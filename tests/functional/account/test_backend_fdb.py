@@ -27,7 +27,6 @@ from unittest.mock import patch
 import eventlet
 import fdb
 import pytest
-from testtools.testcase import ExpectedException
 from werkzeug.exceptions import BadRequest, Conflict
 
 from oio.account.backend_fdb import (
@@ -872,17 +871,31 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # same event
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, mtime, dtime, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            mtime,
+            dtime,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
         # old event
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, old_mtime, 0, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            old_mtime,
+            0,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
     def test_utf8_container(self):
@@ -967,10 +980,17 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # ensure it has been removed
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, 0, dtime, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            0,
+            dtime,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
     def test_update_container(self):
@@ -1026,10 +1046,17 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # same event
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, mtime, 0, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            mtime,
+            0,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
         # New event
@@ -1065,18 +1092,32 @@ class TestAccountBackend(BaseTestCase):
 
         # Old event
         old_mtime = Timestamp(time() - 1).normal
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, old_mtime, 0, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            old_mtime,
+            0,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
         # Old delete event
         dtime = Timestamp(time() - 1).normal
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, 0, dtime, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            0,
+            dtime,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
         # New delete event
@@ -1685,10 +1726,17 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
         # same event
-        with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, mtime, 0, 0, 0, region=region
-            )
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
+            account_id,
+            name,
+            mtime,
+            0,
+            0,
+            0,
+            region=region,
+        )
         self._check_backend(*backend_info)
 
         mtime = "0000012456.00005"

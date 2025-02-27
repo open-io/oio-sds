@@ -120,8 +120,9 @@ class TestAccountServer(TestAccountServerBase):
     def test_account_list(self):
         resp = self.app.get("/v1.0/account/list")
         self.assertEqual(resp.status_code, 200)
-        self.assertIn(self.account_id, resp.data.decode("utf-8"))
-        self.assertNotIn("Should_no_exist", resp.data)
+        resp_data = resp.data.decode("utf-8")
+        self.assertIn(self.account_id, resp_data)
+        self.assertNotIn("Should_no_exist", resp_data)
 
     def test_account_info(self):
         resp = self.app.get("/v1.0/account/show", query_string={"id": self.account_id})

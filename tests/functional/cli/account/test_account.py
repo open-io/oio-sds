@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,8 +16,6 @@
 
 import re
 import uuid
-
-from testtools.matchers import Equals
 
 from oio.account.backend_fdb import AccountBackendFdb
 from tests.functional.cli import CliTestCase
@@ -46,21 +44,21 @@ class AccountTest(CliTestCase):
         opts = self.get_opts([], "json")
         output = self.openio("account create " + self.NAME + opts)
         data = self.json_loads(output)
-        self.assertThat(len(data), Equals(1))
+        self.assertEqual(len(data), 1)
         self.assert_list_fields(data, HEADERS)
         item = data[0]
-        self.assertThat(item["Name"], Equals(self.NAME))
-        self.assertThat(item["Created"], Equals(True))
+        self.assertEqual(item["Name"], self.NAME)
+        self.assertTrue(item["Created"])
         opts = self.get_opts([], "json")
         output = self.openio("account set -p test=1 " + self.NAME)
         output = self.openio("account show " + self.NAME + opts)
         data = self.json_loads(output)
         self.assert_show_fields(data, ACCOUNT_FIELDS)
-        self.assertThat(data["account"], Equals(self.NAME))
-        self.assertThat(data["bytes"], Equals(0))
-        self.assertThat(data["containers"], Equals(0))
-        self.assertThat(data["objects"], Equals(0))
-        self.assertThat(data["metadata"]["test"], Equals("1"))
+        self.assertEqual(data["account"], self.NAME)
+        self.assertEqual(data["bytes"], 0)
+        self.assertEqual(data["containers"], 0)
+        self.assertEqual(data["objects"], 0)
+        self.assertEqual(data["metadata"]["test"], "1")
         output = self.openio("account delete " + self.NAME)
         self.assertOutput("", output)
 

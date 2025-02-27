@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,8 +20,6 @@ import time
 from io import BytesIO
 
 from mock import MagicMock as Mock
-from testtools.matchers import Contains, Not
-from testtools.testcase import ExpectedException
 
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.fullpath import encode_fullpath
@@ -318,7 +316,7 @@ class TestContentFactory(BaseTestCase):
 
         hosts = []
         for c in content_updated.chunks.filter(metapos=0):
-            self.assertThat(hosts, Not(Contains(c.host)))
+            self.assertNotIn(c.host, hosts)
             self.assertNotEqual(c.url, chunk_url)
             hosts.append(c.host)
 
@@ -349,17 +347,18 @@ class TestContentFactory(BaseTestCase):
     def test_move_chunk_not_in_content(self):
         data = random_data(self.chunk_size)
         content = self._new_content(self.stgpol_twocopies, data)
-        with ExpectedException(OrphanChunk):
-            content.move_chunk("1234")
+        self.assertRaises(OrphanChunk, content.move_chunk, "1234")
 
     @ec
     def test_move_chunk_not_right_service_id_ec(self):
-        with ExpectedException(OrphanChunk):
-            self._test_move_chunk(self.stgpol_ec, host="123")
+        self.assertRaises(
+            OrphanChunk, self._test_move_chunk, self.stgpol_ec, host="123",
+        )
 
     def test_twocopies_move_chunk_not_right_service_id_2copies(self):
-        with ExpectedException(OrphanChunk):
-            self._test_move_chunk(self.stgpol_twocopies, host="123")
+        self.assertRaises(
+            OrphanChunk, self._test_move_chunk, self.stgpol_twocopies, host="123",
+        )
 
     def test_strange_paths(self):
         answers = dict()

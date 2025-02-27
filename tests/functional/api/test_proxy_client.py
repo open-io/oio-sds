@@ -60,12 +60,12 @@ class TestProxyClient(BaseTestCase):
                 ).encode("utf-8"),
             )
         )
-        err = self.assertRaises(
-            ServiceBusy, self.proxy_client._direct_request, "GET", "test"
-        )
-        self.assertEqual(err.status, 503)
-        self.assertEqual(err.message, "cache error: DB busy")
-        self.assertEqual(err.info.get("service_id"), "OPENIO-meta2-1")
+        with self.assertRaises(ServiceBusy) as context:
+            self.proxy_client._direct_request("GET", "test")
+
+        self.assertEqual(context.exception.status, 503)
+        self.assertEqual(context.exception.message, "cache error: DB busy")
+        self.assertEqual(context.exception.info.get("service_id"), "OPENIO-meta2-1")
 
     def test_negative_requests_attempts(self):
         self.assertRaises(

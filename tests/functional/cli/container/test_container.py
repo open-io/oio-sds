@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -504,7 +504,7 @@ class ContainerTest(CliTestCase):
         opts = " -f json"
         output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertNotIn(output, "bucket")
+        self.assertNotIn("bucket", output)
         output = self.openio("container set --bucket-name " + bname + cid_opt + name)
         self.assertEqual("", output)
         output = self.openio("container show " + cid_opt + name + opts)
@@ -514,7 +514,7 @@ class ContainerTest(CliTestCase):
         self.assertEqual("", output)
         output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
-        self.assertNotIn(output, "bucket")
+        self.assertNotIn("bucket", output)
 
     def test_container_set_bucket_name(self):
         self._test_container_set_bucket_name()

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,6 @@ import math
 import time
 from io import BytesIO
 from urllib.parse import urlparse
-
-from testtools.testcase import ExpectedException
 
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
 from oio.common.exceptions import (
@@ -211,8 +209,7 @@ class TestPlainContent(BaseTestCase):
                 # if this chunk is broken, it must not have been rebuilt
                 for b_c_i in broken_chunks_info[rebuild_pos].values():
                     if c.url == b_c_i["url"]:
-                        with ExpectedException(NotFound):
-                            _, _ = self.blob_client.chunk_get(c.url)
+                        self.assertRaises(NotFound, self.blob_client.chunk_get, c.url)
                 continue
             meta, stream = self.blob_client.chunk_get(c.url)
             self.assertEqual(meta["chunk_id"], c.id)
@@ -274,8 +271,8 @@ class TestPlainContent(BaseTestCase):
         )
 
     def test_2copies_content_0_byte_2broken_rebuild_pos_0_idx_0(self):
-        with ExpectedException(UnrecoverableContent):
-            self._test_rebuild(self.stgpol_twocopies, 0, [(0, 0), (0, 1)], (0, 0))
+        self.assertRaises(UnrecoverableContent,
+            self._test_rebuild, self.stgpol_twocopies, 0, [(0, 0), (0, 1)], (0, 0))
 
     def test_rebuild_chunk_in_frozen_container(self):
         data = random_data(self.chunk_size)

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,7 +30,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status, 200)
         body = self.json_loads(resp.data)
         self.assertIsInstance(body, dict)
-        self.assertItemsEqual(body["srv"], [])
+        self.assertEqual(body["srv"], [])
 
         srv0 = self._srv("echo")
         srv1 = self._srv("echo")
@@ -94,7 +95,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status, 200)
         body = self.json_loads(resp.data)
         self.assertIsInstance(body, dict)
-        self.assertItemsEqual(body["srv"], [])
+        self.assertEqual(body["srv"], [])
 
         # Renew while not linked
         resp = self.request("POST", self._url_ref("renew"), params=params)

@@ -20,12 +20,12 @@ import os
 import random
 import string
 import sys
+import unittest
 from collections import defaultdict
 from functools import wraps
 from subprocess import check_call
 from urllib.parse import urlencode
 
-import testtools
 import yaml
 from confluent_kafka import OFFSET_END, TopicPartition
 
@@ -123,7 +123,7 @@ def get_config(defaults=None):
     return conf
 
 
-class CommonTestCase(testtools.TestCase):
+class CommonTestCase(unittest.TestCase):
     CLIENT_LOCATION = "dc.rack.127-0-0-1.0"
     TEST_HEADERS = {REQID_HEADER: "7E571D0000000000"}
 
