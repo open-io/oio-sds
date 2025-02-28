@@ -26,7 +26,7 @@ from redis import (
 from oio.common.constants import STRLEN_REQID
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden
-from oio.common.green import sleep, threading, time
+from oio.common.green import get_watchdog, sleep, threading, time
 from oio.common.json import json
 from oio.common.kafka import (
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
@@ -63,10 +63,11 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
     DEFAULT_BATCH_SIZE = 100
     DEFAULT_BATCH_COMMIT_TIMEOUT = 10
 
-    def __init__(self, conf, logger=None):
+    def __init__(self, conf, logger=None, watchdog=None):
         KafkaOffsetHelperMixin.__init__(self)
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
+        self.watchdog = watchdog or get_watchdog()
         self.backend = XcuteBackend(self.conf, logger=self.logger)
 
         self.orchestrator_id = self.conf.get("orchestrator_id")
@@ -214,7 +215,9 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         main_reqid = main_reqid[:STRLEN_REQID]
 
         job_class = JOB_TYPES[job_type]
-        job = job_class(self.conf, job_id=job_id, logger=self.logger)
+        job = job_class(
+            self.conf, job_id=job_id, logger=self.logger, watchdog=self.watchdog
+        )
         # Some jobs may use a dedicated topic
         job.set_topic_suffix(job_info["config"]["params"])
         if (

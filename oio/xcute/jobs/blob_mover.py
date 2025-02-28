@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,7 @@ from oio.common.exceptions import (
     NotFound,
     OrphanChunk,
 )
-from oio.common.green import get_watchdog, time
+from oio.common.green import time
 from oio.common.kafka import DEFAULT_REBUILD_TOPIC
 from oio.content.factory import ContentFactory
 from oio.event.evob import EventTypes
@@ -227,10 +227,9 @@ class RawxDecommissionJob(XcuteUsageTargetJob):
 
         return sanitized_job_params, f"rawx/{service_id}"
 
-    def __init__(self, conf, logger=None, **kwargs):
+    def __init__(self, conf, logger=None, watchdog=None, **kwargs):
         super(RawxDecommissionJob, self).__init__(conf, logger=logger, **kwargs)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
-        watchdog = kwargs.get("watchdog", get_watchdog())
         self.blob_client = BlobClient(self.conf, logger=self.logger, watchdog=watchdog)
         self.conscience_client = self.blob_client.conscience_client
         self.must_auto_exclude_rawx = False

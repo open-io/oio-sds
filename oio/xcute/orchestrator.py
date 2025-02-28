@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,7 @@ from redis import (
 from oio.common.constants import STRLEN_REQID
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Forbidden, OioTimeout
-from oio.common.green import sleep, threading, time
+from oio.common.green import get_watchdog, sleep, threading, time
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import ratelimit, request_id
@@ -46,14 +46,15 @@ from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES
 
 
-class XcuteOrchestrator(object):
+class XcuteOrchestrator:
     DEFAULT_DISPATCHER_TIMEOUT = 2
     DEFAULT_REFRESH_TIME_BEANSTALKD_WORKERS = 30
     DEFAULT_MAX_JOBS_PER_BEANSTALKD = 1024
 
-    def __init__(self, conf, logger=None):
+    def __init__(self, conf, logger=None, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
+        self.watchdog = watchdog or get_watchdog()
         self.backend = XcuteBackend(self.conf, logger=self.logger)
         self.conscience_client = ConscienceClient(self.conf)
 
@@ -228,7 +229,9 @@ class XcuteOrchestrator(object):
         main_reqid = main_reqid[:STRLEN_REQID]
 
         job_class = JOB_TYPES[job_type]
-        job = job_class(self.conf, job_id=job_id, logger=self.logger)
+        job = job_class(
+            self.conf, job_id=job_id, logger=self.logger, watchdog=self.watchdog
+        )
 
         if (
             job_info["tasks"]["total"] == 0

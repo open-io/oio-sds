@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -52,7 +52,7 @@ class XcuteJob(object):
     DEFAULT_TASKS_PER_SECOND = 32
     MAX_TASKS_BATCH_SIZE = 32
 
-    def __init__(self, conf, job_id=None, logger=None):
+    def __init__(self, conf, job_id=None, logger=None, **kwargs):
         self.conf = conf
         self.job_id = job_id
         self.logger = logger or get_logger(self.conf)
