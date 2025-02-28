@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 import json
+import os
 import time
 from datetime import datetime
 from enum import Enum
@@ -115,6 +116,7 @@ class TestLifecycleCrawler(BaseTestCase):
             M2_PROP_BUCKET_NAME: self.container,
             M2_PROP_LIFECYCLE_TIME_BYPASS: "1",
         }
+        self.local_copies = []
         self.containers_to_process = []
         # Create containers
         for container in (self.container, self.container_segment):
@@ -142,6 +144,17 @@ class TestLifecycleCrawler(BaseTestCase):
         self.run_id = f"runid_{random_str(4)}"
 
         self.wait_for_score(("meta2",), score_threshold=2)
+
+    def tearDown(self):
+
+        for db_copy in self.local_copies:
+            try:
+                os.remove(db_copy)
+            except Exception as exc:
+                self.logger.error(
+                    "Failed to remove local copy %s, reason: %s", db_copy, exc
+                )
+        super().tearDown()
 
     def _wait_n_days(self, days):
         wait = days * 86400 / self.TIME_FACTOR
@@ -257,6 +270,7 @@ class TestLifecycleCrawler(BaseTestCase):
         if create_copy:
             # Request a local copy of the meta2 database
             self.admin.copy_base_local(**params)
+            self.local_copies.append(meta2db_env["path"])
 
     def _get_meta2db_env(self, cid):
         services = self.conscience.all_services("meta2")
@@ -1638,7 +1652,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "doc/"},
                     "NoncurrentVersionExpiration": {
-                        "0": {"NoncurrentDays": 2},
+                        "0": {"NoncurrentDays": 3},
                         "__time_type": "NoncurrentDays",
                     },
                 },
