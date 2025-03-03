@@ -125,6 +125,8 @@ class EventQueue:
 
 class PerServiceEventQueue(EventQueue):
     def init(self, conf, workers):
+        super().init(conf, workers)
+
         self.ids = conf.get("event_queue_ids", "").strip(";").split(";")
 
         if workers < len(self.ids):
