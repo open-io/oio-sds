@@ -116,7 +116,7 @@ def _object_matches(
 
 
 def get_replication_destinations(
-    configuration: Dict[str, Any],
+    configuration: str,
     key: str,
     metadata: Dict[str, str] = {},
     xml_tags: str = None,
@@ -148,20 +148,20 @@ def get_replication_destinations(
     if ensure_replicated and not replication_status:
         return [], None
 
-    configuration = json.loads(configuration)
+    conf = json.loads(configuration)
     category = "deletions" if is_deletion else "replications"
-    rules_per_destination = configuration.get(category, {})
+    rules_per_destination = conf.get(category, {})
 
     # Retrieve object tags if required
     tags = {}
-    if configuration.get("use_tags", False):
+    if conf.get("use_tags", False):
         if not xml_tags:
             xml_tags = metadata.get("s3api-tagging")
 
         tags = _tagging_obj_to_dict(xmltodict.parse(xml_tags)) if xml_tags else {}
 
     dest_buckets = []
-    ruleset = configuration.get("rules", {})
+    ruleset = conf.get("rules", {})
     for destination, rules in rules_per_destination.items():
         for rule_name in rules:
             rule = ruleset.get(rule_name)
@@ -172,7 +172,7 @@ def get_replication_destinations(
                 dest_buckets.append(destination)
             if not r_continue:
                 break
-    role = configuration.get("role")
+    role = conf.get("role")
     return dest_buckets, role
 
 
@@ -251,7 +251,10 @@ class ReplicationRecovery(Command):
                 metadata=metadata,
                 is_deletion=is_delete_marker,
             )
-            dest_buckets = [dest.lstrip("arn:aws:s3:::") for dest in dest_buckets]
+            dest_buckets = [
+                dest[13:] if dest.startswith("arn:aws:s3:::") else dest
+                for dest in dest_buckets
+            ]
             if not dest_buckets:
                 if pending:
                     self.log.error(
@@ -277,7 +280,7 @@ class ReplicationRecovery(Command):
         match = REPLICATION_ROLE_RE.fullmatch(role)
         src_project_id = match.group(1)
         replicator_id = match.group(2)
-        event = {}
+        event: Dict[str, Any] = {}
         event["event"] = event_type
         event["when"] = int(time.time() * 1000000)  # use time in micro seconds
         event["url"] = {}
@@ -341,7 +344,7 @@ class ReplicationRecovery(Command):
             event["repli"]["x-object-sysmeta-s3api-acl"] = obj["properties"].get(
                 "x-object-sysmeta-s3api-acl"
             )
-        return json.dumps(event)
+        return event
 
     def send_event(
         self,
@@ -376,17 +379,18 @@ class ReplicationRecovery(Command):
     def get_parser(self, prog_name):
         parser = super(ReplicationRecovery, self).get_parser(prog_name)
         parser.add_argument("bucket", help="Name of bucket to scan")
-        parser.add_argument(
+        group = parser.add_mutually_exclusive_group()
+        group.add_argument(
             "--pending",
             action="store_true",
             help="Resend only events from objects pending to be replicated.",
         )
-        parser.add_argument(
+        group.add_argument(
             "--only-metadata",
             action="store_true",
             help="Resend only events from objects with metadatata to be replicated",
         )
-        parser.add_argument(
+        group.add_argument(
             "--all",
             action="store_true",
             help="Resend events from all objects",
@@ -450,22 +454,48 @@ class ReplicationRecovery(Command):
         self.log.info("Replication recovery exiting.")
 
     def _get_marker_file_path(self, operation, account, bucket):
-        """Return the marker file path according to the INFRA"""
+        """Return the path to the appropriate marker file"""
+        cache_dirs = (str(Path.home()) + "/.oio/sds", "/var/cache")
         marker_file_name = (
             f"replication_recovery_marker_{operation}_{account}_{bucket}.json"
         )
         parent_dir = None
-        for path_dir in (
-            str(Path.home()) + "/.oio/sds",
-            str(Path.home()) + "/var/cache",
-        ):
-            if os.path.exists(path_dir):
-                parent_dir = path_dir
-                break
-        if parent_dir:
-            os.makedirs(f"{parent_dir}/replicationrecovery", exist_ok=True)
-            return f"{parent_dir}/replicationrecovery/{marker_file_name}"
-        return None
+        for dir_path in cache_dirs:
+            if os.path.exists(dir_path):
+                try:
+                    os.makedirs(f"{dir_path}/replicationrecovery", exist_ok=True)
+                    parent_dir = dir_path
+                    break
+                except OSError as err:
+                    self.log.warning(
+                        "Failed to create marker directory in %s: %s",
+                        dir_path,
+                        err,
+                    )
+        else:
+            self.log.warning("Failed to build marker file path")
+            return None
+        return f"{parent_dir}/replicationrecovery/{marker_file_name}"
+
+    def flush_and_update_marker(self, account, bucket, obj):
+        """
+        Flush the events pending in the producer, then update the marker file.
+        """
+        nb_msg = 0
+        if self.kafka_producer:
+            nb_msg = self.kafka_producer.flush(1.0)
+            attempt = 0
+            while nb_msg > 0 and attempt < 3:
+                self.log.warning(
+                    "All events are not flushed. %d are still in queue", nb_msg
+                )
+                nb_msg = self.kafka_producer.flush(1.0)
+                # Wait little bit
+                time.sleep(0.1)
+                attempt += 1
+        if nb_msg <= 0:
+            # Update the marker only if we were able to send the events
+            self.update_marker_file(obj["name"], bucket, account)
 
     def update_marker_file(self, obj_name, bucket, account):
         """Update the marker file with the latest listed object in the bucket."""
@@ -493,14 +523,8 @@ class ReplicationRecovery(Command):
         pending = parsed_args.pending
         only_metadata = parsed_args.only_metadata
         use_marker = parsed_args.use_marker
-        all = parsed_args.all
         marker_update_after = parsed_args.marker_update_after
-        if (pending and only_metadata) or (pending and all) or (only_metadata and all):
-            raise ValueError(
-                "Options conflict: cannot combine 'pending', 'only-metadta' and"
-                " 'all' options. Only one option at a time is supported"
-            )
-        elif not (pending or only_metadata or all):
+        if not (pending or only_metadata or parsed_args.all):
             # When no option is defined, use pending by default
             pending = True
         until = int(parsed_args.until) * 1000000 if parsed_args.until else None
@@ -535,9 +559,7 @@ class ReplicationRecovery(Command):
             operation = "all"
         self.marker_file = self._get_marker_file_path(operation, account, bucket)
         marker = None
-        if not self.marker_file:
-            self.log.warning("Failed to build marker file path")
-        else:
+        if self.marker_file:
             if os.path.exists(self.marker_file):
                 with open(self.marker_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
@@ -578,19 +600,7 @@ class ReplicationRecovery(Command):
                 )
                 counter += 1
                 if counter == marker_update_after and self.success:
-                    nb_msg = self.kafka_producer.flush(1.0)
-                    attempt = 0
-                    while nb_msg > 0 and attempt < 3:
-                        self.log.warning(
-                            "All events are not flushed. %d are still in queue", nb_msg
-                        )
-                        nb_msg = self.kafka_producer.flush(1.0)
-                        # Wait little bit
-                        time.sleep(0.1)
-                        attempt += 1
-                    if nb_msg <= 0:
-                        # Update the marker only if we were able to send the events
-                        self.update_marker_file(obj["name"], bucket, account)
+                    self.flush_and_update_marker(account, bucket, obj)
                     # Reinitialize the counter
                     counter = 0
         except KeyboardInterrupt:  # Catches CTRL+C or SIGINT

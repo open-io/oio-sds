@@ -134,8 +134,7 @@ class ReplicationRecoveryTest(CliTestCase):
             option = "--pending --only-metadata --use-marker 2"
             self.assertRaisesRegex(
                 CommandFailed,
-                "Options conflict: cannot combine 'pending', 'only-metadta' "
-                "and 'all' options. Only one option at a time is supported",
+                r"argument .+ not allowed with argument .+",
                 lambda: self.openio(
                     f"replication recovery {container_src} {option}", ""
                 ),
