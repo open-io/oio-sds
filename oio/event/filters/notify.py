@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 # License along with this library.
 
 import re
+from typing import Any, Dict
 from urllib.parse import unquote
 
 from oio.common.json import json
@@ -140,7 +141,7 @@ class NotifyFilter(Filter):
                 break
         return policy
 
-    def send_event(self, event, data):
+    def send_event(self, event, payload: Dict[str, Any]):
         """Send data to the configured message topic.
         Must be implemented by subclasses.
         """
@@ -166,9 +167,8 @@ class NotifyFilter(Filter):
             data = payload.get("data")
             if data:
                 payload["data"] = self.strip_event(data)
-            new_event = json.dumps(payload, separators=(",", ":"))  # compact encoding
             # If there is an error, do not continue
-            err_resp = self.send_event(event, new_event)
+            err_resp = self.send_event(event, payload)
             if err_resp:
                 return err_resp(env, cb)
         return self.app(env, cb)
@@ -199,7 +199,8 @@ class BeanstalkdNotifyFilter(NotifyFilter):
     def _prefix(self):
         return "tube_"
 
-    def send_event(self, event, data):
+    def send_event(self, event, payload):
+        data = json.dumps(payload, separators=(",", ":"))  # compact encoding
         out_beanstalkd = self.beanstalk
         if self.rules:
             policy = self._lookup_policy(event)
@@ -234,7 +235,7 @@ class KafkaNotifyFilter(NotifyFilter):
     def _prefix(self):
         return "topic_"
 
-    def send_event(self, event, data):
+    def send_event(self, event, payload):
         if not self.producer:
             self.producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
             topics = [self.destination]
@@ -251,7 +252,7 @@ class KafkaNotifyFilter(NotifyFilter):
                         topic = rule["destination"]
                         break
         try:
-            self.producer.send(topic, data, flush=True)
+            self.producer.send(topic, payload, flush=True)
         except KafkaSendException as err:
             delay = None
             if err.retriable:

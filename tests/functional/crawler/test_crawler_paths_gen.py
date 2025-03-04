@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,6 @@
 # License along with this library.
 
 import random
-import time
 from os import listdir, remove, walk
 from os.path import islink, join
 
@@ -73,7 +72,7 @@ class TestCrawlerPathGen(BaseTestCase):
             policy=policy,
             reqid=reqid,
         )
-        self.wait_for_kafka_event(
+        self.wait_for_event(
             reqid=reqid,
             timeout=5.0,
             types=(EventTypes.CHUNK_NEW,),
@@ -157,7 +156,11 @@ class TestCrawlerPathGen(BaseTestCase):
         # Case 2: delete the chunk but the symbolic link is still there
         del_reqid = request_id("testpathsgen-")
         self.api.object_delete(self.account, container, object_name, reqid=del_reqid)
-        time.sleep(2)
+        self.wait_for_event(
+            reqid=del_reqid,
+            timeout=5.0,
+            types=(EventTypes.CHUNK_DELETED,),
+        )
         self.assertTrue(islink(chunk_symlink_path))
         self.assertEqual(
             len(list(paths_gen(join(volume_path, misplaced_chunk_dir)))),

@@ -56,7 +56,7 @@ class TestPipeline(BaseTestCase):
                 types=["test.grouping"], data_fields={"id": e["data"]["id"]}
             )
             self.assertIsNotNone(evt)
-            self.assertNotIn("_internal", evt)
+            self.assertNotIn("_internal", evt.env)
 
         expected_ids = [e["data"]["id"] for e in events]
         produced_ids = []
@@ -69,7 +69,7 @@ class TestPipeline(BaseTestCase):
 
             if evt is None:
                 break
-            self.assertNotIn("_internal", evt)
+            self.assertNotIn("_internal", evt.env)
             self.assertLessEqual(len(evt.env["content"]), 3)
             for e in evt.env["content"]:
                 e_id = e.get("data", {}).get("id")
