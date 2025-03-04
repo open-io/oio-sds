@@ -89,12 +89,11 @@ class DelayFilter(Filter):
             new_env = env.copy()
             data = new_env["data"]
             data["next_due_time"] = datetime.now().timestamp() + self._delay_granularity
-            self._producer.send(self.topic, new_env, flush=True, key=data.get("key"))
+            self._producer.send(self.topic, new_env, flush=True)
         else:
             # Restore original event data
             source_event = data["source_event"]
-
-            self._producer.send(destination_topic, source_event)
+            self._producer.send(destination_topic, source_event, key=data.get("key"))
 
     def process(self, env, cb):
         if not self._producer:

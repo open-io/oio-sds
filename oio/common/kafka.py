@@ -304,6 +304,7 @@ class KafkaSender(KafkaClient):
             # Encapsulate event in a delayed one
             data = self._generate_delayed_event(topic, data, delay, key=key)
             topic = self._delayed_topic
+            key = None
 
         self._send(topic, data, key=key, flush=flush)
 

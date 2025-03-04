@@ -446,6 +446,21 @@ class TestLifecycleCrawler(BaseTestCase):
                 elif expect.action == ExpectedAction.DELETE_MARKER:
                     self._validate_delete_marker_action(expect)
 
+                # Ensure event is processed (same event fromoio-preserved)
+                event = self.wait_for_kafka_event(
+                    types=[EventTypes.LIFECYCLE_ACTION],
+                    data_fields={
+                        "object": expect.key,
+                        "rule_id": expect.rule_id,
+                        "run_id": self.run_id,
+                        **expect.extra_fields,
+                    },
+                )
+                self.assertIsNotNone(
+                    event,
+                    f"({i}/{len(self.expectations)}) Event not found for: {expect}",
+                )
+
             self._ensure_no_more_event()
 
     def _validate_delete_action(self, expect):

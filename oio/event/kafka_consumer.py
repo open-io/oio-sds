@@ -47,6 +47,7 @@ DEFAULT_BATCH_INTERVAL = 1.0
 
 class EventQueue:
     DEFAULT_QUEUE = "__default"
+    produce_internal_events = False
 
     def __init__(self, logger, conf, size, workers):
         self.logger = logger
@@ -54,16 +55,11 @@ class EventQueue:
         self.queues = {}
         self.queue_ids = []
 
-        # Instantiate default queue
-        self.register_queue(self.DEFAULT_QUEUE)
-
         self.init(conf, workers)
 
-        self._current_queue = 0
-
-    def init(self, _conf, workers):
-        for i in range(workers):
-            self.register_queue(f"q_{i}")
+    def init(self, _conf, _workers):
+        # Instantiate default queue
+        self.register_queue(self.DEFAULT_QUEUE)
 
     def reset(self):
         """Remove all events from queues"""
@@ -79,6 +75,9 @@ class EventQueue:
         self.queue_ids.append(queue_id)
 
     def put_batch_internal_event(self, batch_id, event_type):
+        if not self.produce_internal_events:
+            return 0
+
         for queue in self.queues.values():
             evt = {
                 "batch_id": batch_id,
@@ -113,21 +112,44 @@ class EventQueue:
         return queue.get(**kwargs)
 
     def id_from_event(self, _event):
-        queue_id = self.queue_ids[self._current_queue]
-        self._current_queue = (self._current_queue + 1) % len(self.queue_ids)
-        return queue_id
+        return self.DEFAULT_QUEUE
 
     def get_queue_id(self, worker_id):
         return self.queue_ids[worker_id % len(self.queue_ids)]
 
 
+class PausableEventQueue(EventQueue):
+    produce_internal_events = True
+
+    def init(self, _conf, workers):
+        self._current_queue = 0
+        for i in range(workers):
+            self.register_queue(f"q_{i}")
+
+    def id_from_event(self, _event):
+        queue_id = self.queue_ids[self._current_queue]
+        self._current_queue = (self._current_queue + 1) % len(self.queue_ids)
+        return queue_id
+
+    def get_queue_id(self, worker_id):
+        return self.queue_ids[worker_id]
+
+
 class PerServiceEventQueue(EventQueue):
+    produce_internal_events = False
+
     def init(self, conf, workers):
         self.ids = conf.get("event_queue_ids", "").strip(";").split(";")
 
+        # Create a default queue
+        self.register_queue(self.DEFAULT_QUEUE)
+        # Allocate a worker to this queue
+        workers -= 1
+
         if workers < len(self.ids):
             raise ValueError(
-                f"Not enough workers to handle queues ({workers} < {len(self.ids)})"
+                f"Not enough workers to handle queues ({workers} < {len(self.ids)}. "
+                "One dedicated to fallback queue)"
             )
 
         for queue_id in self.ids:
@@ -137,8 +159,14 @@ class PerServiceEventQueue(EventQueue):
         return event.get("service_id")
 
 
-class DeterministicEventQueue(EventQueue):
+class DeterministicEventQueue(PausableEventQueue):
+    produce_internal_events = True
+
     def init(self, conf, workers):
+        # Create a default queue
+        self.register_queue(self.DEFAULT_QUEUE)
+        workers -= 1
+
         super().init(conf, workers)
 
         self._field_parts = conf.get("field", "").split(".")
@@ -159,20 +187,19 @@ class DeterministicEventQueue(EventQueue):
 
 
 def event_queue_factory(logger, conf, *args, **kwargs):
-    event_queue_type = conf.get("event_queue_type")
-    _class = None
-    if event_queue_type in (None, "default"):
-        logger.info("Instantiate default event queue")
-        _class = EventQueue
-    elif event_queue_type == "per_service":
-        logger.info("Instantiate per_service event queue")
-        _class = PerServiceEventQueue
-    elif event_queue_type == "deterministic":
-        logger.info("Instantiate deterministic")
-        _class = DeterministicEventQueue
-    else:
+    event_queue_type = conf.get("event_queue_type", "default")
+    queues_mapping = {
+        "default": EventQueue,
+        "pausable": PausableEventQueue,
+        "per_service": PerServiceEventQueue,
+        "deterministic": DeterministicEventQueue,
+    }
+    queue_class = queues_mapping.get(event_queue_type)
+    if queue_class is None:
         raise NotImplementedError(f"Event queue '{event_queue_type}' not supported")
-    return _class(logger, conf, *args, **kwargs)
+
+    logger.debug("Instantiate %s event queue", event_queue_type)
+    return queue_class(logger, conf, *args, **kwargs)
 
 
 class RejectMessage(Exception):
@@ -408,7 +435,7 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
         Repeatedly read messages from the topic and call process_message().
         """
         run_time = time.time()
-        pause_allowed = True
+        pause_allowed = self._events_queue.produce_internal_events
         current_batch_id = None
         while True:
             if self._stop_requested.is_set():
@@ -420,7 +447,7 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
                 continue
             if current_batch_id != event.get("batch_id"):
                 # This is a new batch, pause is allowed again
-                pause_allowed = True
+                pause_allowed = self._events_queue.produce_internal_events
                 current_batch_id = event.get("batch_id")
             try:
                 body = event["data"]
@@ -694,6 +721,7 @@ class KafkaBatchFeeder(
                                 offset["topic"],
                                 offset["data"],
                                 delay=offset["delay"],
+                                key=offset["key"],
                                 flush=True,
                             )
                         else:  # No retry, send to deadletter
@@ -855,12 +883,9 @@ class KafkaConsumerPool:
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
         try:
-            # We must have an extra process for default queue
-            nb_processes = self.processes + 1
-
             worker_factories = {"feeder": self._start_feeder}
 
-            self._workers = {w: None for w in range(nb_processes)}
+            self._workers = {w: None for w in range(self.processes)}
             self._workers["feeder"] = None
 
             while self.running:

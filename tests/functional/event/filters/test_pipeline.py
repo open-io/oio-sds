@@ -24,7 +24,7 @@ class TestPipeline(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls._cls_tests_consumer = cls._register_consumer(topic="oio-tests")
+        cls._cls_tests_consumer = cls._register_consumer(topic="oio-tests-out")
         cls._cls_dead_letter_consumer = cls._register_consumer(topic="oio-deadletter")
         # Initialize producer
         cls._producer = KafkaSender(cls._cls_conf["kafka_endpoints"], cls._cls_logger)
@@ -38,7 +38,7 @@ class TestPipeline(BaseTestCase):
                 "id": uuid4().hex,
             },
         }
-        self._producer.send("oio", event)
+        self._producer.send("oio-tests-in", event)
 
         return event
 

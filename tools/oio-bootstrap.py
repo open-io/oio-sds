@@ -1543,9 +1543,6 @@ pipeline = volume_index ${PRESERVE}
 [handler:account.services]
 pipeline = account_update volume_index ${PRESERVE}
 
-[handler:test.grouping]
-pipeline = group ${PRESERVE}
-
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 
@@ -1555,11 +1552,6 @@ concurrency = 4
 pool_connections = 16
 pool_maxsize = 16
 timeout = 4.5
-
-[filter:group]
-use = egg:oio#group
-broker_endpoint = ${QUEUE_URL}
-topic = oio-tests
 
 [filter:content_rebuild]
 use = egg:oio#notify
@@ -1772,6 +1764,22 @@ pipeline = lifecycle_delete_restore ${PRESERVE}
 
 [filter:lifecycle_delete_restore]
 use = egg:oio#lifecycle_delete_restore
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_testing_handlers = """
+[handler:test.grouping]
+pipeline = group ${PRESERVE}
+
+[filter:group]
+use = egg:oio#group
+broker_endpoint = ${QUEUE_URL}
+topic = oio-tests-out
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic.
@@ -3278,7 +3286,7 @@ def generate(options):
                     f"oio-delete-{host}-{slot}",
                     url,
                     srv_type="event-agent-delete",
-                    workers=len(rawx_per_host[host]),
+                    workers=len(rawx_per_host[host]) + 1,
                     group_id="event-agent-delete",
                     queue_type="per_service",
                     queue_ids=";".join(rawx_per_host[host]).lower(),
@@ -3427,7 +3435,7 @@ def generate(options):
             "oio-lifecycle-backup",
             url,
             srv_type="event-agent-lifecycle-delete-backup",
-            workers=4,
+            workers=5,
             group_id="event-agent-lifecycle-delete-backup",
             queue_type="deterministic",
             template_handler=template_event_agent_lifecycle_delete_backup_handlers,
@@ -3446,6 +3454,22 @@ def generate(options):
             workers=4,
             group_id="event-agent-lifecycle-restore-backup",
             template_handler=template_event_agent_lifecycle_delete_restore_handlers,
+        )
+        # We need only one service
+        break
+
+    # Configure a special oio-testing dedicated to tests
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-tests-in",
+            url,
+            srv_type="event-agent-testing",
+            workers=4,
+            group_id="event-agent-testing",
+            queue_type="pausable",
+            template_handler=template_event_agent_testing_handlers,
         )
         # We need only one service
         break
@@ -3596,7 +3620,8 @@ def generate(options):
         ("oio-transitioned", None),
         ("oio-rebuild", None),
         ("oio-replication", None),
-        ("oio-tests", None),
+        ("oio-tests-in", None),
+        ("oio-tests-out", None),
         ("oio-xcute-job", None),
         ("oio-xcute-job-reply", None),
     ]

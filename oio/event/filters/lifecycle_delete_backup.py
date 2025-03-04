@@ -25,6 +25,7 @@ from oio.event.filters.base import Filter
 
 class LifecycleDeleteBackupFilter(Filter):
     DEFAULT_PREFIX = "/lifecycle/recycle_bin/"
+    handle_end_batch_events = True
 
     def __init__(self, app, conf):
         self._fds = {}
@@ -61,9 +62,6 @@ class LifecycleDeleteBackupFilter(Filter):
 
         self._prefix = self.conf.get("prefix", self.DEFAULT_PREFIX)
         self._retry_delay = get_retry_delay(self.conf)
-
-    def skip_end_batch_event(self):
-        return False
 
     def _send_to_bucket(self, event):
         # Close all file descriptors

@@ -35,7 +35,7 @@ def pipeline_use_internal_event(handler):
     while True:
         if not isinstance(handler, Filter):
             break
-        if not handler.skip_end_batch_event():
+        if handler.handle_end_batch_events:
             return True
         handler = handler.app
     return False
@@ -123,9 +123,20 @@ class KafkaEventWorker(KafkaConsumerWorker):
         self.handlers = loadhandlers(
             self.conf.get("handlers_conf"), global_conf=self.conf, app=self
         )
-        self.handlers_with_internal = [
-            h for h in self.handlers.values() if pipeline_use_internal_event(h)
-        ]
+        handlers_with_internal = {
+            k: v for k, v in self.handlers.items() if pipeline_use_internal_event(v)
+        }
+        self.handlers_with_internal = list(handlers_with_internal.values())
+
+        if (
+            self.handlers_with_internal
+            and not self._events_queue.produce_internal_events
+        ):
+            raise ValueError(
+                f"Event queue '{self._events_queue.__class__.__name__}' does not "
+                " support internal events. "
+                f"Required for handlers: {','.join(handlers_with_internal)}"
+            )
 
     def log_and_statsd(self, start, status, _extra):
         extra = {

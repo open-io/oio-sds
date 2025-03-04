@@ -934,7 +934,6 @@ class BaseTestCase(CommonTestCase):
                 if not event or event.error():
                     continue
                 event_key = f"{event.topic()},{event.partition()},{event.offset()}"
-                logging.debug("Got event: %s", event_key)
                 data = event.value()
                 event_obj = Event(jsonlib.loads(data))
                 event_obj.job_id = event.offset()

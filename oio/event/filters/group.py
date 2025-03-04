@@ -26,6 +26,8 @@ class GroupFilter(Filter):
     This filter is for testing purpose only.
     """
 
+    handle_end_batch_events = True
+
     def __init__(self, app, conf, endpoint=None, **kwargs):
         self._endpoint = endpoint
         self._producer = None
@@ -37,9 +39,6 @@ class GroupFilter(Filter):
     def init(self):
         self._topic = self.conf.get("topic", "tests")
         self._group_size = self.conf.get("group_size", 3)
-
-    def skip_end_batch_event(self):
-        return False
 
     def send_event(self):
         if not self._producer:

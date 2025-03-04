@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -84,7 +84,7 @@ broker_endpoint = {endpoint}
             {
                 "namespace": namespace,
                 "event_queue_ids": event_queue_ids,
-                "workers": nb_rawx,
+                "workers": nb_rawx + 1,
                 "concurrency": nb_rawx + 2,
             }
         )

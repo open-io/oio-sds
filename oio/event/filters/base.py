@@ -72,6 +72,7 @@ class Filter(object):
     )
 
     DEFAULT_EXTRA_LOG_FORMAT = ""
+    handle_end_batch_events = False
 
     def __init__(self, app, conf, logger=None):
         self.app = app
@@ -115,22 +116,15 @@ class Filter(object):
             raise PausePipeline()
         return
 
-    def skip_end_batch_event(self):
-        """
-        Tells if the internal events must pass through the filter or should be
-        processed.
-        """
-        return True
-
     def process(self, env, cb):
         return self.app(env, cb)
 
     def __process(self, env, cb):
-        self._pause_allowed = is_pausable(env)
+        self._pause_allowed = self.handle_end_batch_events and is_pausable(env)
         evt = Event(env)
         if (
             evt.event_type == EventTypes.INTERNAL_BATCH_END
-            and self.skip_end_batch_event()
+            and not self.handle_end_batch_events
         ):
             return self.app(env, cb)
         context = self.log_context_from_env(env)
