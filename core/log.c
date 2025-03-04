@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -57,31 +57,31 @@ oio_log_lvl2str(GLogLevelFlags lvl)
 {
 	switch (lvl & G_LOG_LEVEL_MASK) {
 		case G_LOG_LEVEL_ERROR:
-			return "ERR";
+			return "ERROR";
 		case G_LOG_LEVEL_CRITICAL:
-			return "CRI";
+			return "CRITICAL";
 		case G_LOG_LEVEL_WARNING:
-			return "WRN";
+			return "WARNING";
 		case G_LOG_LEVEL_MESSAGE:
-			return "NOT";
+			return "NOTICE";
 		case G_LOG_LEVEL_INFO:
-			return "INF";
+			return "INFO";
 		case G_LOG_LEVEL_DEBUG:
-			return "DBG";
+			return "DEBUG";
 	}
 
 	switch (lvl >> G_LOG_LEVEL_USER_SHIFT) {
 		case 0:
 		case 1:
-			return "ERR";
+			return "ERROR";
 		case 2:
-			return "WRN";
+			return "WARNING";
 		case 4:
-			return "NOT";
+			return "NOTICE";
 		case 8:
-			return "INF";
+			return "INFO";
 		case 16:
-			return "DBG";
+			return "DEBUG";
 		case 32:
 			return "TR0";
 		default:
