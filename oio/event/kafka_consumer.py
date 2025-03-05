@@ -32,6 +32,7 @@ from oio.common.kafka import (
     get_retry_delay,
 )
 from oio.common.logger import get_logger
+from oio.common.statsd import StatsdTiming, get_statsd
 from oio.common.utils import monotonic_time, ratelimit, request_id
 from oio.event.evob import (
     EventTypes,
@@ -232,7 +233,7 @@ class KafkaOffsetHelperMixin:
 
     def get_offsets_to_commit(self):
         _offsets = []
-
+        offsets_count = 0
         for topic, partitions in self._offsets_to_commit.items():
             for partition, offsets in partitions.items():
                 top_offset = -1
@@ -253,6 +254,7 @@ class KafkaOffsetHelperMixin:
                     if top_offset != -1 and top_offset + 1 != offset:
                         break
                     top_offset = offset
+                    offsets_count += 1
                 if top_offset != -1:
                     _offsets.append(
                         TopicPartition(
@@ -261,7 +263,7 @@ class KafkaOffsetHelperMixin:
                             top_offset + 1,
                         )
                     )
-        return _offsets
+        return _offsets, offsets_count
 
 
 class KafkaRejectorMixin:
@@ -531,6 +533,20 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
         raise NotImplementedError
 
 
+def _statsd_timing(name):
+    def decorator(func):
+        def wrapper(self, *args, **kwargs):
+            start = time.monotonic()
+            ret = func(self, *args, **kwargs)
+            duration = (time.monotonic() - start) * 1000
+            self._statsd.timing(f"openio.event.{self.topic}.{name}_duration", duration)
+            return ret
+
+        return wrapper
+
+    return decorator
+
+
 class KafkaBatchFeeder(
     Process, KafkaRejectorMixin, KafkaOffsetHelperMixin, AcknowledgeMessageMixin
 ):
@@ -564,6 +580,7 @@ class KafkaBatchFeeder(
         self._commit_interval = float_value(
             self._app_conf.get("batch_commit_interval"), DEFAULT_BATCH_INTERVAL
         )
+        self._statsd = get_statsd(conf=app_conf)
         self._consumer = None
         self._stop_requested = Event()
         self._events_queue = events_queue
@@ -582,6 +599,7 @@ class KafkaBatchFeeder(
         # still be present in queues
         self.events_queue.reset()
 
+    @_statsd_timing("fill_batch")
     def _fill_batch(self):
         # Create a new batch
         self._batch_id = uuid.uuid4().hex
@@ -654,8 +672,12 @@ class KafkaBatchFeeder(
             produced = self.events_queue.put_batch_internal_event(
                 self._batch_id, EventTypes.INTERNAL_BATCH_END
             )
+            self._statsd.gauge(
+                f"openio.event.{self.topic}.batch_size", self._registered_offsets
+            )
             self._registered_offsets += produced
 
+    @_statsd_timing("wait_batch_processed")
     def _wait_batch_processed(self):
         if self.has_registered_offsets():
             # Wait all events are processed
@@ -712,8 +734,17 @@ class KafkaBatchFeeder(
                     self._cleanup_previous_batch()
                     self._connect()
                     # Retrieve events
-                    self._fill_batch()
-                    self._wait_batch_processed()
+                    with StatsdTiming(
+                        self._statsd,
+                        f"openio.event.{self.topic}.fill_batch.{{code}}.duration",
+                    ):
+                        self._fill_batch()
+                    # Wait for events processing
+                    with StatsdTiming(
+                        self._statsd,
+                        f"openio.event.{self.topic}.wait_batch.{{code}}.duration",
+                    ):
+                        self._wait_batch_processed()
                     self._commit_batch()
                 except KafkaFatalException:
                     self._close()
@@ -751,11 +782,11 @@ class KafkaBatchFeeder(
         self.close_producer()
 
     def _commit_batch(self):
-        _offsets = self.get_offsets_to_commit()
-
-        if _offsets:
-            self.logger.info("Commit offsets: %s", _offsets)
-            self._consumer.commit(offsets=_offsets)
+        offsets, offsets_count = self.get_offsets_to_commit()
+        self._statsd.gauge(f"openio.event.{self.topic}.commited", offsets_count)
+        if offsets:
+            self.logger.info("Commit offsets: %s", offsets)
+            self._consumer.commit(offsets=offsets)
 
     def stop(self):
         """

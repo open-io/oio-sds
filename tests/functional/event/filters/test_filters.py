@@ -24,6 +24,7 @@ from mock import patch
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common.exceptions import ServiceBusy
+from oio.common.statsd import get_statsd
 from oio.event.evob import Event
 from oio.event.filters.lifecycle_actions import LifecycleActionContext, LifecycleActions
 from oio.event.filters.notify import KafkaNotifyFilter
@@ -31,7 +32,9 @@ from tests.utils import BaseTestCase, random_str, strange_paths
 
 
 class _App(object):
-    app_env = {}
+    app_env = {
+        "statsd_client": get_statsd(),
+    }
 
     def __init__(self, env, cb):
         self.env = env

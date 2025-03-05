@@ -77,6 +77,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
         self.app_env = {
             "logger": self.logger,
         }
+        self.app_env["statsd_client"] = get_statsd(app_conf)
         self.app_env["account_client"] = AccountClient(
             self.conf,
             logger=self.logger,
@@ -107,6 +108,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
 
         self.app_env["worker_id"] = self.name
+        self.app_env["topic"] = self.topic
 
         template = self.conf.get("log_request_format")
         if template is not None:

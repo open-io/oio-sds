@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 
 import time
 
+from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
 from oio.event.filters.mpu_cleaner import MpuPartCleaner
@@ -23,7 +24,9 @@ from tests.utils import BaseTestCase, random_str
 
 
 class _App(object):
-    app_env = {}
+    app_env = {
+        "statsd_client": get_statsd(),
+    }
 
     def __init__(self, env, cb):
         self.env = env

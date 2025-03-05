@@ -15,7 +15,7 @@
 
 from copy import deepcopy
 
-from oio.api.object_storage import ObjectStorageApi
+from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
 from oio.event.filters.transition import Transition
@@ -47,7 +47,12 @@ class TestFilterPolicyTransition(BaseTestCase):
             data="test",
             policy="SINGLE",
         )
-        self.app = _App({"api": ObjectStorageApi(self.ns)})
+        self.app = _App(
+            {
+                "api": self.storage,
+                "statsd_client": get_statsd(),
+            }
+        )
 
     def test_transition(self):
         reqid = request_id("pol-chg")

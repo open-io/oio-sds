@@ -15,6 +15,7 @@
 
 import time
 
+from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.filters.lifecycle_actions import LifecycleActions
 from tests.utils import BaseTestCase
@@ -36,7 +37,12 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.container = "lifecycle-actions-"
         self.storage.container.container_create(self.account, self.container)
         self.clean_later(self.container)
-        self.app = _App({"api": self.storage})
+        self.app = _App(
+            {
+                "api": self.storage,
+                "statsd_client": get_statsd(),
+            }
+        )
         self.object = "policy-transition/obj"
         _, _, _, self.obj_meta = self.storage.object_create_ext(
             account=self.account,

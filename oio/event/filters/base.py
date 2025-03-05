@@ -19,6 +19,7 @@ from uuid import uuid4
 
 from oio.common.exceptions import OioException
 from oio.common.logger import LTSVFormatter, get_logger
+from oio.common.statsd import StatsdTiming
 from oio.event.evob import Event, EventTypes, add_pipeline_to_resume, is_pausable
 from oio.event.utils import MsgContext, log_context_from_msg
 
@@ -74,6 +75,7 @@ class Filter(object):
     def __init__(self, app, conf, logger=None):
         self.app = app
         self.app_env = app.app_env
+        self.statsd = self.app_env["statsd_client"]
         self.conf = conf
         log_format_parts = [
             self.conf.get("log_format", self.DEFAULT_LOG_FORMAT),
@@ -142,20 +144,28 @@ class Filter(object):
             self._pipelines_on_hold.clear()
 
     def __call__(self, env, cb):
-        try:
-            res = self.__process(env, cb)
-            self.__attach_pipelines_to_event(env)
-        except PausePipeline as exc:
-            exc.next_filter = lambda e: self.app(e, cb)
-            # Register paused pipeline
-            self._pipelines_on_hold.append(exc.id)
-            raise exc
-        except Exception:
-            self.__attach_pipelines_to_event(env)
-            raise
+        evt = Event(env)
+        name = self.conf.get("ctx_name", self.__class__.__name__)
+        topic = self.app_env["topic"]
+        with StatsdTiming(
+            self.statsd,
+            f"openio.event.{topic}.filter.{evt.event_type}.{name}.{{code}}.duration",
+        ) as st:
+            try:
+                res = self.__process(env, cb)
+                self.__attach_pipelines_to_event(env)
+            except PausePipeline as exc:
+                st.code = 307
+                exc.next_filter = lambda e: self.app(e, cb)
+                # Register paused pipeline
+                self._pipelines_on_hold.append(exc.id)
+                raise exc
+            except Exception:
+                st.code = 500
+                self.__attach_pipelines_to_event(env)
+                raise
 
         if res is not None:
             raise OioException(
-                f"Unexpected return value when filter {self.__class__.__name__} "
-                f"processed an event: {res}"
+                f"Unexpected return value when filter {name} processed an event: {res}"
             )

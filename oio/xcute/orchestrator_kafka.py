@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -737,7 +737,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                         break
                     # Commit if needed
                     if self.need_commit(self.batch_size, self.commit_timeout):
-                        offsets = self.get_offsets_to_commit()
+                        offsets, _ = self.get_offsets_to_commit()
                         if offsets:
                             reply_listener.commit(offsets=offsets)
                             self.reset_offsets()
@@ -770,7 +770,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             finally:
                 if reply_listener:
                     if not fatal_error and self._ready_offsets > 0:
-                        offsets = self.get_offsets_to_commit()
+                        offsets, _ = self.get_offsets_to_commit()
                         reply_listener.commit(offsets=offsets)
                     reply_listener.close()
 
