@@ -41,28 +41,28 @@ from oio.event.evob import (
 from oio.event.filters.base import PausePipeline
 
 DEFAULT_BATCH_SIZE = 100
-DEFAULT_BATCH_INTERVAL = 0.1
+DEFAULT_BATCH_INTERVAL = 1.0
 
 
 class EventQueue:
     DEFAULT_QUEUE = "__default"
-    POLLING_TIMEOUT = 0.5
-    INTERNAL_POLLING_TIMEOUT = 0.1
 
     def __init__(self, logger, conf, size, workers):
         self.logger = logger
         self.size = size
         self.queues = {}
         self.queue_ids = []
-        self._internal_queues = [Queue(self.size) for _ in range(workers)]
 
         # Instantiate default queue
         self.register_queue(self.DEFAULT_QUEUE)
 
         self.init(conf, workers)
 
-    def init(self, _conf, _workers):
-        pass
+        self._current_queue = 0
+
+    def init(self, _conf, workers):
+        for i in range(workers):
+            self.register_queue(f"q_{i}")
 
     def reset(self):
         """Remove all events from queues"""
@@ -85,9 +85,9 @@ class EventQueue:
             },
         }
         set_pausable_flag(evt["data"], False)
-        for queue in self._internal_queues:
+        for _, queue in self.queues.items():
             queue.put(evt)
-        return len(self._internal_queues)
+        return len(self.queues)
 
     def put(self, queue_id, data, **kwargs):
         queue = self.queues.get(queue_id)
@@ -101,23 +101,17 @@ class EventQueue:
                 )
         queue.put(data, **kwargs)
 
-    def get(self, queue_id, worker_id, **kwargs):
-        # Get work from specific queue and fallback to the default one
-        queue = self.queues.get(queue_id, self.queues[self.DEFAULT_QUEUE])
-        internal_queue = self._internal_queues[worker_id]
-        try:
-            blocking = True
-            if not internal_queue.empty():
-                # As the batch is complete, there is no reason to wait for event
-                # from queue.
-                blocking = False
-            return queue.get(block=blocking, timeout=self.POLLING_TIMEOUT)
-        except Empty:
-            # Work queue is empty, check if an end of batch event is present
-            return internal_queue.get(block=True, timeout=self.INTERNAL_POLLING_TIMEOUT)
+    def get(self, queue_id, **kwargs):
+        queue = self.queues.get(queue_id)
+        if not queue:
+            # Fallback to default queue
+            queue = self.queues[self.DEFAULT_QUEUE]
+        return queue.get(**kwargs)
 
     def id_from_event(self, _event):
-        return self.DEFAULT_QUEUE
+        queue_id = self.queue_ids[self._current_queue]
+        self._current_queue = (self._current_queue + 1) % len(self.queue_ids)
+        return queue_id
 
     def get_queue_id(self, worker_id):
         return self.queue_ids[worker_id % len(self.queue_ids)]
@@ -384,7 +378,6 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
         self.logger = logger
         self.topic = topic
         self._stop_requested = Event()
-        self._worker_id = worker_id
 
         self._retry_delay = get_retry_delay(self.app_conf)
 
@@ -404,9 +397,7 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
             event, next_filter = self._events_to_resume.pop()
             return event, next_filter
 
-        event = self._events_queue.get(
-            self._events_queue_id, self._worker_id, block=True, timeout=1.0
-        )
+        event = self._events_queue.get(self._events_queue_id, block=True, timeout=1.0)
         return event, None
 
     def _consume(self):
@@ -792,8 +783,7 @@ class KafkaConsumerPool:
         self.conf = conf
         self.endpoint = endpoint
         self.logger = logger or get_logger(None)
-        # We must have an extra process for default queue
-        self.processes = (processes or os.cpu_count()) + 1
+        self.processes = processes or os.cpu_count()
         self.topic = topic
         self.running = False
         self.worker_args = args
@@ -817,6 +807,7 @@ class KafkaConsumerPool:
             events_queue=self._events_queue,
             offsets_queue=self._offsets_queue,
             app_conf=self.conf,
+            workers=self.processes,
             **self.worker_kwargs,
         )
         self.logger.info("Spawning worker %s %s", KafkaBatchFeeder.__name__, worker_id)
@@ -848,8 +839,12 @@ class KafkaConsumerPool:
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
         try:
+            # We must have an extra process for default queue
+            nb_processes = self.processes + 1
+
             worker_factories = {"feeder": self._start_feeder}
-            self._workers = {w: None for w in range(self.processes)}
+
+            self._workers = {w: None for w in range(nb_processes)}
             self._workers["feeder"] = None
 
             while self.running:
