@@ -561,7 +561,7 @@ class KafkaBatchFeeder(
             self._app_conf.get("batch_size"), DEFAULT_BATCH_SIZE
         )
         self._commit_interval = float_value(
-            self._app_conf.get("batch_commit_interval_"), DEFAULT_BATCH_INTERVAL
+            self._app_conf.get("batch_commit_interval"), DEFAULT_BATCH_INTERVAL
         )
         self._consumer = None
         self._stop_requested = Event()
