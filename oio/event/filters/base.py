@@ -57,6 +57,8 @@ class Filter(object):
             "request_id:%(request_id)s",
             "account:%(account)s",
             "container:%(container)s",
+            "cid:%(cid)s",
+            "bucket:%(bucket)s",
             "object:%(path)s",
             "content_id:%(content)s",
             "version_id:%(version)s",

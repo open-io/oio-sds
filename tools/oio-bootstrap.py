@@ -1488,7 +1488,7 @@ log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 log_format = log_type:log	exc_text:%(exc_text)s	exc_filename:%(exc_filename)s	exc_lineno:%(exc_lineno)s	message:%(message)s
-log_request_format = log_type:access	request_id:%(request_id)s	status_int:%(status)d	duration_float:%(duration)f	handler:%(handler)s	event:%(event_type)s	tube:%(tube)s	topic:%(topic)s	account:%(account)s	container:%(container)s	object:%(path)s	content_id:%(content)s	version_id:%(version)s
+log_request_format = log_type:access	worker_id:%(worker_id)s	request_id:%(request_id)s	status_int:%(status)d	duration_float:%(duration)f	handler:%(handler)s	event:%(event_type)s	tube:%(tube)s	topic:%(topic)s	account:%(account)s	container:%(container)s	cid:%(cid)s	bucket:%(bucket)s	object:%(path)s	content_id:%(content)s	version_id:%(version)s
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 broker_endpoint = ${QUEUE_URL}

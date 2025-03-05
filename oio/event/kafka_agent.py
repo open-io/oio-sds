@@ -127,12 +127,15 @@ class KafkaEventWorker(KafkaConsumerWorker):
 
     def log_and_statsd(self, start, status, _extra):
         extra = {
+            "worker_id": "-",
             "request_id": "-",
             "tube": "-",
             "topic": "-",
             "event_type": "-",
+            "cid": "-",
             "container": "-",
             "account": "-",
+            "bucket": "-",
             "path": "-",
             "content": "-",
             "version": "-",
@@ -162,6 +165,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
             "tube": self.topic,
             "topic": self.topic,
             "handler": None,
+            "worker_id": self.name,
             **asdict(ctx),
         }
 
