@@ -5,6 +5,7 @@ workflow:
   root:
     pipeline: oio-sds-root
     application: oio-sds
+    optional: true
     payload:
       git.author: ""
       git.branch: "master"

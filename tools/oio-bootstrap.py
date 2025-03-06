@@ -18,21 +18,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import print_function
-from six import iterkeys, iteritems
-from six.moves import xrange
+import argparse
 import errno
 import grp
-import yaml
 import os
 import pwd
+import shutil
+import sys
+from collections import namedtuple
 from random import choice
 from string import ascii_letters, digits, Template
-import sys
-import argparse
-from collections import namedtuple
-import shutil
-from urllib.parse import parse_qsl, urlsplit, urlunsplit
+import yaml
 
 C_LANG_SERVICES = (
     "oio-daemon",
@@ -2038,22 +2034,19 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
-template_systemd_rabbitmq_to_beanstalkd = """
+template_systemd_service_tinyproxy = """
 [Unit]
-Description=[OpenIO] Forward messages from RabbitMQ to Beanstalkd
-After=oio-meta2-1.service
+Description=[OpenIO] Forward all requests from ObjectStorageApi
+After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},event
+OioGroup=${NS},proxy,httpproxy
 
 [Service]
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} --ns ${NS} --workers 2 --input-queue-argument x-queue-type=quorum
-Environment=PYTHONPATH=${PYTHONPATH}
-Environment=LD_LIBRARY_PATH=${LIBDIR}
+ExecStart=${EXE} -d -c ${CONFIG}
 ${ENVIRONMENT}
-Environment=OIO_RABBITMQ_ENDPOINT=amqp://guest:guest@127.0.0.1:56666/%%2F;amqp://guest:guest@127.0.0.1:5672/%%2F
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 
 [Install]
@@ -2231,7 +2224,7 @@ def generate(options):
     final_conf = {}
     final_services = {}
 
-    ports = (x for x in xrange(options["port"], 60000))
+    ports = (x for x in range(options["port"], 60000))
     port_proxy = next(ports)
     port_account = next(ports)
     port_admin = next(ports)
@@ -2260,6 +2253,7 @@ def generate(options):
     want_service_id = "" if options.get("with_service_id") else "#"
 
     DATADIR = options.get("DATADIR", SDSDIR + "/data")
+    TINYPROXY_CONFIG = options.get("tinyproxy_config")
     WEBHOOK = "webhook" if options.get("webhook_enabled", False) else ""
     WEBHOOK_ENDPOINT = options.get("webhook_endpoint", "")
 
@@ -2459,7 +2453,7 @@ def generate(options):
             target.deps.append(service_name)
         service_path = "{}/{}".format(env["SYSTEMDDIR"], service_name)
         environment = list()
-        for key in (k for k in iterkeys(env) if k.startswith("env.")):
+        for key in (k for k in env.keys() if k.startswith("env.")):
             environment.append("Environment=%s=%s" % (key[4:], env[key]))
         env.update({"ENVIRONMENT": "\n".join(environment)})
         with open(service_path, "w+") as f:
@@ -3568,6 +3562,18 @@ def generate(options):
         add_service_to_conf=False,
     )
 
+    # tinyproxy
+    if TINYPROXY_CONFIG:
+        env = subenv(
+            {
+                "CONFIG": os.path.abspath(f"{SRCDIR}/../{TINYPROXY_CONFIG}"),
+                "EXE": "tinyproxy",
+                "SRVNUM": 1,
+                "SRVTYPE": "tinyproxy",
+            }
+        )
+        register_service(env, template_systemd_service_tinyproxy, root_target)
+
     # webhook test server
     if WEBHOOK:
         env = subenv(
@@ -3605,7 +3611,7 @@ def generate(options):
         tpl = Template(template_local_ns)
         f.write(tpl.safe_substitute(env))
         # Now dump the configuration
-        for k, v in iteritems(options["config"]):
+        for k, v in options["config"].items():
             strv = str(v)
             if isinstance(v, bool):
                 strv = strv.lower()
@@ -3725,7 +3731,7 @@ def dump_config(conf):
 
 
 def merge_config(base, inc):
-    for k, v in iteritems(inc):
+    for k, v in inc.items():
         if isinstance(v, dict):
             if k not in base:
                 base[k] = v

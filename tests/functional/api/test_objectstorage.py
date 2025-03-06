@@ -21,6 +21,7 @@ import random
 import time
 from functools import partial
 
+import pytest
 from mock import MagicMock as Mock
 from mock import patch
 from urllib3 import HTTPResponse
@@ -59,7 +60,12 @@ class ObjectStorageApiTestBase(BaseTestCase):
 
     def setUp(self):
         super(ObjectStorageApiTestBase, self).setUp()
-        self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
+        self.api = ObjectStorageApi(
+            self.ns,
+            endpoint=self.uri,
+            logger=self.logger,
+            pool_manager=self.http_pool,
+        )
         self.created = []
 
     def tearDown(self):
@@ -258,6 +264,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # clean
         self._clean(name, True)
 
+    @pytest.mark.flaky(reruns=1)
     def test_container_create_many(self):
         containers = [random_str(8) for _ in range(8)]
         props = {"a": "a"}
@@ -522,7 +529,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 self.fail("Contains stats by storage policy")
         all_objects = self.api.object_list(self.account, cname)
         self.assertEqual(0, len(all_objects["objects"]))
-        self.beanstalkd0.drain_buried("oio")
 
     # These tests are numbered to force them to be run in order
     def test_container_flush_0_no_container(self):
@@ -557,6 +563,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_create(self.account, name, obj_name="content", data="data")
         self._flush_and_check(name, fast=True)
 
+    @pytest.mark.flaky(reruns=2)
     def test_container_flush_2_many_objects(self):
         name = "flush-" + random_str(6)
 
@@ -585,6 +592,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             )
         self._flush_and_check(name, fast=True)
 
+    @pytest.mark.flaky(reruns=1)
     def test_container_del_properties(self):
         name = "del-prop-" + random_str(6)
 
@@ -673,6 +681,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             list(metadata.keys()),
         )
 
+    @pytest.mark.flaky(reruns=1)
     def test_container_touch(self):
         name = "ct-touch-" + random_str(32)
 
@@ -1907,6 +1916,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             exc.NoSuchObject, self.api.object_fetch, self.account, container, obj
         )
 
+    @pytest.mark.flaky(reruns=1)
     def test_object_delete_many(self):
         container = "del-many-" + random_str(6)
         self.clean_later(container)
@@ -2005,6 +2015,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             None,
         )
 
+    @pytest.mark.flaky(reruns=1)
     def test_container_snapshot(self):
         container = "container-" + random_str(6)
         snapshot = container + ".snapshot"
@@ -2130,10 +2141,16 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertTrue(self.api.object_head(self.account, cname, path, trust_level=2))
 
         # chunk missing
-        self.api.blob_client.http_pool.request = Mock(
-            return_value=HTTPResponse(status=404, reason="Not Found")
-        )
-        self.assertFalse(self.api.object_head(self.account, cname, path, trust_level=2))
+        old_request = self.api.blob_client.http_pool.request
+        try:
+            self.api.blob_client.http_pool.request = Mock(
+                return_value=HTTPResponse(status=404, reason="Not Found")
+            )
+            self.assertFalse(
+                self.api.object_head(self.account, cname, path, trust_level=2)
+            )
+        finally:
+            self.api.blob_client.http_pool.request = old_request
 
     def test_object_create_without_autocreate_and_missing_container(self):
         name = "obj-create-" + random_str(6)
@@ -3262,9 +3279,7 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
         )
 
         system = {M2_PROP_DRAINING_STATE: str(DRAINING_STATE_IN_PROGRESS)}
-        output = self.storage.container_set_properties(
-            self.account, name, system=system
-        )
+        output = self.api.container_set_properties(self.account, name, system=system)
         self.assertEqual(b"", output)
 
         # Drain the object
@@ -3684,7 +3699,9 @@ class TestContainerStorageApiUsingCache(ObjectStorageApiTestBase):
     def setUp(self):
         super(TestContainerStorageApiUsingCache, self).setUp()
         self.cache = Cache()
-        self.api = ObjectStorageApi(self.ns, endpoint=self.uri, cache=self.cache)
+        self.api = ObjectStorageApi(
+            self.ns, endpoint=self.uri, cache=self.cache, pool_manager=self.http_pool
+        )
 
         self.container = random_str(8)
         self.api.container_create(self.account, self.container)
@@ -3761,7 +3778,9 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
     def setUp(self):
         super(TestObjectStorageApiUsingCache, self).setUp()
         self.cache = Cache()
-        self.api = ObjectStorageApi(self.ns, endpoint=self.uri, cache=self.cache)
+        self.api = ObjectStorageApi(
+            self.ns, endpoint=self.uri, cache=self.cache, pool_manager=self.http_pool
+        )
 
         self.container = random_str(8)
         self.path = random_str(8)

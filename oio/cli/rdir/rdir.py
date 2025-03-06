@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,6 @@ from argparse import ArgumentError
 from itertools import combinations
 from logging import getLogger
 
-from six import iteritems
-
 from oio.cli import Lister
 from oio.cli.common.utils import ValueCheckStoreTrueAction, format_detailed_scores
 from oio.common.exceptions import OioException
@@ -31,7 +29,7 @@ def _format_assignments(all_services, svc_col_title="Rawx", check=False):
     """Prepare the list of results for display"""
     # Possible improvement: if we do not sort by rdir,
     # we can yield results instead of building a list.
-    results = list()
+    results = []
     for svc in all_services:
         rdirs = svc.get("rdir", [{"addr": "n/a", "tags": {}}])
         joined_ids = ",".join(
@@ -57,7 +55,7 @@ def _format_assignments(all_services, svc_col_title="Rawx", check=False):
     if check:
         columns += ("Number of replicas", "Minimum distance", "Check status")
     else:
-        columns += ("%s location" % svc_col_title, "Rdir location")
+        columns += (f"{svc_col_title} location", "Rdir location")
     return columns, results
 
 
@@ -115,6 +113,7 @@ class RdirBootstrap(Lister):
                 dry_run=parsed_args.dry_run,
                 connection_timeout=30.0,
                 read_timeout=90.0,
+                request_attempts=3,
             )
         except OioException as exc:
             self.success = False
@@ -225,7 +224,7 @@ class RdirAssignments(Lister):
             managed_svc = dispatcher.get_aggregated_assignments(
                 parsed_args.service_type, connection_timeout=30.0, read_timeout=90.0
             )
-            for rdir, managed in iteritems(managed_svc):
+            for rdir, managed in managed_svc.items():
                 results.append((rdir, len(managed), " ".join(managed)))
             results.sort()
             if parsed_args.stats:

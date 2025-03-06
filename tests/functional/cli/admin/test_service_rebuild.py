@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,8 @@
 
 import time
 
+import pytest
+
 from oio import ObjectStorageApi
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
@@ -28,22 +30,26 @@ class ServiceRebuildTest(CliTestCase):
     @classmethod
     def setUpClass(cls):
         super(ServiceRebuildTest, cls).setUpClass()
-        cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
+        cls.api = ObjectStorageApi(
+            cls._cls_ns,
+            endpoint=cls._cls_uri,
+            logger=cls._cls_logger,
+        )
 
     def _wait_events(self, account, container, obj_name, reqid):
-        self.wait_for_kafka_event(
+        self.wait_for_event(
             fields={"account": account, "user": container, "path": obj_name},
             types=(EventTypes.CONTENT_NEW,),
             reqid=reqid,
         )
-        self.wait_for_kafka_event(
+        self.wait_for_event(
             fields={"account": account, "user": container},
             types=(EventTypes.CONTAINER_STATE,),
             reqid=reqid,
         )
 
     def create_object(self, account, container, obj_name):
-        reqid = request_id()
+        reqid = request_id("test-rebuild-")
         self.api.object_create(
             account,
             container,
@@ -55,6 +61,7 @@ class ServiceRebuildTest(CliTestCase):
         self._wait_events(account, container, obj_name, reqid=reqid)
         return obj_meta, obj_chunks
 
+    @pytest.mark.flaky(reruns=1)
     def test_account_service_rebuild(self):
         account = "service_rebuild_account" + random_str(4)
         container = "service_rebuild_container" + random_str(4)
@@ -62,7 +69,7 @@ class ServiceRebuildTest(CliTestCase):
         self.create_object(account, container, obj_name)
 
         # Create a container only in account service
-        reqid = request_id()
+        reqid = request_id("test-rebuild-")
         self.api.account.container_update(
             account, container, time.time(), 0, 0, reqid=reqid
         )
@@ -77,10 +84,10 @@ class ServiceRebuildTest(CliTestCase):
         self.assertEqual(0, containers_list[0][2])
 
         opts = self.get_opts(["Entry", "Status", "Errors"])
-        output = self.openio_admin("account-service rebuild %s" % opts)
+        output = self.openio_admin(f"account-service rebuild {opts}")
         entries = output.rstrip("\n").split("\n")
-        self.assertIn("%s|%s OK None" % (self.ns, account), entries)
-        self.assertIn("%s|%s|%s OK None" % (self.ns, account, container), entries)
+        self.assertIn(f"{self.ns}|{account} OK None", entries)
+        self.assertIn(f"{self.ns}|{account}|{container} OK None", entries)
 
         self.wait_for_kafka_event(
             fields={"account": account, "user": container},

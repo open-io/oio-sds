@@ -62,6 +62,8 @@ jobs:
 
           fdbtag="fdb-${FDB_VERSION}"
           worker cache pull $fdbtag
+          worker cache pull tinyproxy
+          chmod +x src/tinyproxy && mv src/tinyproxy $HOME/oiovenv/bin/
           dpkg -i fdb-packages/*.deb
           systemctl stop foundationdb.service
           systemctl disable foundationdb.service

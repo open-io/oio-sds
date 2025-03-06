@@ -23,4 +23,26 @@ jobs:
           fi
     requirements:
       # - binary: wget
-      - model: Debian11-Container
+      - model: Debian12-Container
+
+  - job: Compile tinyproxy
+    steps:
+      - name: Compile tinyproxy
+        script: |+
+          #!/bin/bash
+          TINYPROXY_VERSION="1.11.2"
+          tag="tinyproxy"
+          set -ex
+          if ! worker cache pull $tag
+          then
+            apt-get -q update
+            apt-get -q -y install build-essential
+            curl -s -S -L --output tinyproxy.tar.gz \
+              https://github.com/tinyproxy/tinyproxy/releases/download/${TINYPROXY_VERSION}/tinyproxy-${TINYPROXY_VERSION}.tar.gz
+            tar -xf tinyproxy.tar.gz
+            cd tinyproxy-${TINYPROXY_VERSION}
+            ./configure && make -j2
+            worker cache push $tag src/tinyproxy
+          fi
+    requirements:
+      - model: ubuntu-focal

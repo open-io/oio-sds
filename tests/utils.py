@@ -136,9 +136,7 @@ class CommonTestCase(unittest.TestCase):
         return v and v != "off"
 
     def is_running_on_public_ci(self):
-        from os import getenv
-
-        clues = (getenv("TRAVIS"), getenv("CIRCLECI"))
+        clues = (os.getenv("TRAVIS"), os.getenv("CIRCLECI"))
         return any(clue is not None for clue in clues)
 
     def _random_user(self):
@@ -451,7 +449,9 @@ class CommonTestCase(unittest.TestCase):
             from oio.rdir.client import RdirClient
 
             self._rdir_client = RdirClient(
-                self.conf, directory_client=self.storage.directory, logger=self.logger
+                self.conf,
+                directory_client=self.storage.directory,
+                logger=self.logger,
             )
         return self._rdir_client
 

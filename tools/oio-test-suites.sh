@@ -314,6 +314,11 @@ test_cli () {
 	cd $SRCDIR
 	tox -e cli
 
+	export OIO_PROXY_URL="http://127.0.0.1:8888"
+	export TEST_SUITE="${TEST_SUITE}-proxy"
+	tox -e cli tests/functional/cli/object
+	unset OIO_PROXY_URL
+
 	$SYSTEMCTL stop oio-cluster.target
 	$OPENIOCTL stop
 	sleep 0.5

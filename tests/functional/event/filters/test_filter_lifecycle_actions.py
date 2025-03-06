@@ -153,8 +153,8 @@ class TestFilterLifecycleActions(BaseTestCase):
             reqid=reqid,
         )
 
-        self.lifeycle_actions = LifecycleActions(app=self.app, conf=self.conf)
-        self.lifeycle_actions.process(event, None)
+        self.lifecycle_actions = LifecycleActions(app=self.app, conf=self.conf)
+        self.lifecycle_actions.process(event, None)
 
         evt = self.wait_for_kafka_event(
             reqid=reqid,
