@@ -35,8 +35,9 @@ class TestEventAgentDelete(BaseTestCase):
         "rdir_connection_timeout": 0.5,
         "rdir_read_timeout": 5.0,
         "log_facility": "LOG_LOCAL0",
-        "log_level": "INFO",
+        "log_level": "DEBUG",
         "log_address": "/dev/log",
+        "syslog_prefix": "test-agent",
     }
     handlers_conf = """
 
@@ -54,7 +55,7 @@ use = egg:oio#content_cleaner
 concurrency = 4
 pool_connections = 16
 pool_maxsize = 16
-timeout = 4.5
+timeout = 1.0
 
 [filter:log]
 use = egg:oio#logger
@@ -71,7 +72,7 @@ broker_endpoint = {endpoint}
 
     def setUp(self):
         super(TestEventAgentDelete, self).setUp()
-        self.test_conf = self.CONF.copy()
+        self.agent_conf = self.CONF.copy()
         namespace = self.conf["namespace"]
         namespace_lower = namespace.lower()
         ns_conf = load_namespace_conf(namespace)
@@ -80,7 +81,7 @@ broker_endpoint = {endpoint}
             f"{namespace_lower}-rawx-{i}" for i in range(1, 1 + nb_rawx)
         )
         # Update event agent conf values
-        self.test_conf.update(
+        self.agent_conf.update(
             {
                 "namespace": namespace,
                 "event_queue_ids": event_queue_ids,
@@ -89,24 +90,24 @@ broker_endpoint = {endpoint}
             }
         )
         # Configuration from dedicated file
-        self.workers = int_value(self.test_conf.get("workers"), 1)
+        self.workers = int_value(self.agent_conf.get("workers"), 1)
 
         # Configuration either from dedicated file or central file (in that order)
-        self.endpoint = self.test_conf.get(
+        self.endpoint = self.agent_conf.get(
             "broker_endpoint", ns_conf.get("event-agent", DEFAULT_ENDPOINT)
         )
-        self.topic = self.test_conf.get(
+        self.topic = self.agent_conf.get(
             "topic", ns_conf.get("events.kafka.topic", DEFAULT_TOPIC)
         )
-        self.group_id = self.test_conf.get(
+        self.group_id = self.agent_conf.get(
             "group_id", ns_conf.get("events.kafka.group_id", "event-agent")
         )
         self.created_objects = []
 
     def tearDown(self):
-        super().tearDown()
         self._service("oio-rawx.target", "start", wait=3)
         self._service("oio-event-agent-delete.target", "start", wait=3)
+        super().tearDown()
 
     def create_objects(self, cname, n_obj=10, reqid=None):
         self.clean_later(cname)
@@ -122,7 +123,7 @@ broker_endpoint = {endpoint}
             )
             self.created_objects.append(name)
         for i in range(n_obj * 3):
-            _event = self.wait_for_kafka_event(
+            _event = self.wait_for_event(
                 reqid=reqid,
                 types=(EventTypes.CHUNK_NEW,),
                 timeout=10.0,
@@ -135,6 +136,7 @@ broker_endpoint = {endpoint}
         """
         cname = f"event-agent-delete-{time.time()}"
         create_reqid = request_id("event-agent-delete-chunk-")
+        delete_reqid = request_id("event-agent-delete-chunk-")
         self.create_objects(cname, 10, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
@@ -143,13 +145,13 @@ broker_endpoint = {endpoint}
         self._service("oio-rawx.target", "stop", wait=5)
         # Delete objects created
         for obj in self.created_objects:
-            self.storage.object_delete(self.account, cname, obj=obj)
+            self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)
         with tempfile.NamedTemporaryFile(mode="w", suffix=".conf") as temp:
             temp.write(self.handlers_conf.format(endpoint=self.endpoint))
             temp.flush()
-            self.test_conf["handlers_conf"] = temp.name
+            self.agent_conf["handlers_conf"] = temp.name
             self.pool = KafkaConsumerPool(
-                self.test_conf,
+                self.agent_conf,
                 self.endpoint,
                 self.topic,
                 worker_class=KafkaEventWorker,
@@ -183,7 +185,7 @@ broker_endpoint = {endpoint}
                 )
                 self.pool._workers[worker_id].start()
 
-            def run_for_180_s():
+            def run_limited_time():
                 "Run workers for 180s"
                 nb_processes = self.pool.processes + 1
                 worker_factories = {"feeder": self.pool._start_feeder}
@@ -191,7 +193,7 @@ broker_endpoint = {endpoint}
                 self.pool._workers = {w: None for w in range(nb_processes)}
                 self.pool._workers["feeder"] = None
                 counter = 0
-                max_time = 180
+                max_time = 45
                 while counter < max_time:
                     for worker_id, instance in self.pool._workers.items():
                         if instance is None or not instance.is_alive():
@@ -212,7 +214,7 @@ broker_endpoint = {endpoint}
                 self.pool.logger.info("All workers stopped")
 
             # Start a kafka consumer pool on oio-delete topic
-            self.pool.run = run_for_180_s
+            self.pool.run = run_limited_time
             self.pool.run()
             # No errors should be in the queue as producer
             # error are not expected from the worker
