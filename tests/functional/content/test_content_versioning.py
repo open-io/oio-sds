@@ -770,7 +770,8 @@ class TestContentVersioning(BaseTestCase):
         self.assertEqual(objects[5]["name"], "past_obj")
 
     def test_object_list_short_timeout(self):
-        attempts = 10
+        attempts = 20
+        marker_count = 15
         obj_count = 401
         reqid = request_id("test-obj-list-")
         self.admin.proxy_set_live_config(
@@ -790,6 +791,7 @@ class TestContentVersioning(BaseTestCase):
             reqid=reqid + "-prep",
         )
         # Then create a lot of delete markers
+        self.logger.info("Creating %d objects", obj_count)
         for obj in object_names:
             self.storage.object_create_ext(
                 self.account,
@@ -799,27 +801,32 @@ class TestContentVersioning(BaseTestCase):
                 policy="SINGLE",
                 reqid=reqid + "-prep",
             )
-        for _ in range(12):
+        self.logger.info("Creating %d delete markers for each object", marker_count)
+        for _ in range(marker_count):
             self.storage.object_delete_many(
                 self.account, self.container, object_names, reqid=reqid + "-prep"
             )
         # Finally try to get an empty yet "truncated" listing, with a marker
-        timeout = 0.01 * attempts
-        for _ in range(attempts):
+        self.logger.info(
+            "Get the list of objects with a short timeout (should be empty)",
+        )
+        timeout = 0.005 * attempts
+        for attempt in range(attempts):
             try:
                 res = self.storage.object_list(
                     self.account,
                     self.container,
                     versions=False,
                     limit=100,
-                    reqid=reqid,
+                    reqid=f"{reqid}-{attempt}",
                     read_timeout=timeout,
                 )
                 self.assertListEqual(
                     res["objects"], [], "Some objects have no delete marker!"
                 )
                 if not res.get("truncated"):
-                    timeout -= 0.01
+                    timeout -= 0.005
+                    self.logger.info("Retrying with a shorter timeout (%.3fs)", timeout)
                     continue
                 self.assertLess(res.get("next_marker"), object_names[-1])
                 break

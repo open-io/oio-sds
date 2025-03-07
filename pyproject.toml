@@ -18,6 +18,7 @@ build-backend = "setuptools.build_meta"
 addopts = [
   "--timer-top-n=10",
 ]
+log_level = "DEBUG"
 markers = [
   "no_thread_patch: tests which must run with unpatched thread module",
 ]
