@@ -101,7 +101,7 @@ class Filter(object):
 
     def log_context_from_env(self, env, context_class=FilterContext):
         ctx = log_context_from_msg(env, context_class)
-        ctx.filter_name = self.__class__.__name__
+        ctx.filter_name = self.conf.get("ctx_name")
         return ctx
 
     def request_pause(self):

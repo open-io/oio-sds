@@ -207,7 +207,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
             handlers = [handler]
 
         for handler in handlers:
-            replacements["handler"] = handler.__class__.__name__
+            replacements["handler"] = handler.conf.get("ctx_name")
             handler(message, _cb)
 
         return None
