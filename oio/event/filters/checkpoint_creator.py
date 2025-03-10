@@ -32,13 +32,22 @@ from oio.lifecycle.metrics import (
 
 
 class Context:
-    def __init__(self, run_id, account_id, bucket_id, container_id, root_container_id):
+    def __init__(
+        self,
+        run_id,
+        account_id,
+        bucket_id,
+        container_id,
+        root_container_id,
+        request_id=None,
+    ):
         self.run_id = run_id
         self.account_id = account_id
         self.bucket_id = bucket_id
         self.container_id = container_id
         self.root_container_id = root_container_id
         self.container_to_process = None
+        self.request_id = request_id
 
 
 class CheckpointCreatorFilter(Filter):
@@ -95,8 +104,7 @@ class CheckpointCreatorFilter(Filter):
 
         # Retrieve container status
         meta = self._container_client.container_get_properties(
-            cid=cid,
-            params={"urgent": 1},
+            cid=cid, params={"urgent": 1}, reqid=self._event_context.request_id
         )
 
         # Ensure no sharding is in progress
@@ -108,7 +116,12 @@ class CheckpointCreatorFilter(Filter):
     def _check_container_up_to_date(self, root_cid, cid, bounds, env):
         lower, upper = bounds
         shards = self._sharding_client.get_shards_in_range(
-            None, None, lower, upper, root_cid=root_cid
+            None,
+            None,
+            lower,
+            upper,
+            root_cid=root_cid,
+            reqid=self._event_context.request_id,
         )
         shards = [s for s in shards]
         err_resp = None
@@ -159,6 +172,7 @@ class CheckpointCreatorFilter(Filter):
             _ = self._container_client.container_checkpoint(
                 cid=cid,
                 suffix=checkpoint_suffix,
+                reqid=self._event_context.request_id,
             )
         except Conflict:
             self.logger.info(
@@ -216,7 +230,9 @@ class CheckpointCreatorFilter(Filter):
             root_cid = data.get("root_cid")
             cid = data.get("cid")
 
-            self._event_context = Context(run_id, account_id, bucket_id, cid, root_cid)
+            self._event_context = Context(
+                run_id, account_id, bucket_id, cid, root_cid, request_id=event.reqid
+            )
 
             err = self._check_no_sharding()
             if err:
