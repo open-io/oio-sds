@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +17,6 @@
 
 import random
 
-from oio.api.object_storage import ObjectStorageApi
 from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
 from tests.utils import BaseTestCase, random_str
@@ -24,8 +24,8 @@ from tests.utils import BaseTestCase, random_str
 
 class TestMeta2Database(BaseTestCase):
     def setUp(self):
-        super(TestMeta2Database, self).setUp()
-        self.api = ObjectStorageApi(self.ns)
+        super().setUp()
+        self.api = self.storage
         self.account = "test_meta2_database"
         self.reference = "meta2_database_" + random_str(4)
         self.meta2_database = Meta2Database(self.conf)
@@ -33,7 +33,7 @@ class TestMeta2Database(BaseTestCase):
 
     def _get_peers(self):
         linked_services = self.api.directory.list(self.account, self.reference)
-        peers = list()
+        peers = []
         for service in linked_services["srv"]:
             if service["type"] == self.service_type:
                 peers.append(service["host"])
@@ -47,7 +47,7 @@ class TestMeta2Database(BaseTestCase):
         all_meta2_services = self.conscience.all_services(self.service_type, True)
         if len(all_meta2_services) <= len(current_peers):
             self.skipTest(
-                "need at least %d more %s" % (len(current_peers) + 1, self.service_type)
+                f"need at least {len(current_peers) + 1} more {self.service_type}"
             )
 
         expected_peers = list(current_peers)
@@ -95,12 +95,12 @@ class TestMeta2Database(BaseTestCase):
         self._test_move()
 
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test1")
+            self.api.object_get_properties(self.account, self.reference, "test1")
         self.api.object_create(
             self.account, self.reference, data="move meta2", obj_name="test2"
         )
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test2")
+            self.api.object_get_properties(self.account, self.reference, "test2")
 
     def test_move_with_seq(self):
         self.api.container_create(self.account, self.reference)
@@ -114,12 +114,12 @@ class TestMeta2Database(BaseTestCase):
         self._test_move(base=base)
 
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test1")
+            self.api.object_get_properties(self.account, self.reference, "test1")
         self.api.object_create(
             self.account, self.reference, data="move meta2", obj_name="test2"
         )
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test2")
+            self.api.object_get_properties(self.account, self.reference, "test2")
 
     def test_move_without_dst(self):
         self.api.container_create(self.account, self.reference)
@@ -130,12 +130,12 @@ class TestMeta2Database(BaseTestCase):
         self._test_move(fixed_dst=False)
 
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test1")
+            self.api.object_get_properties(self.account, self.reference, "test1")
         self.api.object_create(
             self.account, self.reference, data="move meta2", obj_name="test2"
         )
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test2")
+            self.api.object_get_properties(self.account, self.reference, "test2")
 
     def test_move_with_src_not_used(self):
         self.api.container_create(self.account, self.reference)
@@ -222,12 +222,12 @@ class TestMeta2Database(BaseTestCase):
         self._test_move()
 
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test1")
+            self.api.object_get_properties(self.account, self.reference, "test1")
         self.api.object_create(
             self.account, self.reference, data="move meta2", obj_name="test2"
         )
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test2")
+            self.api.object_get_properties(self.account, self.reference, "test2")
 
     def test_move_with_1_remaining_base(self):
         self.api.container_create(self.account, self.reference)
@@ -247,9 +247,9 @@ class TestMeta2Database(BaseTestCase):
         self._test_move()
 
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test1")
+            self.api.object_get_properties(self.account, self.reference, "test1")
         self.api.object_create(
             self.account, self.reference, data="move meta2", obj_name="test2"
         )
         for _ in range(0, 5):
-            self.api.object_show(self.account, self.reference, "test2")
+            self.api.object_get_properties(self.account, self.reference, "test2")

@@ -399,7 +399,7 @@ class TestLifecycleCrawler(BaseTestCase):
         # Ensure object is not accessible anymore
         self.assertRaises(
             NoSuchObject,
-            self.storage.object_show,
+            self.storage.object_get_properties,
             self.account,
             self.container,
             expect.key,
@@ -414,7 +414,7 @@ class TestLifecycleCrawler(BaseTestCase):
 
     def _validate_delete_marker_action(self, expect):
         # Ensure a delete marker had been added
-        props = self.storage.object_show(
+        props = self.storage.object_get_properties(
             self.account,
             self.container,
             expect.key,
@@ -423,7 +423,7 @@ class TestLifecycleCrawler(BaseTestCase):
         self.assertTrue(props["deleted"])
 
         # Ensure previous version still exist
-        self.storage.object_show(
+        self.storage.object_get_properties(
             self.account,
             self.container,
             expect.key,
