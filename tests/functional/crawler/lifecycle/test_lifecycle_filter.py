@@ -20,7 +20,9 @@ from enum import Enum
 from unittest.mock import patch
 
 from oio.common.constants import (
+    ACL_PROPERTY_KEY,
     LIFECYCLE_USER_AGENT,
+    LOGGING_PROPERTY_KEY,
     M2_PROP_BUCKET_NAME,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_VERSIONING_POLICY,
@@ -39,6 +41,20 @@ from tests.utils import BaseTestCase, random_str
 
 INTERNAL_ACCOUNT = "internal"
 INTERNAL_BUCKET = "internal_lifecycle"
+BUCKET_LOGGING = {
+    "Bucket": "test2",
+    "Prefix": "Logs/",
+    "Grant": [],
+}
+BUCKET_ACL = {
+    "Owner": "demo:demo",
+    "Grant": [
+        {
+            "Permission": "FULL_CONTROL",
+            "Grantee": "demo:demo",
+        },
+    ],
+}
 
 
 class FilterApp(object):
@@ -116,11 +132,17 @@ class TestLifecycleCrawler(BaseTestCase):
             M2_PROP_BUCKET_NAME: self.container,
             M2_PROP_LIFECYCLE_TIME_BYPASS: "1",
         }
+        properties = {
+            ACL_PROPERTY_KEY: json.dumps(BUCKET_ACL, separators=(",", ":")),
+            LOGGING_PROPERTY_KEY: json.dumps(BUCKET_LOGGING, separators=(",", ":")),
+        }
         self.local_copies = []
         self.containers_to_process = []
         # Create containers
         for container in (self.container, self.container_segment):
-            self.storage.container_create(self.account, container, system=system)
+            self.storage.container_create(
+                self.account, container, properties=properties, system=system
+            )
             self.containers_to_process.append((self.account, container))
             self.clean_later(container)
 
@@ -146,7 +168,6 @@ class TestLifecycleCrawler(BaseTestCase):
         self.wait_for_score(("meta2",), score_threshold=2)
 
     def tearDown(self):
-
         for db_copy in self.local_copies:
             try:
                 os.remove(db_copy)
@@ -374,6 +395,11 @@ class TestLifecycleCrawler(BaseTestCase):
                     event,
                     f"({i}/{len(self.expectations)}) Event not found for: {expect}",
                 )
+                # Validate access logging info are present
+                self.assertIn("has_bucket_logging", event.data)
+                self.assertTrue(event.data["has_bucket_logging"])
+                self.assertIn("bucket_owner", event.data)
+                self.assertEqual(event.data["bucket_owner"], "demo:demo")
                 if expect.action == ExpectedAction.DELETE:
                     self._validate_delete_action(expect)
                 elif expect.action == ExpectedAction.DELETE_MARKER:

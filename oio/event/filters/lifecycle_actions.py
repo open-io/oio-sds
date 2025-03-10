@@ -30,7 +30,7 @@ from oio.common.exceptions import (
 )
 from oio.common.kafka import get_retry_delay
 from oio.common.logger import S3AccessLogger
-from oio.common.utils import request_id
+from oio.common.utils import oio_versionid_to_str_versionid, request_id
 from oio.container.client import ContainerClient
 from oio.event.evob import (
     Event,
@@ -308,10 +308,11 @@ class LifecycleActions(Filter):
         key = context.path
         if key:
             key = quote(quote(key))
+        bucket_owner = context.event.data.get("bucket_owner", "unknown")
 
         self.s3_access_logger.log(
             {
-                "bucket_owner": context.account,
+                "bucket_owner": bucket_owner,
                 "bucket": context.bucket,
                 "time": current_time,
                 "remote_ip": None,  # ignored
@@ -328,7 +329,7 @@ class LifecycleActions(Filter):
                 "turn_around_time": None,  # ignored
                 "referer": None,  # ignored
                 "user_agent": None,  # ignored
-                "version_id": context.version,
+                "version_id": oio_versionid_to_str_versionid(context.version),
                 "host_id": None,  # ignored
                 "signature_version": None,  # ignored
                 "cipher_suite": None,  # ignored

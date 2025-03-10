@@ -4387,10 +4387,10 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	const gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
+		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL, *owner = NULL;
 	const char *main_account = NULL, *run_id = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL, *jprefix = NULL;
+		*jquery_set_tag = NULL, *jprefix = NULL, *jowner = NULL;
 	int is_markers = 0;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL,
 		*jrule_id = NULL, *jis_markers = NULL;
@@ -4416,6 +4416,7 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		{"last_action", &jlast_action, json_type_int, 0},
 		{"rule_id", &jrule_id, json_type_string, 0},
 		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
+		{"bucket_owner", &jowner, json_type_string, 0},
 		{"main_account", &jmain_account, json_type_string, 0},
 		{"run_id", &jrun_id, json_type_string, 0},
 		{NULL, NULL, 0, 0}
@@ -4459,6 +4460,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 	if (jrun_id) {
 		run_id = json_object_get_string(jrun_id);
+	}
+	if (jowner) {
+		owner = json_object_get_string(jowner);
 	}
 
 	if (query_set_tag) {
@@ -4552,6 +4556,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 		append_int64(event, "version", version);
 		append_int64(event, "mtime", mtime);
 		append_boolean(event, "has_bucket_logging", has_bucket_logging);
+		if (has_bucket_logging) {
+			append_str(event, "bucket_owner", g_strdup(owner));
+		}
 		// Add delete marker when versioning and Expiration and
 		// current version is not a deleted marker
 		if (VERSIONS_ENABLED(versioning) && (deleted == 0) && \
@@ -4619,10 +4626,10 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	const gchar *base_set_tags = "INSERT INTO properties (alias, version, key, value) ";
 
 	const char *action = NULL, *query = NULL, *policy = NULL, *suffix = NULL,
-		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL;
+		*query_set_tag = NULL, *rule_id = NULL, *prefix = NULL, *owner = NULL;
 	const char *main_account = NULL, *run_id = NULL;
 	struct json_object *jaction = NULL, *jquery = NULL, *jsuffix = NULL,
-		*jquery_set_tag = NULL, *jprefix = NULL;
+		*jquery_set_tag = NULL, *jprefix = NULL, *jowner = NULL;
 	struct json_object *jpolicy = NULL, *jbatch_size = NULL, *jlast_action = NULL, *jrule_id = NULL,
 	*jhas_bucket_logging = NULL;
 
@@ -4645,6 +4652,7 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		{"last_action", &jlast_action, json_type_int, 0},
 		{"rule_id", &jrule_id, json_type_string, 0},
 		{"has_bucket_logging", &jhas_bucket_logging, json_type_boolean, 0},
+		{"bucket_owner", &jowner, json_type_string, 0},
 		{"run_id", &jrun_id, json_type_string, 0},
 		{"main_account", &jmain_account, json_type_string, 0},
 		{NULL, NULL, 0, 0}
@@ -4693,6 +4701,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 	}
 	if (jrun_id) {
 		run_id = json_object_get_string(jrun_id);
+	}
+	if (jowner) {
+		owner = json_object_get_string(jowner);
 	}
 
 	if (query_set_tag) {
@@ -4781,6 +4792,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		append_int64(event, "version", version);
 		append_int64(event, "mtime", mtime);
 		append_boolean(event, "has_bucket_logging", has_bucket_logging);
+		if (has_bucket_logging) {
+			append_str(event, "bucket_owner", g_strdup(owner));
+		}
 		append_str(event, "action", g_strdup(action));
 		if (policy) {
 			append_str(event, "policy", g_strdup(policy));

@@ -531,7 +531,6 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
             )
 
             for action, marker, s3action in tests:
-
                 # Expiration delete marker action
                 event = LifecycleActionContext(
                     Event(
@@ -542,8 +541,10 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                                 "action": action,
                                 "bucket": "foo",
                                 "has_bucket_logging": True,
+                                "bucket_owner": "my_owner",
                                 "add_delete_marker": marker,
                                 "object": "test/bar🔥",
+                                "version": 123456789,
                                 "storage_class": "STANDARD_IA",
                             },
                         }
@@ -552,8 +553,8 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                 with patch("logging.Logger.info") as mock_logger:
                     self.filter._log_event(event)
                     mock_logger.assert_called_once_with(
-                        "lifecycle_access-foo: - foo [30/Sep/2024:07:46:47 +0000] - "
-                        f"OVHcloudS3 req-1 {s3action} "
+                        "lifecycle_access-foo: my_owner foo "
+                        f"[30/Sep/2024:07:46:47 +0000] - OVHcloudS3 req-1 {s3action} "
                         'test/bar%25F0%259F%2594%25A5 "-" - - - - '
-                        '- - "-" "-" - - - - - - - -'
+                        '- - "-" "-" 123.456789 - - - - - - -'
                     )

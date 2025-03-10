@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 import grp
 import hashlib
+import json
 import os
 import pwd
 import re
@@ -312,7 +313,7 @@ def request_id(prefix=""):
     """
     pref_bits = min(26, len(prefix)) * 4
     rand_bits = 112 - pref_bits
-    return f"{prefix:.26s}{os.getpid():04X}{getrandbits(rand_bits):0{rand_bits//4}X}"
+    return f"{prefix:.26s}{os.getpid():04X}{getrandbits(rand_bits):0{rand_bits // 4}X}"
 
 
 class GeneratorIO(RawIOBase):
@@ -753,3 +754,14 @@ def ratelimit(run_time, max_rate, increment=1, rate_buffer=5, time_time=None):
     # that time could have passed well beyond that point, but the next call
     # will catch that and skip the sleep.
     return run_time + time_per_request
+
+
+def get_bucket_owner_from_acl(acl_config):
+    """
+    Get bucket owner from ACL configuration
+    """
+    if acl_config:
+        acl_config = json.loads(acl_config)
+    else:
+        acl_config = {}
+    return acl_config.get("Owner", "unknown")

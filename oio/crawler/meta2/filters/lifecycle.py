@@ -17,6 +17,7 @@ import datetime
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
+    ACL_PROPERTY_KEY,
     LOGGING_PROPERTY_KEY,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_SHARDING_LOWER,
@@ -27,7 +28,7 @@ from oio.common.constants import (
 )
 from oio.common.easy_value import debinarize, int_value
 from oio.common.exceptions import NotFound, OioException
-from oio.common.utils import request_id
+from oio.common.utils import get_bucket_owner_from_acl, request_id
 from oio.container.client import ContainerClient
 from oio.container.lifecycle import (
     AbortMpuAction,
@@ -70,6 +71,7 @@ class Context:
         self.container = container
         self.has_versioning = False
         self.has_bucket_logging = False
+        self.bucket_owner = None
         self.has_time_bypass = False
 
     @property
@@ -329,6 +331,10 @@ class Lifecycle(Meta2Filter):
                 self.context.root_container,
                 self.context.root_account,
             )
+        # Retrieve acl
+        acl_config = properties["properties"].get(ACL_PROPERTY_KEY)
+        self.context.bucket_owner = get_bucket_owner_from_acl(acl_config)
+
         # Retrieve time bypass status
         time_bypass_property = properties["system"].get(M2_PROP_LIFECYCLE_TIME_BYPASS)
         self.context.has_time_bypass = time_bypass_property == "1"
@@ -688,6 +694,7 @@ class Lifecycle(Meta2Filter):
                 "run_id": self.context.run_id,
                 "main_account": self.context.root_account,
                 "has_bucket_logging": self.context.has_bucket_logging,
+                "bucket_owner": self.context.bucket_owner,
             }
             if isinstance(action_class, DeleteMarkerAction):
                 data["is_markers"] = 1
