@@ -89,6 +89,7 @@ class Meta2DB:
     file_status = _meta2db_env_property(
         "file_status", fetch_value_function=_fetch_file_status
     )
+    to_remove = _meta2db_env_property("to_remove", lambda _: False)
 
     def _fetch_system(self):
         system = {}

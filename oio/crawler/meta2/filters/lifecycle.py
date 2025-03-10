@@ -27,7 +27,7 @@ from oio.common.constants import (
     SHARDING_ACCOUNT_PREFIX,
 )
 from oio.common.easy_value import debinarize, int_value
-from oio.common.exceptions import NotFound, OioException
+from oio.common.exceptions import NoSuchContainer, NotFound, OioException
 from oio.common.utils import get_bucket_owner_from_acl, request_id
 from oio.container.client import ContainerClient
 from oio.container.lifecycle import (
@@ -52,6 +52,10 @@ class BucketBudgetReached(LifecycleBudgetReached):
 
 
 class ContainerPassBudgetReached(LifecycleBudgetReached):
+    pass
+
+
+class RootContainerNotFound(Exception):
     pass
 
 
@@ -224,14 +228,16 @@ class Lifecycle(Meta2Filter):
             props = self.api.container_get_properties(
                 self.context.root_account, self.context.root_container
             )
-
-        except NotFound:
+        except (NotFound, NoSuchContainer):
             self.logger.warning(
                 "Associated container for %s in account %s not found",
                 self.context.container,
                 self.context.account,
             )
-            raise
+            raise RootContainerNotFound(
+                f"Root container ct={self.context.container}"
+                f"acct={self.context.account} not found"
+            )
         except Exception as exc:
             self.logger.warning(
                 "Error occurred %s for container %s in account %s ",
@@ -392,7 +398,14 @@ class Lifecycle(Meta2Filter):
 
             # Apply rules/actions as defined in configuration
             self._apply_rules(lc_instance)
-
+        except RootContainerNotFound as exc:
+            self.logger.warning(
+                "Database copy %s is obsolete, reason: %s", meta2db.path, exc
+            )
+            meta2db.to_remove = True
+            self.skipped += 1
+            # Do not return an error to let next filters to process copy
+            return self.app(env, cb)
         except (BucketBudgetReached, ContainerPassBudgetReached) as exc:
             self.logger.info("Budget reached: %s", exc)
             if isinstance(exc, BucketBudgetReached):
@@ -401,7 +414,7 @@ class Lifecycle(Meta2Filter):
                 self.container_budget_reached += 1
         except Exception as exc:
             self.logger.error(
-                "Failed to process container: %s, reason: %s", self.context.path, exc
+                "Failed to process container: %s, reason: %s", meta2db.path, exc
             )
             self.errors += 1
             resp = Meta2DBError(
