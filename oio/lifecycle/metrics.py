@@ -191,3 +191,14 @@ class LifecycleMetricTracker:
             containers.add(container.decode("utf-8"))
 
         return containers
+
+    @catch_service_errors
+    def mark_bucket_as_triggered(self, run_id, account_id, bucket_id):
+        key = self.__key(run_id, account_id, bucket_id, "triggered")
+        self._redis_client.conn.set(key, b"1", nx=True)
+
+    @catch_service_errors
+    def is_bucket_triggered(self, run_id, account_id, bucket_id):
+        key = self.__key(run_id, account_id, bucket_id, "triggered")
+        value = self._redis_client.conn.get(key)
+        return value == b"1"

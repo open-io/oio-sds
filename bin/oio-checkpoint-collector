@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -257,36 +257,48 @@ class CheckpointCollector:
     def _process_bucket(self, account, bucket):
         error = None
         self._progress[(account, bucket)] = None
-        self._logger.info("Processing %s %s", account, bucket)
-        ctx = (account, bucket)
-        try:
-            for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
-                container = f"{bucket}{ct_suffix}"
-                try:
-                    if self._with_time_bypass and not ct_suffix:
-                        props = self._api.container_get_properties(account, container)
-                        if props.get(M2_PROP_LIFECYCLE_TIME_BYPASS, False):
-                            break
+        if not self._metrics.is_bucket_triggered(self._run_id, account, bucket):
+            ctx = (account, bucket)
+            self._logger.info("Processing %s %s", account, bucket)
+            try:
+                for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
+                    container = f"{bucket}{ct_suffix}"
+                    try:
+                        if self._with_time_bypass and not ct_suffix:
+                            props = self._api.container_get_properties(
+                                account,
+                                container,
+                                reqid=self._request_id,
+                            )
+                            if props.get(M2_PROP_LIFECYCLE_TIME_BYPASS, False):
+                                break
 
-                    self._logger.debug(
-                        "Get info on container: acct=%s, ref=%s", account, bucket
-                    )
-                    props = self._api.container_show(account, container)
-                    if not ct_suffix:
-                        # This is the main container
-                        self._upload_configuration(account, bucket, props)
+                        self._logger.debug(
+                            "Get info on container: acct=%s, ref=%s", account, bucket
+                        )
+                        props = self._api.container_show(
+                            account,
+                            container,
+                            reqid=self._request_id,
+                        )
+                        if not ct_suffix:
+                            # This is the main container
+                            self._upload_configuration(account, bucket, props)
 
-                    self._process_container(account, container, ctx=ctx)
-                except NoSuchContainer:
-                    self._logger.debug(
-                        "Container not found account: %s, container: %s",
-                        account,
-                        container,
-                    )
-                    continue
-        except Exception as exc:
-            self._logger.error("Failed to process bucket %s, reason: %s", bucket, exc)
-            error = exc
+                        self._process_container(account, container, ctx=ctx)
+                    except NoSuchContainer:
+                        self._logger.debug(
+                            "Container not found account: %s, container: %s",
+                            account,
+                            container,
+                        )
+                        continue
+                self._metrics.mark_bucket_as_triggered(self._run_id, account, bucket)
+            except Exception as exc:
+                self._logger.error(
+                    "Failed to process bucket %s, reason: %s", bucket, exc
+                )
+                error = exc
         self._result_queue.put((account, bucket, error))
 
     def _fetch_buckets(self, marker=None):
@@ -379,9 +391,9 @@ class CheckpointCollector:
             if not self._running:
                 cancel_pending_tasks()
                 break
+            has_process_bucket = True
             task = self._pool.spawn(self._process_bucket, account, bucket)
             tasks.append(task)
-            has_process_bucket = True
         if not has_process_bucket:
             self._logger.warning(
                 "No buckets found with feature '%s'. Ensure the feature is tracked"

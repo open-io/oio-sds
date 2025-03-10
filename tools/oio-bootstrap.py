@@ -670,8 +670,8 @@ endpoint = ${EVENT_CNXSTRING}
 topic = oio-lifecycle-checkpoint
 redis_host = ${IP}:${REDIS_PORT}
 
-lifecycle_configuration_backup_account = AUTH_demo
-lifecycle_configuration_backup_bucket = lc-bucket
+lifecycle_configuration_backup_account = internal
+lifecycle_configuration_backup_bucket = internal_lifecycle
 
 """
 
