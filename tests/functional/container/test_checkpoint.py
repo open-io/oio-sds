@@ -21,7 +21,7 @@ from os import walk
 from os.path import isfile, join
 from unittest.mock import patch
 
-from oio.common.exceptions import NoSuchAccount, NoSuchContainer, NotFound
+from oio.common.exceptions import Conflict, NoSuchAccount, NoSuchContainer, NotFound
 from oio.common.utils import cid_from_name, request_id
 from tests.utils import BaseTestCase, random_str
 
@@ -176,17 +176,13 @@ class TestCheckpointContainer(BaseTestCase):
         self.assertEqual(len(entries), 0)
 
         # Create container with same suffix
-        self.api.container.container_checkpoint(
+        self.assertRaises(
+            Conflict,
+            self.api.container.container_checkpoint,
             account=self.account,
             reference=self.container,
             suffix="my-suffix",
         )
-        entries = self._list_base_in_master(self.container_base)
-        self.assertEqual(len(entries), 2)
-        # keep only base with suffix
-        entries = [e for e in entries if not e.endswith(".meta2")]
-        self.assertEqual(len(entries), 1)
-        self.assertTrue(entries[0].endswith(".my-suffix"))
 
     def test_checkpoint_invalid_container(self):
         self.assertRaises(

@@ -13,10 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
+import hashlib
 from copy import deepcopy
 
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import ClientException, Conflict
 from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
 from oio.common.statsd import get_statsd
 from oio.container.client import ContainerClient
@@ -113,6 +113,7 @@ class CheckpointCreatorFilter(Filter):
         shards = [s for s in shards]
         err_resp = None
         cid_to_process = None
+        has_shards = False
         if not shards:
             # There are no shards. We can checkpoint the root container
             cid_to_process = root_cid
@@ -123,9 +124,10 @@ class CheckpointCreatorFilter(Filter):
             # Container has been sharded or shrunk
             err_resp = self._generate_sub_events(shards, env)
             if not err_resp and root_cid == cid:
+                has_shards = True
                 cid_to_process = root_cid
 
-        return cid_to_process, err_resp
+        return cid_to_process, has_shards, err_resp
 
     def _generate_sub_events(self, shards, env):
         events = []
@@ -145,7 +147,7 @@ class CheckpointCreatorFilter(Filter):
                 self._update_metrics(LifecycleStep.SUBMITTED, cid=shard["cid"])
         return err_resp
 
-    def _create_checkpoint(self):
+    def _create_checkpoint(self, suffix):
         cid = self._event_context.container_to_process
         run_id = self._event_context.run_id
 
@@ -153,10 +155,16 @@ class CheckpointCreatorFilter(Filter):
             "Create a checkpoint for container %s in lifecycle run: %s", cid, run_id
         )
         try:
-            timestamp = int(time.time())
+            checkpoint_suffix = f"{self._checkpoint_suffix}-{run_id}-{suffix}"
             _ = self._container_client.container_checkpoint(
                 cid=cid,
-                suffix=f"{self._checkpoint_suffix}-{run_id}-{timestamp}",
+                suffix=checkpoint_suffix,
+            )
+        except Conflict:
+            self.logger.info(
+                "Checkpoint already exists for container %s (suffix=%s)",
+                cid,
+                checkpoint_suffix,
             )
         except ClientException as exc:
             self.logger.error(
@@ -189,6 +197,15 @@ class CheckpointCreatorFilter(Filter):
             LifecycleAction.CHECKPOINT,
         )
 
+    def _get_suffix_hash(self, has_shards, bounds):
+        hash_ = hashlib.new("sha256")
+        hash_.update(str(has_shards).encode("utf-8"))
+        hash_.update(b"\0")
+        hash_.update(bounds[0].encode("utf-8"))
+        hash_.update(b"\0")
+        hash_.update(bounds[1].encode("utf-8"))
+        return hash_.hexdigest().upper()[:32]
+
     def process(self, env, cb):
         try:
             event = Event(env)
@@ -210,7 +227,7 @@ class CheckpointCreatorFilter(Filter):
             bounds = (_bounds.get("lower", ""), _bounds.get("upper", ""))
 
             # Ensure bounds are up to date (container has not been sharded nor shrunk)
-            cid_to_process, err = self._check_container_up_to_date(
+            cid_to_process, has_shards, err = self._check_container_up_to_date(
                 root_cid, cid, bounds, env
             )
 
@@ -223,7 +240,8 @@ class CheckpointCreatorFilter(Filter):
                 step = LifecycleStep.SKIPPED
             else:
                 self._event_context.container_to_process = cid_to_process
-                err = self._create_checkpoint()
+                suffix_hash = self._get_suffix_hash(has_shards, bounds)
+                err = self._create_checkpoint(suffix_hash)
                 if err:
                     return err(env, cb)
 

@@ -4299,7 +4299,11 @@ meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				"%s.%"G_GINT64_FORMAT, sq3->path_inline, timestamp);
 		}
 
-		if (g_access(copy_path, F_OK | R_OK) != 0) {
+		if (g_access(copy_path, F_OK | R_OK) == 0) {
+			// Checkpoint already present
+			err = NEWERROR(
+				CODE_CONTAINER_EXISTS, "Checkpoint %s already exists", copy_path);
+		} else {
 			// Create a database copy (ref link)
 			err = sqlx_repository_flush_wal(sq3);
 			if (!err) {
@@ -4308,19 +4312,13 @@ meta2_backend_checkpoint(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			if (err) {
 				g_prefix_error(&err, "Failed to copy %s to %s: ",
 						sq3->path_inline, copy_path);
-				goto rollback;
-			}
-		}
-
-rollback:
-		// Remove copy
-		if (err) {
-			if (remove(copy_path)) {
-				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+				// Cleanup
+				if (remove(copy_path)) {
+					GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
 						errno, strerror(errno));
+				}
 			}
 		}
-
 		// Cleanup
 		g_free(copy_path);
 		sqlx_repository_unlock_and_close_noerror(sq3);
