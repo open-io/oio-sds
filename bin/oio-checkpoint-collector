@@ -44,7 +44,7 @@ from oio.common.kafka import KafkaSender
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.timestamp import Timestamp
-from oio.common.utils import cid_from_name, get_hasher
+from oio.common.utils import cid_from_name, get_hasher, request_id
 from oio.container.lifecycle import lifecycle_backup_path
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
@@ -128,6 +128,8 @@ class CheckpointCollector:
         self._last_commited_marker = None
         self.has_error = False
 
+        self._request_id = request_id(f"lc-{self._run_id}-")
+
         self._reload_progress()
 
     def _reload_progress(self):
@@ -161,6 +163,7 @@ class CheckpointCollector:
             {
                 "event": EventTypes.LIFECYCLE_CHECKPOINT,
                 "when": time.time(),
+                "request_id": self._request_id,
                 "data": {
                     "run_id": self._run_id,
                     "account": account,
@@ -224,6 +227,7 @@ class CheckpointCollector:
                     self._lc_backup_account,
                     self._lc_backup_bucket,
                     obj_name,
+                    reqid=self._request_id,
                 )
                 # Compute lifecycle configuration hash
                 hasher = get_hasher("md5")
@@ -244,6 +248,7 @@ class CheckpointCollector:
                     self._lc_backup_bucket,
                     obj_name=obj_name,
                     data=lifecycle_config,
+                    reqid=self._request_id,
                 )
         except NoSuchContainer as exc:
             self._logger.error(
@@ -307,7 +312,10 @@ class CheckpointCollector:
 
         while True:
             resp = self._api.bucket.buckets_list_by_feature(
-                self._feature_name, marker=marker, limit=100
+                self._feature_name,
+                marker=marker,
+                limit=100,
+                reqid=self._request_id,
             )
             for entry in resp.get("buckets", []):
                 yield entry["account"], entry["bucket"]
