@@ -134,7 +134,7 @@ class CheckpointCollector:
 
     def _reload_progress(self):
         # load marker
-        self._logger.info("Retrieve progress from file: '%s'", self._progress_file)
+        self._logger.debug("Retrieve progress from file: '%s'", self._progress_file)
         if exists(self._progress_file):
             with open(self._progress_file, "r", encoding="utf-8") as progress_file:
                 line = progress_file.readline()
@@ -144,7 +144,7 @@ class CheckpointCollector:
                 if len(parts) != 2:
                     return
                 account, bucket = parts
-                self._logger.info(
+                self._logger.debug(
                     "Reload marker account=%s, bucket=%s", account, bucket
                 )
                 self._last_commited_marker = self._marker = (account, bucket)
@@ -193,15 +193,21 @@ class CheckpointCollector:
             LifecycleAction.CHECKPOINT,
         )
 
-    def _process_container(self, account, container, ctx=None):
+    def _process_container(self, account, bucket, container, ctx=None):
         cid = cid_from_name(account, container)
         # Produce event for root container
-        self._produce_event(account, container, cid)
+        self._produce_event(account, bucket, container, cid)
         self._increment_snapshot_counter(ctx, cid, LifecycleStep.SUBMITTED)
 
-    def _produce_event(self, account, container, cid, shard_info=None):
+    def _produce_event(self, account, bucket, container, cid, shard_info=None):
         payload = self._make_payload(account, container, cid, shard_info)
-        self._logger.info("Produce event %s", container)
+        self._logger.info(
+            "Produce event account=%s bucket=%s container=%s cid=%s",
+            account,
+            bucket,
+            container,
+            cid,
+        )
         self._kafka_producer.send(self._topic, payload, flush=True)
 
     def _upload_configuration(self, account, bucket, props):
@@ -268,7 +274,7 @@ class CheckpointCollector:
                     raise BucketAlreadyProcessed()
 
                 ctx = (account, bucket)
-                self._logger.info("Processing %s %s", account, bucket)
+                self._logger.debug("Processing %s %s", account, bucket)
                 for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
                     is_main_container = ct_suffix == ""
                     container = f"{bucket}{ct_suffix}"
@@ -293,7 +299,7 @@ class CheckpointCollector:
                         if is_main_container:
                             self._upload_configuration(account, bucket, props)
 
-                        self._process_container(account, container, ctx=ctx)
+                        self._process_container(account, bucket, container, ctx=ctx)
                     except NoSuchContainer:
                         self._logger.debug(
                             "Container not found account: %s, container: %s",
@@ -391,6 +397,9 @@ class CheckpointCollector:
 
     def run(self):
         """ """
+
+        start_time = time.monotonic()
+
         # Install signal handlers
         signal.signal(signal.SIGINT, lambda _sig, _stack: self.__stop())
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.__stop())
@@ -406,7 +415,7 @@ class CheckpointCollector:
                 task.cancel()
 
         self._logger.info(
-            "Listing bucket with feature '%s' activated", self._feature_name
+            "Starting with listing of buckets with %s", self._feature_name
         )
         has_process_bucket = bool(self._marker)
         for account, bucket in self._fetch_buckets(self._marker):
@@ -417,7 +426,7 @@ class CheckpointCollector:
             task = self._pool.spawn(self._process_bucket, account, bucket)
             tasks.append(task)
         if not has_process_bucket:
-            self._logger.warning(
+            self._logger.info(
                 "No buckets found with feature '%s'. Ensure the feature is tracked"
                 "(features_whitelist)",
                 self._feature_name,
@@ -432,6 +441,10 @@ class CheckpointCollector:
         self._pool.waitall()
 
         self._kafka_producer.close()
+
+        # to be also added as statsd to track the total runtime of the script
+        # + convert logs to LTSV
+        self._logger.info("Stopped duration=%f", time.monotonic() - start_time)
 
 
 def make_arg_parser():

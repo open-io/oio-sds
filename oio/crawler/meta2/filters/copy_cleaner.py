@@ -14,6 +14,7 @@
 # License along with this library.
 
 import time
+from os.path import basename
 
 from oio.common.easy_value import int_value
 from oio.crawler.meta2.filters.base import Meta2Filter
@@ -58,7 +59,7 @@ class CopyCleaner(Meta2Filter):
         meta2db = Meta2DB(self.app_env, env)
         # Force removal from previous filter
         if meta2db.to_remove:
-            self.logger.info("Force database %s removal", meta2db.path)
+            self.logger.debug("Force database %s removal", meta2db.path)
             return True
         # Match keywords
         if [k for k in self.keywords if k in meta2db.suffix]:
@@ -75,8 +76,8 @@ class CopyCleaner(Meta2Filter):
     def _process(self, env, cb):
         meta2db = Meta2DB(self.app_env, env)
 
-        self.logger.info(
-            "Delete meta2 db copy from previous crawler pass: %s",
+        self.logger.debug(
+            "Deleting meta2 db copy: %s",
             meta2db.path,
         )
 
@@ -93,6 +94,10 @@ class CopyCleaner(Meta2Filter):
             meta2db.file_status = None
             meta2db.system = None
             self.success += 1
+            self.logger.info(
+                "meta2 DB copy has been deleted: %s",
+                basename(meta2db.path),
+            )
         else:
             self.errors += 1
         return self.app(env, cb)

@@ -785,7 +785,7 @@ class KafkaBatchFeeder(
         offsets, offsets_count = self.get_offsets_to_commit()
         self._statsd.gauge(f"openio.event.{self.topic}.commited", offsets_count)
         if offsets:
-            self.logger.info("Commit offsets: %s", offsets)
+            self.logger.debug("Commit offsets: %s", offsets)
             self._consumer.commit(offsets=offsets)
 
     def stop(self):

@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -185,7 +185,7 @@ class CrawlerStatsdMixin:
                 self.scans_interval,
             )
         else:
-            self.logger.info(
+            self.logger.debug(
                 "crawling_duration=%d for volume_id=%s",
                 duration,
                 self.volume_id,
@@ -331,7 +331,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     def _wait_before_starting(self):
         if self.wait_random_time_before_starting:
             waiting_time_to_start = randint(0, self.scans_interval)
-            self.logger.info(
+            self.logger.debug(
                 "Waiting %d seconds before starting on volume_id=%s",
                 waiting_time_to_start,
                 self.volume_id,
@@ -344,7 +344,7 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
     def _wait_next_iteration(self, crawling_duration):
         waiting_time_to_start = self.scans_interval - crawling_duration
         if waiting_time_to_start > 0:
-            self.logger.info(
+            self.logger.debug(
                 "Waiting %d seconds before next pass on volume_id=%s",
                 waiting_time_to_start,
                 self.volume_id,

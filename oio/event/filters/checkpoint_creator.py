@@ -85,7 +85,7 @@ class CheckpointCreatorFilter(Filter):
                 self._endpoint, logger=self.logger, app_conf=self.conf
             )
         try:
-            self.logger.info("Produce %d events", len(events))
+            self.logger.debug("Produce %d events", len(events))
             for evt in events:
                 self._producer.send(self._topic, evt)
             self._producer.flush(1.0)
@@ -164,7 +164,7 @@ class CheckpointCreatorFilter(Filter):
         cid = self._event_context.container_to_process
         run_id = self._event_context.run_id
 
-        self.logger.info(
+        self.logger.debug(
             "Create a checkpoint for container %s in lifecycle run: %s", cid, run_id
         )
         try:
@@ -175,7 +175,7 @@ class CheckpointCreatorFilter(Filter):
                 reqid=self._event_context.request_id,
             )
         except Conflict:
-            self.logger.info(
+            self.logger.debug(
                 "Checkpoint already exists for container %s (suffix=%s)",
                 cid,
                 checkpoint_suffix,

@@ -21,11 +21,15 @@ class MsgContext:
     event_type: str = None
     content: str = None
     cid: str = None
+    root_cid: str = None
     container: str = None
     account: str = None
     bucket: str = None
     path: str = None
     version: str = None
+    action: str = None
+    rule_id: str = None
+    run_id: str = None
 
     def items(self):
         return self.__dict__.items()
@@ -41,8 +45,8 @@ def log_context_from_msg(message, context_class=MsgContext):
     match_ctx_name = {
         "user": "container",
         "id": "cid",
-        "root_cid": "cid",
         "object": "path",
+        "main_account": "account",
     }
     for key in (
         "path",
@@ -51,9 +55,14 @@ def log_context_from_msg(message, context_class=MsgContext):
         "version",
         "user",
         "account",
+        "main_account",
         "bucket",
         "id",
+        "cid",
         "root_cid",
+        "action",
+        "rule_id",
+        "run_id",
     ):
         if key in url or key in shard or key in data:
             value = shard.get(key) or url.get(key) or data.get(key)

@@ -14,6 +14,7 @@
 # License along with this library.
 
 import datetime
+from os.path import basename
 
 from oio.common.client import ProxyClient
 from oio.common.constants import (
@@ -166,6 +167,7 @@ class Lifecycle(Meta2Filter):
         self.bucket_budget_reached = 0
         self.container_budget_reached = 0
         self.events_count = {}
+        self.events_count_for_container = {}
 
         super().__init__(app, conf, logger=logger)
 
@@ -229,7 +231,7 @@ class Lifecycle(Meta2Filter):
                 self.context.root_account, self.context.root_container
             )
         except (NotFound, NoSuchContainer):
-            self.logger.warning(
+            self.logger.debug(
                 "Associated container for %s in account %s not found",
                 self.context.container,
                 self.context.account,
@@ -290,8 +292,8 @@ class Lifecycle(Meta2Filter):
 
             if budget_left == 0:
                 raise BucketBudgetReached(
-                    f"Budget reached for bucket {self.context.root_container} "
-                    f"(produced={total} budget={self.budget_per_bucket}) "
+                    f"produced {total} actions globally "
+                    f"over {self.budget_per_bucket} allowed per bucket and per day "
                     f"for run {self.context.run_id}"
                 )
             return budget_left
@@ -304,9 +306,9 @@ class Lifecycle(Meta2Filter):
         )
         if budget_left == 0:
             raise ContainerPassBudgetReached(
-                f"Budget reached for container {self.context.container}"
-                f"(produced={self.events_produced_for_container} "
-                f" budget={self.container_budget_per_pass}) "
+                f"produced {self.events_produced_for_container} actions over "
+                f"{self.container_budget_per_pass} allowed "
+                "per container and per crawler pass "
                 f"for run {self.context.run_id}"
             )
         return budget_left
@@ -332,7 +334,7 @@ class Lifecycle(Meta2Filter):
         logging_config = properties["properties"].get(LOGGING_PROPERTY_KEY)
         self.context.has_bucket_logging = logging_config is not None
         if self.context.has_bucket_logging:
-            self.logger.info(
+            self.logger.debug(
                 "Access logging enabled for root_container %s, account: %s",
                 self.context.root_container,
                 self.context.root_account,
@@ -345,7 +347,7 @@ class Lifecycle(Meta2Filter):
         time_bypass_property = properties["system"].get(M2_PROP_LIFECYCLE_TIME_BYPASS)
         self.context.has_time_bypass = time_bypass_property == "1"
         if self.context.has_time_bypass:
-            self.logger.warning(
+            self.logger.debug(
                 "Time bypass enabled for root_container %s, account: %s",
                 self.context.root_container,
                 self.context.root_account,
@@ -367,19 +369,21 @@ class Lifecycle(Meta2Filter):
             self.skipped += 1
             return self.app(env, cb)
 
+        budget_reached = ""
         try:
             if not self._prepare_context(meta2db):
                 raise OioException("Unable to initialize context")
 
-            # New container, reset events count
+            # New container, reset events count per container
             self.events_produced_for_container = 0
+            self.events_count_for_container = {a.value: 0 for a in self.ACTIONS_ALLOWED}
 
             # Get progression from meta2db
             self._load_progression(meta2db)
 
             # Check if container is fully processed
             if self._is_processed("container"):
-                self.logger.info("Container '%s' already processed", meta2db.path)
+                self.logger.debug("Container '%s' already processed", meta2db.path)
                 self.processed += 1
                 return self.app(env, cb)
 
@@ -399,7 +403,7 @@ class Lifecycle(Meta2Filter):
             # Apply rules/actions as defined in configuration
             self._apply_rules(lc_instance)
         except RootContainerNotFound as exc:
-            self.logger.warning(
+            self.logger.debug(
                 "Database copy %s is obsolete, reason: %s", meta2db.path, exc
             )
             meta2db.to_remove = True
@@ -407,14 +411,24 @@ class Lifecycle(Meta2Filter):
             # Do not return an error to let next filters to process copy
             return self.app(env, cb)
         except (BucketBudgetReached, ContainerPassBudgetReached) as exc:
-            self.logger.info("Budget reached: %s", exc)
+            self.logger.debug(
+                "Budget reached for container %s (%s): %s",
+                self.context.root_container,
+                basename(meta2db.path),
+                exc,
+            )
             if isinstance(exc, BucketBudgetReached):
                 self.bucket_budget_reached += 1
+                budget_reached = "bucket"
             elif isinstance(exc, ContainerPassBudgetReached):
                 self.container_budget_reached += 1
+                budget_reached = "container"
         except Exception as exc:
             self.logger.error(
-                "Failed to process container: %s, reason: %s", meta2db.path, exc
+                "Failed to process container: %s (%s), reason: %s",
+                self.context.root_container,
+                basename(meta2db.path),
+                exc,
             )
             self.errors += 1
             resp = Meta2DBError(
@@ -425,6 +439,24 @@ class Lifecycle(Meta2Filter):
                 ),
             )
             return resp(env, cb)
+
+        _stat = ", ".join(
+            [f"{k}={v}" for k, v in self.events_count_for_container.items() if v > 0]
+        )
+        if _stat:
+            _stat = f" ({_stat})"
+
+        if budget_reached:
+            budget_reached = f" (budget: {budget_reached})"
+
+        self.logger.info(
+            "Container %s (%s) processed, %d action(s) have been generated%s%s",
+            self.context.root_container,
+            basename(self.context.path),
+            self.events_produced_for_container,
+            _stat,
+            budget_reached,
+        )
         self.successes += 1
         return self.app(env, cb)
 
@@ -571,7 +603,7 @@ class Lifecycle(Meta2Filter):
                 self.logger.debug("Action '%s' already processed", action_class)
                 continue
 
-            self.logger.info(
+            self.logger.debug(
                 "Processing action %s for container: %s",
                 action_class,
                 self.context.path,
@@ -590,7 +622,7 @@ class Lifecycle(Meta2Filter):
                 raise
 
             if self._is_prefix_outside_range(rule_filter):
-                self.logger.info(
+                self.logger.debug(
                     "Skipped rule %s, prefix '%s' is outside of range [%s: %s]",
                     rule_id,
                     rule_filter.prefix,
@@ -608,12 +640,12 @@ class Lifecycle(Meta2Filter):
                 )
                 break
             self._set_finished_status(self.context._meta2db, action_id)
-            self.logger.info(
+            self.logger.debug(
                 "Container %s action %s processed", self.context.path, action_class
             )
         else:
             # All action are processed
-            self.logger.info("Container '%s' fully processed", self.context.path)
+            self.logger.debug("Container '%s' fully processed", self.context.path)
             self._set_finished_status(self.context._meta2db, "container")
 
     def _create_views_request(self, view_queries):
@@ -746,6 +778,7 @@ class Lifecycle(Meta2Filter):
         if value == 0:
             return
         self.events_count[action_class.step.value] += value
+        self.events_count_for_container[action_class.step.value] += value
         self.events_produced_for_container += value
         step = LifecycleStep.SUBMITTED
         self._metrics.increment_counter(
@@ -784,6 +817,7 @@ class Lifecycle(Meta2Filter):
         self.bucket_budget_reached = 0
         self.container_budget_reached = 0
         self.events_count = {a.value: 0 for a in self.ACTIONS_ALLOWED}
+        self.events_count_per_container = {a.value: 0 for a in self.ACTIONS_ALLOWED}
 
 
 def filter_factory(global_conf, **local_conf):

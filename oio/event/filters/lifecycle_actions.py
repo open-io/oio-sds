@@ -388,7 +388,7 @@ class LifecycleActions(Filter):
                 "x-object-sysmeta-s3api-replication-status"
             )
             if replication_status == OBJECT_REPLICATION_PENDING:
-                self.logger.info("Lifecycle postponed, replication pending")
+                self.logger.debug("Lifecycle postponed, replication pending")
                 resp = RetryableEventError(
                     event=event,
                     body=(
@@ -399,7 +399,7 @@ class LifecycleActions(Filter):
                 )
                 return resp(env, cb)
 
-            self.logger.info("Processing started")
+            self.logger.debug("Processing started")
             if context.action in ("Expiration", "NoncurrentVersionExpiration"):
                 action_type = LifecycleAction.DELETE
                 self._process_expiration(context, is_mpu)
@@ -420,7 +420,7 @@ class LifecycleActions(Filter):
 
         except NotFound:
             # The action should have already been processed
-            self.logger.warning(
+            self.logger.debug(
                 "object %s with version %s not found in container %s",
                 context.path,
                 context.version,
@@ -465,7 +465,7 @@ class LifecycleActions(Filter):
             LifecycleStep.PROCESSED,
             action_type,
         )
-        self.logger.info("Processing complete")
+        self.logger.debug("Processing complete")
         return self.app(env, cb)
 
     def _update_metrics(self, account, bucket, container, run_id, action):

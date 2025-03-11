@@ -135,12 +135,16 @@ class KafkaEventWorker(KafkaConsumerWorker):
             "topic": "-",
             "event_type": "-",
             "cid": "-",
+            "root_cid": "-",
             "container": "-",
             "account": "-",
             "bucket": "-",
             "path": "-",
             "content": "-",
             "version": "-",
+            "action": "-",
+            "rule_id": "-",
+            "run_id": "-",
         }
         extra.update({k: v for k, v in _extra.items() if v is not None})
 
