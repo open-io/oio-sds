@@ -23,7 +23,7 @@ from oio.common.green import get_watchdog
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.conscience.client import ConscienceClient
-from oio.event.evob import EventTypes, is_retryable, is_success
+from oio.event.evob import EventTypes, ResponseCallBack, is_retryable, is_success
 from oio.event.filters.base import Filter
 from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
 from oio.event.loader import loadhandlers
@@ -164,12 +164,14 @@ class KafkaEventWorker(KafkaConsumerWorker):
         replacements = {
             "tube": self.topic,
             "topic": self.topic,
-            "handler": None,
+            "handlers": None,
             "worker_id": self.name,
             **asdict(ctx),
         }
 
         def _cb(status, msg, **kwargs):
+            if "handlers" in kwargs:
+                replacements["handlers"] = kwargs["handlers"]
             self.log_and_statsd(start, status, replacements)
             if is_success(status):
                 return
@@ -207,7 +209,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
             handlers = [handler]
 
         for handler in handlers:
-            replacements["handler"] = handler.conf.get("ctx_name")
-            handler(message, _cb)
+            resp_cb = ResponseCallBack(_cb, handlers="")
+            handler(message, resp_cb)
 
         return None

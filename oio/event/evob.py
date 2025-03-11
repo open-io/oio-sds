@@ -77,6 +77,28 @@ class Event(object):
         return f"Event [{self.job_id},{self.reqid}]({self.event_type})"
 
 
+class ResponseCallBack(object):
+    def __init__(self, cb=None, **kwargs):
+        self.cb = cb
+        self.extra_kwargs = kwargs
+
+    def update_handlers(self, handler):
+        """Add handler to list of processed event handlers"""
+        if self.extra_kwargs.get("handlers"):
+            self.extra_kwargs["handlers"] = ", ".join(
+                (self.extra_kwargs["handlers"], handler)
+            )
+            return
+        self.extra_kwargs["handlers"] = handler
+
+    def __call__(self, status, msg, **kwargs):
+        for key, value in kwargs.items():
+            if key == "handlers":
+                self.update_handlers(value)
+            self.extra_kwargs[key] = value
+        return self.cb(status, msg, **self.extra_kwargs)
+
+
 class Response(object):
     def __init__(self, body=None, status=200, event=None, **kwargs):
         self.status = status

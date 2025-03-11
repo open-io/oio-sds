@@ -132,6 +132,7 @@ class Filter(object):
             return self.app(env, cb)
         context = self.log_context_from_env(env)
         ctx_filter.set(context)
+        cb.update_handlers(context.filter_name)
         return self.process(env, cb)
 
     def __attach_pipelines_to_event(self, env):
