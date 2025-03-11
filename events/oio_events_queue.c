@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,46 +45,46 @@ oio_events_queue__destroy (struct oio_events_queue_s *self)
 }
 
 gboolean
-oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
+oio_events_queue__send (struct oio_events_queue_s *self, gchar* key, gchar *msg)
 {
 	EXTRA_ASSERT (msg != NULL);
 	if (event_fallback_installed() && oio_events_queue__is_stalled(self)) {
 		struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
-		_drop_event(q->queue_name, msg);
+		_drop_event(q->queue_name, key, msg);
 		return FALSE;
 	}
-	EVTQ_CALL(self,send)(self,msg);
+	EVTQ_CALL(self, send)(self,key,msg);
 }
 
 void
 oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
-		gchar *key)
+		gchar *tag)
 {
-	EXTRA_ASSERT (key != NULL);
+	EXTRA_ASSERT (tag != NULL);
 	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,flush_overwritable)
-			&& key && *key) {
-		EVTQ_CALL(self,flush_overwritable)(self,key);
+			&& tag && *tag) {
+		EVTQ_CALL(self,flush_overwritable)(self,tag);
 	} else {
-		g_free(key);  // safe if key is NULL
+		g_free(tag);  // safe if key is NULL
 	}
 }
 
 gboolean
 oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
-		gchar *key, gchar *msg)
+		gchar *tag, gchar *msg)
 {
 	EXTRA_ASSERT (msg != NULL);
 	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,send_overwritable)
-			&& key && *key) {
-		EVTQ_CALL(self,send_overwritable)(self,key,msg);
+			&& tag && *tag) {
+		EVTQ_CALL(self,send_overwritable)(self,tag,msg);
 	} else {
-		g_free(key);  // safe if key is NULL
+		g_free(tag);  // safe if tag is NULL
 		if (event_fallback_installed() && oio_events_queue__is_stalled(self)) {
 			struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
-			_drop_event(q->queue_name, msg);
+			_drop_event(q->queue_name, NULL, msg);
 			return FALSE;
 		}
-		EVTQ_CALL(self,send)(self,msg);
+		EVTQ_CALL(self,send)(self, NULL, msg);
 	}
 }
 

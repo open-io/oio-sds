@@ -1,7 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -243,10 +243,10 @@ test_with_check (void)
 
 	void t(struct oio_events_queue_s *q) {
 		intercept_errors = check_return;
-		oio_events_queue__send(q, g_strdup("1"));
-		oio_events_queue__send(q, g_strdup("2"));
-		oio_events_queue__send(q, g_strdup("3"));
-		oio_events_queue__send(q, g_strdup("4"));
+		oio_events_queue__send(q, NULL, g_strdup("1"));
+		oio_events_queue__send(q, NULL, g_strdup("2"));
+		oio_events_queue__send(q, NULL, g_strdup("3"));
+		oio_events_queue__send(q, NULL, g_strdup("4"));
 	}
 
 	oio_events_common_check_period = G_TIME_SPAN_SECOND; /* != 0 */
@@ -300,10 +300,10 @@ test_without_check (void)
 	}
 	void t(struct oio_events_queue_s *q) {
 		intercept_errors = check_return;
-		oio_events_queue__send(q, g_strdup("1"));
-		oio_events_queue__send(q, g_strdup("2"));
-		oio_events_queue__send(q, g_strdup("3"));
-		oio_events_queue__send(q, g_strdup("4"));
+		oio_events_queue__send(q, NULL, g_strdup("1"));
+		oio_events_queue__send(q, NULL, g_strdup("2"));
+		oio_events_queue__send(q, NULL, g_strdup("3"));
+		oio_events_queue__send(q, NULL, g_strdup("4"));
 	}
 
 	oio_events_common_check_period = 0;

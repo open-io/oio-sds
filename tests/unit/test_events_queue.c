@@ -1,7 +1,7 @@
 /*
 OpenIO SDS unit tests
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2024 OVH SAS
+Copyright (C) 2024-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -37,11 +37,11 @@ test_queue_stalled (void)
 
 	g_assert_false (oio_events_queue__is_stalled (q));
 	for (guint i=0; i<oio_events_common_max_pending ;++i)
-		oio_events_queue__send (q, g_strdup ("x"));
+		oio_events_queue__send (q, NULL, g_strdup ("x"));
 
 	g_assert_true (oio_events_queue__is_stalled (q));
 	for (guint i=0; i<oio_events_common_max_pending ;++i)
-		oio_events_queue__send (q, g_strdup ("x"));
+		oio_events_queue__send (q, NULL, g_strdup ("x"));
 	g_assert_true (oio_events_queue__is_stalled (q));
 
 	oio_events_queue__start (q);

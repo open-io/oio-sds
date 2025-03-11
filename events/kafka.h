@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2023-2024 OVH SAS
+Copyright (C) 2023-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,8 +28,8 @@ License along with this library.
 
 struct kafka_callback_ctx
 {
-	void (*requeue_func)(gchar*);
-	void (*drop_func)(const gchar*, const gchar*);
+	void (*requeue_func)(gchar*, gchar*);
+	void (*drop_func)(const gchar*, gchar*, gchar*);
 };
 
 struct kafka_s
@@ -45,8 +45,8 @@ struct kafka_s
 GError* kafka_create(
 	const gchar *endpoint,
 	const gchar *topic,
-	void (*requeue_fn)(gchar*),
-	void (*drop_fn)(const gchar*, const gchar*),
+	void (*requeue_fn)(gchar*, gchar*),
+	void (*drop_fn)(const gchar*, gchar*, gchar*),
 	struct kafka_s **out,
 	const gboolean sync);
 
@@ -60,7 +60,9 @@ GError* kafka_connect(struct kafka_s *kafka);
  * If sync is FALSE, then the message is buffered and will be sent asynchronously.
  * The asynchronous mode is the preferred mode. */
 GError* kafka_publish_message(struct kafka_s *kafka,
-		void* msg, size_t msglen, const gchar* topic, const gboolean sync);
+		void* key, size_t keylen,
+		void* msg, size_t msglen,
+		const gchar* topic, const gboolean sync);
 
 /** Check if producer encountered a fatal error.
  * If so, the producer should be restarted **/

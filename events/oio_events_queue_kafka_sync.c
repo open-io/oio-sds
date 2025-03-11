@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2024 OVH SAS
+Copyright (C) 2024-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -31,15 +31,16 @@ License along with this library.
 #include "oio_events_queue_buffer.h"
 
 static void _q_destroy (struct oio_events_queue_s *self);
-static gboolean _q_send (struct oio_events_queue_s *self, gchar *msg);
-static gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
+static gboolean _q_send (struct oio_events_queue_s *self, gchar *key, gchar *msg);
+static gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar* tag,
+		gchar *msg);
 static gboolean _q_is_stalled(struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
 static void _q_set_buffering(struct oio_events_queue_s *self, gint64 v);
 static GError * _q_start (struct oio_events_queue_s *self);
 static guint64 _q_get_total_send_time(struct oio_events_queue_s *self);
 static guint64 _q_get_total_sent_events(struct oio_events_queue_s *self);
-static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
+static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *tag);
 
 
 static struct oio_events_queue_vtable_s vtable_KAFKA =
@@ -140,9 +141,8 @@ _q_destroy(struct oio_events_queue_s *self)
 	g_free(q);
 }
 
-
 gboolean
-_q_send(struct oio_events_queue_s *self, gchar *msg)
+_q_send(struct oio_events_queue_s *self, gchar *key, gchar *msg)
 {
 	struct _queue_with_endpoint_sync_s *q = (struct _queue_with_endpoint_sync_s*) self;
 
@@ -151,8 +151,10 @@ _q_send(struct oio_events_queue_s *self, gchar *msg)
 	}
 
 	const size_t msglen = strlen(msg);
+	const size_t keylen = key ? strlen(key) : 0;
 	gint64 start = oio_ext_monotonic_time();
-	GError *err = kafka_publish_message(q->kafka, msg, msglen, q->queue_name, TRUE);
+	GError *err = kafka_publish_message(
+		q->kafka, key, keylen, msg, msglen, q->queue_name, TRUE);
 	gint64 end = oio_ext_monotonic_time();
 	time_t end_seconds = end / G_TIME_SPAN_SECOND;
 
@@ -160,7 +162,8 @@ _q_send(struct oio_events_queue_s *self, gchar *msg)
 	grid_single_rrd_add(q->event_send_count, end_seconds, 1);
 	grid_single_rrd_add(q->event_send_time, end_seconds, end - start);
 
-	g_free(msg);
+	if (key) oio_str_clean(&key);
+	oio_str_clean(&msg);
 
 	if (err) {
 		GRID_ERROR("%s", err->message);
@@ -170,7 +173,8 @@ _q_send(struct oio_events_queue_s *self, gchar *msg)
 }
 
 gboolean
-_q_send_overwritable(struct oio_events_queue_s *self UNUSED, gchar *key UNUSED, gchar *msg UNUSED)
+_q_send_overwritable(struct oio_events_queue_s *self UNUSED, gchar* tag UNUSED,
+		gchar *msg UNUSED)
 {
 	GRID_ERROR("_q_send_overwritable not implemented for kafka_sync");
 	return FALSE;
@@ -242,7 +246,7 @@ _q_start (struct oio_events_queue_s *self)
 }
 
 void
-_q_flush_overwritable(struct oio_events_queue_s *self UNUSED, gchar *key UNUSED)
+_q_flush_overwritable(struct oio_events_queue_s *self UNUSED, gchar *tag UNUSED)
 {
 	return;
 }

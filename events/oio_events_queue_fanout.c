@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,10 +45,10 @@ License along with this library.
 	TRY++
 
 static void _q_destroy (struct oio_events_queue_s *self);
-static gboolean _q_send (struct oio_events_queue_s *self, gchar *msg);
-static gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *key,
+static gboolean _q_send (struct oio_events_queue_s *self, gchar* key, gchar *msg);
+static gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *tag,
 		gchar *msg);
-static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
+static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *tag);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
 
@@ -176,7 +176,7 @@ _q_run (struct _queue_FANOUT_s *q)
 						q->output_tab[ next_output++ % q->output_nb ];
 				if (oio_events_queue__get_health(out) > SCORE_DOWN) {
 					/* output found (accepting events) */
-					oio_events_queue__send(out, msg);
+					oio_events_queue__send(out, NULL, msg);
 					msg = NULL;
 					break;
 				}
@@ -272,7 +272,7 @@ _q_destroy (struct oio_events_queue_s *self)
 }
 
 static gboolean
-_q_send (struct oio_events_queue_s *self, gchar *msg)
+_q_send (struct oio_events_queue_s *self, gchar *key UNUSED, gchar *msg)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_FANOUT);
@@ -281,18 +281,18 @@ _q_send (struct oio_events_queue_s *self, gchar *msg)
 }
 
 static gboolean
-_q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
+_q_send_overwritable(struct oio_events_queue_s *self, gchar *tag, gchar *msg)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
-	oio_events_queue_buffer_put(&(q->buffer), key, msg);
+	oio_events_queue_buffer_put(&(q->buffer), tag, msg);
 	return TRUE;
 }
 
 static void
-_q_flush_overwritable(struct oio_events_queue_s *self, gchar *key)
+_q_flush_overwritable(struct oio_events_queue_s *self, gchar *tag)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
-	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), key);
+	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), tag);
 }
 
 static gboolean

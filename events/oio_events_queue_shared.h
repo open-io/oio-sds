@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -66,11 +66,10 @@ typedef gboolean (*_queue_BEANSTALKD_intercept_running_f) (
 extern _queue_BEANSTALKD_intercept_running_f intercept_running;
 
 void _event_dropped(const char *msg, const size_t msglen);
-/* FIXME(FVE): _drop_event should take ownership of msg */
-void _drop_event(const gchar *queue_name, const gchar *msg);
+void _drop_event(const gchar *queue_name, gchar *key, gchar *msg);
 void _q_destroy (struct oio_events_queue_s *self);
 void _q_flush_buffered(struct _queue_with_endpoint_s *q, gboolean total);
-void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
+void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *tag);
 void _q_flush_pending(struct _queue_with_endpoint_s *q);
 /** Get the average send rate over the specified duration. */
 guint64 _q_get_avg_send_rate(struct oio_events_queue_s *self, gint64 duration);
@@ -85,10 +84,10 @@ gboolean _q_is_running(struct _queue_with_endpoint_s *q);
 /** Does the queue reached the maximum pending events? */
 gboolean _q_is_stalled(struct oio_events_queue_s *self);
 /** Returns TRUE if no error occurred, FALSE otherwise. */
-gboolean _q_send(struct oio_events_queue_s *self, gchar *msg);
+gboolean _q_send(struct oio_events_queue_s *self, gchar* key, gchar *msg);
 /** Returns TRUE if no error occurred, FALSE otherwise. */
-gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *key,
-		gchar *msg);
+gboolean _q_send_overwritable(struct oio_events_queue_s *self, gchar *tag,
+	gchar *msg);
 void _q_set_buffering(struct oio_events_queue_s *self, gint64 v);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_shared_h*/

@@ -144,7 +144,7 @@ _m2b_notify_beans2(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 			meta2_json_encode_async_repli(gs, repli);
 		}
 		g_string_append_static (gs, "}");
-		oio_events_queue__send (notifier, g_string_free (gs, FALSE));
+		oio_events_queue__send (notifier, NULL, g_string_free (gs, FALSE));
 	}
 
 	if (url == NULL) {
@@ -300,7 +300,7 @@ meta2_filter_send_deferred_events(struct gridd_filter_ctx_s *ctx,
 	if (events) {
 		for (GSList *l = events; l != NULL; l = l->next) {
 			EXTRA_ASSERT(l->data != NULL);
-			oio_events_queue__send(notifier, l->data);
+			oio_events_queue__send(notifier, NULL, l->data);
 			l->data = NULL;  // will be freed by the event queue
 		}
 	}

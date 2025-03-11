@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1199,7 +1199,7 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		}
 		g_string_append_static(notif, "]}");
 
-		oio_events_queue__send (m1->notifier_srv, g_string_free(notif, FALSE));
+		oio_events_queue__send (m1->notifier_srv, NULL, g_string_free(notif, FALSE));
 
 		meta1_service_url_cleanv(services2);
 		meta1_service_url_cleanv(services);

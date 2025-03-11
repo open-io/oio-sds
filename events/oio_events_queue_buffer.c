@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,12 +23,13 @@ License along with this library.
 #include "oio_events_queue_buffer.h"
 
 
+
 void
 oio_events_queue_buffer_init(struct oio_events_queue_buffer_s *buf)
 {
 	g_mutex_init(&(buf->msg_by_key_lock));
-	buf->msg_by_key = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free,
-			LTO_NOATIME|LTO_NOUTIME);
+	buf->msg_by_key = lru_tree_create((GCompareFunc)g_strcmp0,
+			g_free, g_free, LTO_NOATIME|LTO_NOUTIME);
 	buf->delay = oio_events_common_buffer_delay;
 }
 
@@ -72,10 +73,10 @@ oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
 
 void
 oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
-		gchar *key, gchar *msg)
+		gchar *tag, gchar *data)
 {
 	g_mutex_lock(&(buf->msg_by_key_lock));
-	lru_tree_insert(buf->msg_by_key, key, msg);
+	lru_tree_insert(buf->msg_by_key, tag, data);
 	g_mutex_unlock(&(buf->msg_by_key_lock));
 }
 

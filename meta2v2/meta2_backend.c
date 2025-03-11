@@ -1252,7 +1252,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		oio_str_gstring_append_json_pair(gs, "bucket", bucket);
 		g_free(bucket);
 		g_string_append_static(gs, "}}");
-		oio_events_queue__send(m2->notifier_container_created, g_string_free (gs, FALSE));
+		oio_events_queue__send(m2->notifier_container_created, NULL,
+				g_string_free (gs, FALSE));
 	}
 
 	/* Reload any cache maybe already associated with the container.
@@ -1309,7 +1310,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			/* But we send it only after to avoid keeping locks too long. */
 			if (m2->notifier_container_deleted && send_event) {
 				oio_events_queue__send(
-						m2->notifier_container_deleted, event_data);
+						m2->notifier_container_deleted, NULL, event_data);
 			}
 		} else {
 			m2b_close(m2, sq3, url);
@@ -1663,8 +1664,8 @@ _meta2_send_manifest_event(struct meta2_backend_s *m2b,
 			g_string_append_printf(event, "\",\"manifest_version\":\"%ld\"}",
 					manifest_version);
 
-			if (!oio_events_queue__send(
-					m2b->notifier_manifest_deleted, g_string_free(event, FALSE))) {
+			if (!oio_events_queue__send(m2b->notifier_manifest_deleted, NULL,
+					g_string_free(event, FALSE))) {
 				err = BUSY("Failed to send event");
 			}
 		}
@@ -1866,8 +1867,8 @@ meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
 				g_string_append(event, ",\"data\":{");
 				oio_str_gstring_append_json_pair(event, "target_policy", new_policy);
 				g_string_append(event, "}}");
-				oio_events_queue__send(
-					m2->notifier_content_transitioned, g_string_free (event, FALSE));
+				oio_events_queue__send(m2->notifier_content_transitioned, NULL,
+						g_string_free (event, FALSE));
 			}
 		}
 		m2b_close(m2, sq3, url);
@@ -2436,8 +2437,8 @@ meta2_backend_close_callback(struct sqlx_sqlite3_s *sq3,
 					oio_ext_get_reqid());
 			g_string_append_printf(
 					gs, ",\"data\":{\"peer\":\"%s\"}}", me);
-			oio_events_queue__send(
-					m2b->notifier_meta2_deleted, g_string_free(gs, FALSE));
+			oio_events_queue__send(m2b->notifier_meta2_deleted, NULL,
+					g_string_free(gs, FALSE));
 		}
 		g_free(user);
 		g_free(account);
@@ -2482,7 +2483,7 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
 		oio_str_gstring_append_json_pair(event, "bucket", bucket);
 		g_free(bucket);
 		g_string_append_static(event, "}}");
-		oio_events_queue__send(m2b->notifier_container_updated,
+		oio_events_queue__send(m2b->notifier_container_updated, NULL,
 				g_string_free(event, FALSE));
 	}
 
@@ -4571,8 +4572,9 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 			append_str(event, "rule_id", g_strdup(rule_id));
 		}
 		g_string_append(event, "}}");
-		oio_events_queue__send(
-			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+		gchar *key = g_strdup(oio_url_get(url, OIOURL_HEXID));
+		oio_events_queue__send(m2b->notifier_lifecycle_generated, key,
+				g_string_free(event, FALSE));
 		count_rows++;
 	}
 	rc = sqlite3_finalize(stmt);
@@ -4801,8 +4803,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 			append_str(event, "rule_id", g_strdup(rule_id));
 		}
 		g_string_append(event, "}}");
-		oio_events_queue__send(
-			m2b->notifier_lifecycle_generated, g_string_free(event, FALSE));
+		gchar *key = g_strdup(oio_url_get(url, OIOURL_HEXID));
+		oio_events_queue__send(m2b->notifier_lifecycle_generated, key,
+				g_string_free(event, FALSE));
 	}
 	rc = sqlite3_finalize(stmt);
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {

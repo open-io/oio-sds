@@ -1,7 +1,7 @@
 /*
 OpenIO SDS oio-event-benchmark
 Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2024 OVH SAS
+Copyright (C) 2024-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -72,7 +72,7 @@ event_worker_send(const char *event_type, struct oio_url_s *url,
 			g_string_append(json, ",\"data\":null}");
 		}
 
-		oio_events_queue__send(q, g_string_free(json, FALSE));
+		oio_events_queue__send(q, NULL, g_string_free(json, FALSE));
 	}
 
 	if (url) {

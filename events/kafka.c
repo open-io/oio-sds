@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2023-2024 OVH SAS
+Copyright (C) 2023-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -76,13 +76,16 @@ void on_kafka_delivery_report(rd_kafka_t* rk UNUSED,
 	const rd_kafka_topic_t* _topic = rkmessage->rkt;
 	const char* topic_name = rd_kafka_topic_name(_topic);
 	gchar *msg = g_strndup(rkmessage->payload, rkmessage->len);
+	gchar *key = NULL;
+	if (rkmessage->key) {
+		key =g_strndup(rkmessage->key, rkmessage->key_len);
+	}
 	if (message_should_be_dropped(err)) {
-		// FIXME(FVE): drop_func should take ownership of msg!
-		ctx->drop_func(topic_name, msg);
-		g_free(msg);
+		// drop_func take ownership of key and msg
+		ctx->drop_func(topic_name, key, msg);
 	} else {
-		// requeue_func takes ownership of msg
-		ctx->requeue_func(msg);
+		// requeue_func takes ownership of key and msg
+		ctx->requeue_func(key, msg);
 	}
 }
 
@@ -101,8 +104,8 @@ static void msg_sync_delivered (
 GError*
 kafka_create(const gchar *endpoint,
 		const gchar *topic,
-		void (*requeue_fn)(gchar*),
-		void (*drop_fn)(const gchar*, const gchar*),
+		void (*requeue_fn)(gchar*, gchar*),
+		void (*drop_fn)(const gchar*, gchar*, gchar*),
 		struct kafka_s **out,
 		const gboolean sync)
 {
@@ -281,31 +284,28 @@ kafka_poll(struct kafka_s *kafka)
 
 GError*
 kafka_publish_message(struct kafka_s *kafka,
-		void* msg, size_t msglen, const gchar* topic, const gboolean sync)
+		void* key, size_t keylen,
+		void* msg, size_t msglen,
+		const gchar* topic, const gboolean sync)
 {
 	GError *err = NULL;
 	rd_kafka_resp_err_t err_sync = MAGICAL_SYNC;
 	rd_kafka_resp_err_t rc = RD_KAFKA_RESP_ERR_UNKNOWN;
-	
+
 	if (!kafka || !kafka->producer) {
 		// One should call "kafka_connect" before publishing a message
 		return BADREQ("Try to publish message without producer");
 	}
-	if (!sync) {
-		rc = rd_kafka_producev(kafka->producer,
-			RD_KAFKA_V_TOPIC(topic),
-			RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
-			RD_KAFKA_V_VALUE(msg, msglen),
-			RD_KAFKA_V_END);
-	} else {
-		// Add a special opaque only on sync mode.
-		rc = rd_kafka_producev(kafka->producer,
-			RD_KAFKA_V_TOPIC(topic),
-			RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
-			RD_KAFKA_V_VALUE(msg, msglen),
-			RD_KAFKA_V_OPAQUE(&err_sync),
-			RD_KAFKA_V_END);
-	}
+	void* opaque =(sync)? &err_sync : NULL;
+
+	// Add a special opaque only on sync mode.
+	rc = rd_kafka_producev(kafka->producer,
+		RD_KAFKA_V_TOPIC(topic),
+		RD_KAFKA_V_MSGFLAGS(RD_KAFKA_MSG_F_COPY),
+		RD_KAFKA_V_KEY(key, keylen),
+		RD_KAFKA_V_VALUE(msg, msglen),
+		RD_KAFKA_V_OPAQUE(opaque),
+		RD_KAFKA_V_END);
 
 	if (rc != RD_KAFKA_RESP_ERR_NO_ERROR) {
 		if (rc == RD_KAFKA_RESP_ERR_MSG_SIZE_TOO_LARGE) {

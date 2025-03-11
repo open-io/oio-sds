@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -38,14 +38,17 @@ _event_dropped(const char *msg, const size_t msglen)
 }
 
 void
-_drop_event(const gchar *queue_name, const gchar *msg)
+_drop_event(const gchar *queue_name, gchar *key, gchar *msg)
 {
 	g_log(
 		OIO_EVENT_DOMAIN,
 		G_LOG_LEVEL_INFO,
-		"topic:%s\tevent:%s",
+		"topic:%s\tkey:%s\tevent:%s",
 		queue_name,
+		key ? "-" : key,
 		msg);
+	g_free(key);
+	g_free(msg);
 }
 
 void
@@ -88,8 +91,7 @@ _q_flush_pending(struct _queue_with_endpoint_s *q)
 	while (0 < g_async_queue_length(q->queue)) {
 		gchar *msg = g_async_queue_try_pop(q->queue);
 		if (msg) {
-			_drop_event(q->queue_name, msg);
-			oio_str_clean(&msg);
+			_drop_event(q->queue_name, NULL, msg);
 			++ count;
 		}
 	}
@@ -129,7 +131,7 @@ _q_is_stalled(struct oio_events_queue_s *self)
 }
 
 gboolean
-_q_send(struct oio_events_queue_s *self, gchar *msg)
+_q_send(struct oio_events_queue_s *self, gchar* key UNUSED, gchar *msg)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
 	g_async_queue_push(q->queue, msg);
@@ -137,10 +139,11 @@ _q_send(struct oio_events_queue_s *self, gchar *msg)
 }
 
 gboolean
-_q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
+_q_send_overwritable(struct oio_events_queue_s *self, gchar *tag,
+		gchar *msg)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
-	oio_events_queue_buffer_put(&(q->buffer), key, msg);
+	oio_events_queue_buffer_put(&(q->buffer), tag, msg);
 	return TRUE;
 }
 
@@ -175,10 +178,10 @@ _q_flush_buffered(struct _queue_with_endpoint_s *q, gboolean total)
 }
 
 void
-_q_flush_overwritable(struct oio_events_queue_s *self, gchar *key)
+_q_flush_overwritable(struct oio_events_queue_s *self, gchar *tag)
 {
 	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
-	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), key);
+	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), tag);
 }
 
 guint64

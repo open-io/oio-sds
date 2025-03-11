@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2023-2024 OVH SAS
+Copyright (C) 2023-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -31,12 +31,13 @@ License along with this library.
 #include "oio_events_queue_shared.h"
 
 static GError * _q_start (struct oio_events_queue_s *self);
-
+static gboolean _q_send_ext(struct oio_events_queue_s *self,
+		gchar* key, gchar *msg);
 
 static struct oio_events_queue_vtable_s vtable_KAFKA =
 {
 	.destroy = _q_destroy,
-	.send = _q_send,
+	.send = _q_send_ext,
 	.send_overwritable = _q_send_overwritable,
 	.is_stalled = _q_is_stalled,
 	.get_total_send_time = _q_get_total_send_time,
@@ -50,6 +51,11 @@ static struct oio_events_queue_vtable_s vtable_KAFKA =
 #ifdef HAVE_EXTRA_DEBUG
 static _queue_BEANSTALKD_intercept_error_f intercept_errors = NULL;
 #endif
+
+struct oio_kafka_event_s {
+	gchar *key;
+	gchar *msg;
+};
 
 GError *
 oio_events_queue_factory__create_kafka(
@@ -104,14 +110,18 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 	EXTRA_ASSERT(ctx->kafka != NULL);
 
 	gboolean rc = TRUE;
-	gchar* msg = g_async_queue_timeout_pop (q->queue, 200 * G_TIME_SPAN_MILLISECOND);
-	if (!msg) goto exit;
-	if (!*msg) goto exit;
+	struct oio_kafka_event_s *evt = g_async_queue_timeout_pop(
+			q->queue, 200 * G_TIME_SPAN_MILLISECOND);
+	if (!evt) goto exit;
+	if (!evt->msg) goto exit;
+	if (!*(evt->msg)) goto exit;
 
 	/* forward the event as a beanstalkd job */
-	const size_t msglen = strlen(msg);
+	const size_t keylen = evt->key ? strlen(evt->key) : 0;
+	const size_t msglen = strlen(evt->msg);
 	gint64 start = oio_ext_monotonic_time();
-	GError *err = kafka_publish_message(ctx->kafka, msg, msglen, q->queue_name, FALSE);
+	GError *err = kafka_publish_message(ctx->kafka, evt->key, keylen, evt->msg,
+			msglen, q->queue_name, FALSE);
 	gint64 end = oio_ext_monotonic_time();
 	time_t end_seconds = end / G_TIME_SPAN_SECOND;
 	/* count the operation whether it's a success or a failure */
@@ -127,21 +137,27 @@ _q_manage_message(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 		if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
 			GRID_NOTICE("Kafka recoverable error with [%s]: (%d) %s",
 					q->endpoint, err->code, err->message);
-			g_async_queue_push_front(q->queue, msg);
-			msg = NULL;
+			g_async_queue_push_front(q->queue, evt);
+			evt = NULL;
 			ctx->attempts_put += 1;
 			rc = FALSE;
 		} else {
 			GRID_WARN("Kafka unrecoverable error with [%s]: (%d) %s",
 					q->endpoint, err->code, err->message);
-			_drop_event(q->queue_name, msg);
+			_drop_event(q->queue_name, evt->key, evt->msg);
+			g_free(evt);
+			evt = NULL;
 			ctx->attempts_put = 0;
 		}
 		g_clear_error (&err);
 	}
 
 exit:
-	oio_str_clean (&msg);
+	if (evt) {
+		g_free(evt->key);
+		g_free(evt->msg);
+		g_free(evt);
+	}
 	return rc;
 }
 
@@ -221,8 +237,11 @@ _q_run(struct _queue_with_endpoint_s *q)
 {
 	GError *err = NULL;
 	struct _running_ctx_s ctx = {0};
-	void __requeue_fn(gchar* msg) {
-		g_async_queue_push_front(q->queue, msg);
+	void __requeue_fn(gchar* key, gchar* msg) {
+		struct oio_kafka_event_s *evt_wrapper = g_malloc0(sizeof(struct oio_kafka_event_s));
+		evt_wrapper->key = key;
+		evt_wrapper->msg = msg;
+		g_async_queue_push_front(q->queue, evt_wrapper);
 	};
 
 	err = kafka_create(
@@ -274,7 +293,19 @@ _q_run(struct _queue_with_endpoint_s *q)
 		}
 	}
 
-	_q_flush_pending(q);
+	// Flush pending
+	guint count = 0;
+	while (0 < g_async_queue_length(q->queue)) {
+		struct oio_kafka_event_s *evt = g_async_queue_try_pop(q->queue);
+		if (evt) {
+			_drop_event(q->queue_name, evt->key, evt->msg);
+			g_free(evt);
+			++ count;
+		}
+	}
+	if (count > 0) {
+		GRID_WARN("%u events lost", count);
+	}
 
 	/* close the socket to the kafka broker */
 	err = kafka_destroy(ctx.kafka);
@@ -312,4 +343,15 @@ _q_start (struct oio_events_queue_s *self)
 				err ? err->code : 0, err ? err->message : "");
 	}
 	return err;
+}
+
+gboolean
+_q_send_ext(struct oio_events_queue_s *self, gchar* key, gchar *msg)
+{
+	struct _queue_with_endpoint_s *q = (struct _queue_with_endpoint_s*) self;
+	struct oio_kafka_event_s *evt_wrapper = g_malloc0(sizeof(struct oio_kafka_event_s));
+	evt_wrapper->key = key;
+	evt_wrapper->msg = msg;
+	g_async_queue_push(q->queue, evt_wrapper);
+	return TRUE;
 }

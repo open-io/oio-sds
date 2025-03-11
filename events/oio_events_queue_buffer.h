@@ -1,7 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -35,7 +35,7 @@ void oio_events_queue_buffer_clean(struct oio_events_queue_buffer_s *buf);
 void oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
 		gint64 new_delay);
 void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
-		gchar *key, gchar *msg);
+		gchar *tag, gchar *data);
 
 /** Flush the buffered event keyed with `key`, if any, no matter the
  * configured delay. Does nothing if there is no event.

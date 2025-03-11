@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2023-2024 OVH SAS
+Copyright (C) 2023-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,8 @@ License along with this library.
 # define OIO_SDS__sqlx__oio_events_queue_kafka_h 1
 
 struct oio_events_queue_s;
+
+struct oio_kafka_event_s;
 
 /* Creates an event queue based on Kafka, with the default maximum number
  * of events "not yet acknowledged".
