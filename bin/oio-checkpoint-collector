@@ -42,7 +42,7 @@ from oio.common.exceptions import NoSuchContainer, NoSuchObject, NotFound
 from oio.common.green import GreenPool, LightQueue, sleep
 from oio.common.kafka import KafkaSender
 from oio.common.logger import get_logger
-from oio.common.statsd import get_statsd
+from oio.common.statsd import StatsdTiming, get_statsd
 from oio.common.timestamp import Timestamp
 from oio.common.utils import cid_from_name, get_hasher, request_id
 from oio.container.lifecycle import lifecycle_backup_path
@@ -58,7 +58,7 @@ from oio.lifecycle.metrics import (
 CHECKPOINT_TOPIC_DEFAULT = "oio-lifecycle-checkpoint"
 
 
-class Aborted(Exception):
+class BucketAlreadyProcessed(Exception):
     pass
 
 
@@ -262,11 +262,19 @@ class CheckpointCollector:
     def _process_bucket(self, account, bucket):
         error = None
         self._progress[(account, bucket)] = None
-        if not self._metrics.is_bucket_triggered(self._run_id, account, bucket):
-            ctx = (account, bucket)
-            self._logger.info("Processing %s %s", account, bucket)
-            try:
+
+        try:
+            with StatsdTiming(
+                self._statsd, "openio.lifecycle.checkpoint-collector.{code}.duration"
+            ) as st:
+                if self._metrics.is_bucket_triggered(self._run_id, account, bucket):
+                    st.code = 208
+                    raise BucketAlreadyProcessed()
+
+                ctx = (account, bucket)
+                self._logger.info("Processing %s %s", account, bucket)
                 for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
+                    is_main_container = ct_suffix == ""
                     container = f"{bucket}{ct_suffix}"
                     try:
                         if self._with_time_bypass and not ct_suffix:
@@ -286,8 +294,7 @@ class CheckpointCollector:
                             container,
                             reqid=self._request_id,
                         )
-                        if not ct_suffix:
-                            # This is the main container
+                        if is_main_container:
                             self._upload_configuration(account, bucket, props)
 
                         self._process_container(account, container, ctx=ctx)
@@ -297,13 +304,22 @@ class CheckpointCollector:
                             account,
                             container,
                         )
-                        continue
+                        if not is_main_container:
+                            continue
+                        st.code = 404
+                        raise
+
                 self._metrics.mark_bucket_as_triggered(self._run_id, account, bucket)
-            except Exception as exc:
-                self._logger.error(
-                    "Failed to process bucket %s, reason: %s", bucket, exc
-                )
-                error = exc
+        except BucketAlreadyProcessed:
+            self._logger.debug(
+                "Bucket (acct=%s name=%s) already processed for run %s",
+                account,
+                bucket,
+                self._run_id,
+            )
+        except Exception as exc:
+            self._logger.error("Failed to process bucket %s, reason: %s", bucket, exc)
+            error = exc
         self._result_queue.put((account, bucket, error))
 
     def _fetch_buckets(self, marker=None):

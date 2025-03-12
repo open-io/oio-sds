@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,6 +12,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
+import time
 
 from statsd import StatsClient
 from statsd.client.base import StatsClientBase
@@ -66,3 +68,25 @@ def get_statsd(conf={}):
     return StatsClient(
         host=host, port=port, prefix=prefix, maxudpsize=maxudpsize, ipv6=ipv6
     )
+
+
+class StatsdTiming:
+    def __init__(self, statsd, name):
+        self._statsd = statsd
+        self._start = None
+        self._name = name
+        self.code = None
+
+    def __enter__(self):
+        self._start = time.monotonic()
+        return self
+
+    def __exit__(self, exc_type, _exc_val, _exc_tb):
+        duration = time.monotonic() - self._start
+        if self.code is None:
+            if exc_type is None:
+                self.code = 200
+            else:
+                self.code = 500
+        stat_key = self._name.format(code=self.code)
+        self._statsd.timing(stat_key, duration)
