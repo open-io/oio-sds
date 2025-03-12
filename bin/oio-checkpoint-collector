@@ -178,22 +178,18 @@ class CheckpointCollector:
             }
         )
 
-    def _increment_snapshot_counter(self, ctx, cid):
+    def _increment_snapshot_counter(self, ctx, cid, step):
         if not ctx:
             return
         account, bucket = ctx
         with self._statsd.pipeline() as pipe:
-            pipe.incr(
-                statsd_key(
-                    self._run_id, LifecycleStep.SUBMITTED, LifecycleAction.CHECKPOINT
-                )
-            )
+            pipe.incr(statsd_key(self._run_id, step, LifecycleAction.CHECKPOINT))
         self._metrics.increment_counter(
             self._run_id,
             account,
             bucket,
             cid,
-            LifecycleStep.SUBMITTED,
+            step,
             LifecycleAction.CHECKPOINT,
         )
 
@@ -201,7 +197,7 @@ class CheckpointCollector:
         cid = cid_from_name(account, container)
         # Produce event for root container
         self._produce_event(account, container, cid)
-        self._increment_snapshot_counter(ctx, cid)
+        self._increment_snapshot_counter(ctx, cid, LifecycleStep.SUBMITTED)
 
     def _produce_event(self, account, container, cid, shard_info=None):
         payload = self._make_payload(account, container, cid, shard_info)
@@ -319,6 +315,8 @@ class CheckpointCollector:
             )
         except Exception as exc:
             self._logger.error("Failed to process bucket %s, reason: %s", bucket, exc)
+            cid = cid_from_name(account, container)
+            self._increment_snapshot_counter(ctx, cid, LifecycleStep.SUBMIT_ERROR)
             error = exc
         self._result_queue.put((account, bucket, error))
 

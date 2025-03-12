@@ -25,6 +25,7 @@ class LifecycleStep(str, Enum):
     ERROR = "error"
     PROCESSED = "processed"
     SUBMITTED = "submitted"
+    SUBMIT_ERROR = "submit_error"
     SKIPPED = "skipped"
 
 

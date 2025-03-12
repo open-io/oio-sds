@@ -89,4 +89,4 @@ class StatsdTiming:
             else:
                 self.code = 500
         stat_key = self._name.format(code=self.code)
-        self._statsd.timing(stat_key, duration)
+        self._statsd.timing(stat_key, duration * 1000)
