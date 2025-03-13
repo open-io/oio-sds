@@ -32,7 +32,7 @@ from oio.common.kafka import (
     get_retry_delay,
 )
 from oio.common.logger import get_logger
-from oio.common.utils import monotonic_time, ratelimit
+from oio.common.utils import monotonic_time, ratelimit, request_id
 from oio.event.evob import (
     EventTypes,
     get_pipelines_to_resume,
@@ -78,15 +78,18 @@ class EventQueue:
         self.queue_ids.append(queue_id)
 
     def put_batch_internal_event(self, batch_id, event_type):
-        evt = {
-            "batch_id": batch_id,
-            "data": {
-                "event": event_type,
-            },
-        }
-        set_pausable_flag(evt["data"], False)
-        for _, queue in self.queues.items():
+        for queue in self.queues.values():
+            evt = {
+                "batch_id": batch_id,
+                "data": {
+                    "event": event_type,
+                    "request_id": request_id("evt-int-"),
+                    "when": time.time(),
+                },
+            }
+            set_pausable_flag(evt["data"], False)
             queue.put(evt)
+
         return len(self.queues)
 
     def put(self, queue_id, data, **kwargs):

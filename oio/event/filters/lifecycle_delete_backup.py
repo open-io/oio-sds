@@ -65,7 +65,7 @@ class LifecycleDeleteBackupFilter(Filter):
     def skip_end_batch_event(self):
         return False
 
-    def _send_to_bucket(self):
+    def _send_to_bucket(self, event):
         # Close all file descriptors
         for fd in self._fds.values():
             fd.close()
@@ -82,6 +82,7 @@ class LifecycleDeleteBackupFilter(Filter):
                     self._backup_bucket,
                     file_path,
                     obj_name=f"{self._prefix}/{entry}",
+                    reqid=event.reqid,
                 )
                 os.remove(file_path)
             except Exception as exc:
@@ -113,7 +114,7 @@ class LifecycleDeleteBackupFilter(Filter):
         event = Event(env)
 
         if event.event_type == EventTypes.INTERNAL_BATCH_END:
-            self._send_to_bucket()
+            self._send_to_bucket(event)
         else:
             try:
                 self._store_event(event)
