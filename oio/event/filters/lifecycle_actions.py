@@ -102,6 +102,7 @@ class LifecycleActionContext:
     def __init__(self, event: Event):
         self.event = event
         self.reqid = event.reqid or request_id("Lifecycle-actions-")
+        self.size = None
 
     @property
     def run_id(self):
@@ -226,8 +227,8 @@ class LifecycleActions(Filter):
             headers=self._get_headers(),
         )
 
-    def _process_transition(self, context: LifecycleActionContext, object_size, policy):
-        if object_size is None:
+    def _process_transition(self, context: LifecycleActionContext, policy):
+        if context.size is None:
             raise ValueError("Missing object size for transition object")
         storage_class = context.storage_class
         policies = self.stg_classes.get(storage_class, None)
@@ -237,7 +238,7 @@ class LifecycleActions(Filter):
             )
         target_policy = None
         for pol, size in reversed(policies):
-            if int(object_size) >= size:
+            if int(context.size) >= size:
                 target_policy = pol
                 break
         if target_policy is None:
@@ -324,7 +325,7 @@ class LifecycleActions(Filter):
                 "http_status": None,  # ignored
                 "error_code": None,  # ignored
                 "bytes_sent": None,  # ignored
-                "object_size": None,  # ignored
+                "object_size": context.size,  # ignored
                 "total_time": None,  # ignored
                 "turn_around_time": None,  # ignored
                 "referer": None,  # ignored
@@ -378,7 +379,7 @@ class LifecycleActions(Filter):
                 force_master=True,
                 reqid=context.reqid,
             )
-            object_size = obj_meta.get("size", None)
+            context.size = obj_meta.get("size", None)
             policy = obj_meta.get("policy", None)
             metadata = obj_meta.get("properties") or {}
             replication_status = metadata.get(
@@ -402,7 +403,7 @@ class LifecycleActions(Filter):
                 self._process_expiration(context)
             elif context.action in ("Transition", "NoncurrentVersionTransition"):
                 action_type = LifecycleAction.TRANSITION
-                self._process_transition(context, object_size, policy)
+                self._process_transition(context, policy)
             elif context.action == "AbortIncompleteMultipartUpload":
                 action_type = LifecycleAction.ABORT_MPU
                 self._process_abort_mpu(context)

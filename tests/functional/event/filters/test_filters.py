@@ -487,7 +487,7 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
 
     def test_log_event(self):
         # Missing action
-        event = LifecycleActionContext(
+        context = LifecycleActionContext(
             Event(
                 {
                     "url": {},
@@ -498,7 +498,7 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                 }
             )
         )
-        self.assertRaises(ValueError, self.filter._log_event, event)
+        self.assertRaises(ValueError, self.filter._log_event, context)
 
         with patch("oio.event.filters.lifecycle_actions.datetime") as mock_fmt:
             mock_fmt.now.return_value = datetime.fromtimestamp(
@@ -506,7 +506,7 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
             )
 
             # Invalid action
-            event = LifecycleActionContext(
+            context = LifecycleActionContext(
                 Event(
                     {
                         "url": {},
@@ -518,21 +518,22 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                     }
                 )
             )
-            self.assertRaises(ValueError, self.filter._log_event, event)
+            self.assertRaises(ValueError, self.filter._log_event, context)
 
             tests = (
-                ("Expiration", False, "S3.EXPIRE.OBJECT"),
-                ("Expiration", True, "S3.CREATE.DELETEMARKER"),
-                ("NoncurrentVersionExpiration", False, "S3.EXPIRE.OBJECT"),
-                ("NoncurrentVersionExpiration", True, "S3.CREATE.DELETEMARKER"),
-                ("AbortIncompleteMultipartUpload", False, "S3.DELETE.UPLOAD"),
-                ("Transition", False, "S3.TRANSITION_SIA.OBJECT"),
-                ("NoncurrentVersionTransition", False, "S3.TRANSITION_SIA.OBJECT"),
+                ("Expiration", False, "S3.EXPIRE.OBJECT", 123),
+                ("Expiration", True, "S3.CREATE.DELETEMARKER", 123),
+                ("NoncurrentVersionExpiration", False, "S3.EXPIRE.OBJECT", 123),
+                ("NoncurrentVersionExpiration", True, "S3.CREATE.DELETEMARKER", 123),
+                ("AbortIncompleteMultipartUpload", False, "S3.DELETE.UPLOAD", 123),
+                ("Transition", False, "S3.TRANSITION_SIA.OBJECT", 123),
+                ("NoncurrentVersionTransition", False, "S3.TRANSITION_SIA.OBJECT", 123),
             )
 
-            for action, marker, s3action in tests:
+            for action, marker, s3action, obj_size in tests:
+
                 # Expiration delete marker action
-                event = LifecycleActionContext(
+                context = LifecycleActionContext(
                     Event(
                         {
                             "url": {},
@@ -550,11 +551,12 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
                         }
                     )
                 )
+                context.size = obj_size
                 with patch("logging.Logger.info") as mock_logger:
-                    self.filter._log_event(event)
+                    self.filter._log_event(context)
                     mock_logger.assert_called_once_with(
                         "lifecycle_access-foo: my_owner foo "
                         f"[30/Sep/2024:07:46:47 +0000] - OVHcloudS3 req-1 {s3action} "
-                        'test/bar%25F0%259F%2594%25A5 "-" - - - - '
+                        f'test/bar%25F0%259F%2594%25A5 "-" - - - {obj_size} '
                         '- - "-" "-" 123.456789 - - - - - - -'
                     )
