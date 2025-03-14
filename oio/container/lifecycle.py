@@ -26,6 +26,9 @@ from oio.lifecycle.metrics import LifecycleAction
 
 LIFECYCLE_SPECIAL_KEY_TAG = "'__processed_lifecycle'"
 
+# Don't transition small object size except if lesser or greater is specified in Filter
+LIFECYCLE_OBJECT_SIZE = 128000
+
 
 class _LifecycleAction:
     step = None
@@ -213,8 +216,6 @@ class ContainerLifecycle(object):
         rule_filter,
         formated_days=None,
         date=None,
-        non_current=False,
-        versioned=False,
         is_transition=False,
     ):
         # Beginning of query will be force by meta2 code to avoid
@@ -261,6 +262,13 @@ class ContainerLifecycle(object):
 
         if _lesser or _greater:
             _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
+        elif is_transition:
+            _size_cond = (
+                f" AND ((ct.size > {LIFECYCLE_OBJECT_SIZE} AND pr.value IS NULL) OR "
+                f"pr.value > {LIFECYCLE_OBJECT_SIZE}) "
+            )
+
+            _query = f"{_query}{_slo_cond} {_size_cond}"
 
         # Create WHERE clause
         where_clauses = []
@@ -390,11 +398,30 @@ class ContainerLifecycle(object):
         if noncurrent_versions is None:
             noncurrent_versions = 0
         # SELECT is forced on meta2 side
-        query = (
-            "FROM noncurrent_view AS al "
+        query = "FROM noncurrent_view AS al "
+
+        if is_transition:
+            _slo_cond = (
+                " LEFT JOIN properties pr ON al.alias=pr.alias AND"
+                " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
+                " INNER JOIN contents ct ON al.content = ct.id "
+            )
+
+            # bypass size when dealing with delete marker
+            if rule_filter.greater is None and rule_filter.lesser is None:
+                size_cond = (
+                    f" AND ((ct.size > {LIFECYCLE_OBJECT_SIZE}"
+                    " AND pr.value IS NULL) "
+                    f" OR pr.value > {LIFECYCLE_OBJECT_SIZE})"
+                )
+                query = f"{query} {_slo_cond} {size_cond}"
+
+        where_clause = (
             f"WHERE ( (row_id > {1 + noncurrent_versions}) "
             f"AND {self._processed_sql_condition()} "
         )
+
+        query = f"{query} {where_clause} "
         if formated_time is not None:
             _time_cond = (
                 f" AND ((al.non_current_since + {formated_time}) < "

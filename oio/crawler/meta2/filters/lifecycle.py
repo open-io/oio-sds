@@ -214,9 +214,7 @@ class Lifecycle(Meta2Filter):
             storage_class = stg_class_conf[14:].upper()
             policies = [x.strip() for x in pol_conf.split(",")]
             if not policies:
-                raise ValueError(
-                    f"Empty policy for storage class {storage_class}"
-                )
+                raise ValueError(f"Empty policy for storage class {storage_class}")
             for pol in policies:
                 if pol in self.policies_order:
                     raise ValueError(
@@ -630,8 +628,6 @@ class Lifecycle(Meta2Filter):
                     rule_filter,
                     days_in_sec,
                     date,
-                    False,
-                    True,
                     is_transition,
                 )
         else:

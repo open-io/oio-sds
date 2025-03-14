@@ -241,7 +241,7 @@ class TestLifecycleCrawler(BaseTestCase):
         objects=None,
         versions=1,
         tags=None,
-        size=1,
+        size=128001,
         mpu=False,
         properties=None,
         extras_fields=None,
@@ -2371,6 +2371,68 @@ class TestLifecycleCrawler(BaseTestCase):
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
 
+    def test_transition_not_allowed(self):
+        """Transition is not allowed by default for objects with size less than 128K"""
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Transition": {
+                        "0": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Transition": {
+                        "1": {"Days": 10, "StorageClass": "STANDARD_IA"},
+                        "__time_type": "Days",
+                    },
+                },
+                "2": {
+                    "ID": "rule-3",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": " OR 1=1 "},
+                    "Transition": {
+                        "2": {"Days": 2, "StorageClass": "STANDARD_IA"},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": ["0-0", "2-2", "1-1"], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 0,
+                "total_transition": 0,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(None, prefix="doc/", count=10, size=10)
+        self._create_objects_for_rule(None, prefix="foo/", count=10)
+        self._create_objects_for_rule(None, prefix="bar/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
     def test_transition_no_filter(self):
         def callback(status, _msg):
             self.assertEqual(200, status)
@@ -3578,6 +3640,21 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_transition()
+
+    def test_transition_not_allowed(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 0,
+                "total_transition": 0,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 4,
+            },
+        )
+        super().test_transition_not_allowed()
 
     def test_transition_no_filter(self):
         self.metrics_by_passes_with_sharding = (
