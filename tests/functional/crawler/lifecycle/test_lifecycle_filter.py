@@ -395,6 +395,9 @@ class TestLifecycleCrawler(BaseTestCase):
                     event,
                     f"({i}/{len(self.expectations)}) Event not found for: {expect}",
                 )
+                self.assertIsNotNone(event.event_key)
+                self.assertTrue(isinstance(event.event_key, bytes))
+                self.assertEqual(event.url["id"], event.event_key.decode("utf-8"))
                 # Validate access logging info are present
                 self.assertIn("has_bucket_logging", event.data)
                 self.assertTrue(event.data["has_bucket_logging"])

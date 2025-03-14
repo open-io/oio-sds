@@ -938,6 +938,7 @@ class BaseTestCase(CommonTestCase):
                 data = event.value()
                 event_obj = Event(jsonlib.loads(data))
                 event_obj.job_id = event.offset()
+                event_obj.event_key = event.key()
 
                 # Add to cache
                 cached_events[event_key] = event_obj
