@@ -1508,8 +1508,10 @@ action_m2_container_destroy (struct req_args_s *args)
 			_re_enable(args);
 			goto clean_and_exit;
 		} else if (urlv[1]) {
+			/* Force destroy on peers. As the base is already unlinked and the master
+			 * deleted, there is no need for a soft destroy. */
 			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
-					flag_force);
+					M2V2_DESTROY_FORCE);
 		}
 	}
 
