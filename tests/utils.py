@@ -237,7 +237,7 @@ class CommonTestCase(unittest.TestCase):
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]
 
-        cls._cls_logger = get_logger(cls._cls_conf)
+        cls._cls_logger = get_logger(cls._cls_conf, name="test")
 
         cls._consumers = []
         cls._cls_kafka_consumer = cls._register_consumer()

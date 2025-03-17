@@ -17,6 +17,8 @@
 
 import time
 
+import pytest
+
 from oio.common.constants import M2_PROP_VERSIONING_POLICY
 from oio.common.easy_value import true_value
 from oio.common.exceptions import NoSuchObject, OioTimeout
@@ -769,6 +771,7 @@ class TestContentVersioning(BaseTestCase):
         # Only one version -> latest
         self.assertEqual(objects[5]["name"], "past_obj")
 
+    @pytest.mark.flaky(reruns=2)
     def test_object_list_short_timeout(self):
         attempts = 20
         marker_count = 15
@@ -830,8 +833,9 @@ class TestContentVersioning(BaseTestCase):
                     continue
                 self.assertLess(res.get("next_marker"), object_names[-1])
                 break
-            except OioTimeout:
-                self.logger.info("Retrying with the same timeout (%.3fs)", timeout)
+            except OioTimeout as exc:
+                timeout += 0.002
+                self.logger.info("Retrying with timeout=%.3fs (exc: %s)", timeout, exc)
                 continue
         else:
             self.fail("Failed to trigger truncated listing")

@@ -3,5 +3,6 @@ fixtures>=1.4.0
 gcovr
 mock>=1.0
 pytest
+pytest-rerunfailures
 pytest-timer
 ruff
