@@ -777,8 +777,8 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 			NAME_MSGKEY_PROPAGATE_SHARDS, FALSE);
 
 	ctx->subject(
-			"base:%s.%s\thexid:%.*s\top_type:%s",
-			base, type,
+			"base:%s.%s\tsuffix:%s\thexid:%.*s\top_type:%s",
+			base, type, &suffix,
 			STRLEN_CONTAINERID - 1, base,
 			local ? "local" : "replicated"
 	);
