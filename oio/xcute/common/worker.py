@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2024 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -79,9 +79,12 @@ class XcuteWorker(object):
                     task_results.update(task_result)
                 except Exception as exc:
                     self.logger.warning(
-                        "[job_id=%s reqid=%s] Failed to process task %s: (%s) %s",
+                        "[job_id=%s reqid=%s %s] Failed to process task %s: (%s) %s",
                         job_id,
                         reqid,
+                        " ".join(
+                            f"{key}={value}" for key, value in task_payload.items()
+                        ),
                         task_id,
                         exc.__class__.__name__,
                         exc,
