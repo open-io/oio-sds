@@ -155,6 +155,16 @@ class Lifecycle(Meta2Filter):
         LifecycleAction.DELETE,
         LifecycleAction.TRANSITION,
     )
+    STORAGE_CLASS_ORDER = {
+        "EXPRESS_ONEZONE": 1,
+        "STANDARD": 2,
+        "STANDARD_IA": 3,
+        "INTELLIGENT_TIERING": 4,
+        "ONEZONE_IA": 5,
+        "GLACIER_IR": 6,
+        "GLACIER": 7,
+        "DEEP_ARCHIVE": 8,
+    }
 
     def __init__(self, app, conf, logger=None):
         self.progression = []
@@ -205,25 +215,24 @@ class Lifecycle(Meta2Filter):
                 "Missing value for 'lifecycle_configuration_backup_bucket'"
             )
 
-        self.storage_classes_order = {}
         self.policies_order = {}
         order = 1
         for stg_class_conf, pol_conf in self.conf.items():
             if not stg_class_conf.startswith("storage_class."):
                 continue
             storage_class = stg_class_conf[14:].upper()
-            policies = [x.strip() for x in pol_conf.split(",")]
+            if storage_class not in self.STORAGE_CLASS_ORDER:
+                raise ValueError(f"Unsupported storage_class {storage_class} in config")
+            policies = set(
+                [p.strip().split(":", 1)[0] for p in pol_conf.split(",") if p.strip()]
+            )
             if not policies:
                 raise ValueError(f"Empty policy for storage class {storage_class}")
             for pol in policies:
                 if pol in self.policies_order:
-                    raise ValueError(
-                        f"Same policy {pol} used in different storage classes"
-                    )
+                    raise ValueError(f"policy {pol} is used in several storage classes")
+                order = self.STORAGE_CLASS_ORDER.get(storage_class, 0)
                 self.policies_order[pol] = order
-            self.storage_classes_order[storage_class] = order
-            order = order + 1
-
         # Metrics helper
         self._metrics = LifecycleMetricTracker(self.conf)
         # Batch size
@@ -644,7 +653,7 @@ class Lifecycle(Meta2Filter):
         stg_class = self._get_storage_class(action)
         order = 0
         if stg_class is not None:
-            order = self.storage_classes_order[stg_class]
+            order = self.STORAGE_CLASS_ORDER[stg_class]
         return self._send_query_events(
             query,
             view_queries,
