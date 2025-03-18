@@ -353,33 +353,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             exc.NoSuchContainer, self.api.container_get_properties, self.account, name
         )
 
-    def test_container_get_properties_filtered(self):
-        self.skipTest("Server side properties filtering not implemented")
-        name = "ct-prop-" + random_str(6)
-
-        res = self._create(name)
-        self.assertEqual(res, True)
-
-        # container_get_properties on existing container
-        data = self.api.container_get_properties(self.account, name)
-        self.assertEqual(data["properties"], {})
-
-        # container_get_properties
-        metadata = {
-            random_str(32): random_str(32),
-            random_str(32): random_str(32),
-        }
-        self._set_properties(name, metadata)
-
-        # container_get_properties specify key
-        key = random.choice(list(metadata.keys()))
-
-        data = self.api.container_get_properties(self.account, name, [key])
-        self.assertEqual({key: metadata[key]}, data["properties"])
-
-        # clean
-        self._clean(name, True)
-
     def test_container_set_properties(self):
         name = "ct-prop-" + random_str(6)
 
