@@ -533,20 +533,6 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
         raise NotImplementedError
 
 
-def _statsd_timing(name):
-    def decorator(func):
-        def wrapper(self, *args, **kwargs):
-            start = time.monotonic()
-            ret = func(self, *args, **kwargs)
-            duration = (time.monotonic() - start) * 1000
-            self._statsd.timing(f"openio.event.{self.topic}.{name}_duration", duration)
-            return ret
-
-        return wrapper
-
-    return decorator
-
-
 class KafkaBatchFeeder(
     Process, KafkaRejectorMixin, KafkaOffsetHelperMixin, AcknowledgeMessageMixin
 ):
@@ -599,7 +585,6 @@ class KafkaBatchFeeder(
         # still be present in queues
         self.events_queue.reset()
 
-    @_statsd_timing("fill_batch")
     def _fill_batch(self):
         # Create a new batch
         self._batch_id = uuid.uuid4().hex
@@ -677,7 +662,6 @@ class KafkaBatchFeeder(
             )
             self._registered_offsets += produced
 
-    @_statsd_timing("wait_batch_processed")
     def _wait_batch_processed(self):
         if self.has_registered_offsets():
             # Wait all events are processed

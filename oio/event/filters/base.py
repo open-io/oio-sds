@@ -19,9 +19,10 @@ from uuid import uuid4
 
 from oio.common.exceptions import OioException
 from oio.common.logger import LTSVFormatter, get_logger
-from oio.common.statsd import StatsdTiming
 from oio.event.evob import Event, EventTypes, add_pipeline_to_resume, is_pausable
 from oio.event.utils import MsgContext, log_context_from_msg
+
+# from oio.common.statsd import StatsdTiming
 
 
 class PausePipeline(Exception):
@@ -144,26 +145,28 @@ class Filter(object):
             self._pipelines_on_hold.clear()
 
     def __call__(self, env, cb):
-        evt = Event(env)
         name = self.conf.get("ctx_name", self.__class__.__name__)
-        topic = self.app_env["topic"]
-        with StatsdTiming(
-            self.statsd,
-            f"openio.event.{topic}.filter.{evt.event_type}.{name}.{{code}}.duration",
-        ) as st:
-            try:
-                res = self.__process(env, cb)
-                self.__attach_pipelines_to_event(env)
-            except PausePipeline as exc:
-                st.code = 307
-                exc.next_filter = lambda e: self.app(e, cb)
-                # Register paused pipeline
-                self._pipelines_on_hold.append(exc.id)
-                raise exc
-            except Exception:
-                st.code = 500
-                self.__attach_pipelines_to_event(env)
-                raise
+        # evt = Event(env)
+        # name = name.replace(".", "-")
+        # event_type = evt.event_type.replace(".", "-")
+        # topic = self.app_env["topic"]
+        # with StatsdTiming(
+        #     self.statsd,
+        #     f"openio.event.{topic}.filter.{event_type}.{name}.{{code}}.duration",
+        # ) as st:
+        try:
+            res = self.__process(env, cb)
+            self.__attach_pipelines_to_event(env)
+        except PausePipeline as exc:
+            # st.code = 307
+            exc.next_filter = lambda e: self.app(e, cb)
+            # Register paused pipeline
+            self._pipelines_on_hold.append(exc.id)
+            raise exc
+        except Exception:
+            # st.code = 500
+            self.__attach_pipelines_to_event(env)
+            raise
 
         if res is not None:
             raise OioException(
