@@ -200,7 +200,7 @@ class LifecycleActions(Filter):
     def _get_headers(self):
         return make_headers(user_agent=LIFECYCLE_USER_AGENT)
 
-    def _process_expiration(self, context: LifecycleActionContext):
+    def _process_expiration(self, context: LifecycleActionContext, is_mpu=False):
         add_delete_marker = context.event.data.get("add_delete_marker")
         version = None if add_delete_marker else context.version
         if add_delete_marker:
@@ -225,6 +225,7 @@ class LifecycleActions(Filter):
             version=version,
             reqid=context.reqid,
             headers=self._get_headers(),
+            slo_manifest=is_mpu,
         )
 
     def _process_transition(self, context: LifecycleActionContext, policy):
@@ -382,6 +383,7 @@ class LifecycleActions(Filter):
             context.size = obj_meta.get("size", None)
             policy = obj_meta.get("policy", None)
             metadata = obj_meta.get("properties") or {}
+            is_mpu = boolean_value(metadata.get("x-static-large-object"), False)
             replication_status = metadata.get(
                 "x-object-sysmeta-s3api-replication-status"
             )
@@ -400,7 +402,7 @@ class LifecycleActions(Filter):
             self.logger.info("Processing started")
             if context.action in ("Expiration", "NoncurrentVersionExpiration"):
                 action_type = LifecycleAction.DELETE
-                self._process_expiration(context)
+                self._process_expiration(context, is_mpu)
             elif context.action in ("Transition", "NoncurrentVersionTransition"):
                 action_type = LifecycleAction.TRANSITION
                 self._process_transition(context, policy)

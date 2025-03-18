@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,8 @@
 # License along with this library.
 
 from datetime import datetime
+
+from urllib3.util.request import make_headers
 
 from oio.common.constants import MULTIUPLOAD_SUFFIX, SHARDING_ACCOUNT_PREFIX
 from oio.common.easy_value import boolean_value, int_value
@@ -153,11 +155,13 @@ class MpuPartCleaner(Filter):
             # Only happens if the event is replayed but has already been processed.
             return self.app(env, cb)
 
+        headers = make_headers(user_agent=event.origin)
         deleted = self.container_client.content_delete_many(
             account=account,
             reference=segment_name,
             paths=paths,
             reqid=reqid,
+            headers=headers,
         )
         # Make sure all parts are deleted.
         for obj_name, status in deleted:

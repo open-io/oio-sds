@@ -79,13 +79,16 @@ class ExpectedAction(str, Enum):
 
 
 class Expectation:
-    def __init__(self, rule_id, action, key, version, extra_fields=None, chunks=None):
+    def __init__(
+        self, rule_id, action, key, version, extra_fields=None, chunks=None, parts=None
+    ):
         self.rule_id = rule_id
         self.action = action
         self.key = key
         self.version = version
         self.extra_fields = extra_fields or {}
         self.chunks = chunks or []
+        self.parts = parts or []
 
     def __str__(self):
         return (
@@ -198,6 +201,35 @@ class TestLifecycleCrawler(BaseTestCase):
     def _expected_metrics_for_test(self):
         return self.metrics_by_passes
 
+    def _create_mpu(self, obj_name, nb_parts=1, size=1):
+        upload_id = random_str(48)
+        # Create mmanifest
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=obj_name,
+            data="test",
+            properties={
+                "x-static-large-object": "True",
+                "x-object-sysmeta-s3api-upload-id": upload_id,
+            },
+        )
+        chunks = [c for c in chunks]
+        part_size = size // nb_parts
+        parts = []
+        for i in range(1, nb_parts + 1):
+            obj = f"{obj_name}/{upload_id}/{i}"
+            chunks_part, _, _, part_meta = self.storage.object_create_ext(
+                account=self.account,
+                container=self.container_segment,
+                obj_name=obj,
+                data=b"a" * part_size,
+            )
+            chunks.extend(chunks_part)
+            parts.append((obj, part_meta["version"]))
+
+        return chunks, obj_meta, parts
+
     def _create_objects_for_rule(
         self,
         rule_id,
@@ -208,6 +240,7 @@ class TestLifecycleCrawler(BaseTestCase):
         versions=1,
         tags=None,
         size=1,
+        mpu=False,
         properties=None,
         extras_fields=None,
         action=None,
@@ -231,13 +264,17 @@ class TestLifecycleCrawler(BaseTestCase):
         created_objects = []
         for obj_name in generator():
             for _ in range(versions):
-                chunks, _, _, meta = self.storage.object_create_ext(
-                    self.account,
-                    container,
-                    obj_name=obj_name,
-                    data=b"a" * size,
-                    properties=properties,
-                )
+                parts = None
+                if mpu:
+                    chunks, meta, parts = self._create_mpu(obj_name, size=size)
+                else:
+                    chunks, _, _, meta = self.storage.object_create_ext(
+                        self.account,
+                        container,
+                        obj_name=obj_name,
+                        data=b"a" * size,
+                        properties=properties,
+                    )
                 if rule_id:
                     self.expectations.append(
                         Expectation(
@@ -247,6 +284,7 @@ class TestLifecycleCrawler(BaseTestCase):
                             meta["version"],
                             extra_fields=extras_fields,
                             chunks=chunks,
+                            parts=parts,
                         )
                     )
             created_objects.append((obj_name, meta["version"]))
@@ -439,6 +477,17 @@ class TestLifecycleCrawler(BaseTestCase):
         for chunk in expect.chunks:
             self.assertIsNotNone(
                 self.storage.blob_client.chunk_head(chunk.get("real_url", chunk["url"]))
+            )
+
+        # Ensure parts had been removed
+        for part_name, part_version in expect.parts:
+            self.assertRaises(
+                NoSuchObject,
+                self.storage.object_get_properties,
+                self.account,
+                self.container_segment,
+                part_name,
+                version=part_version,
             )
 
     def _validate_delete_marker_action(self, expect):
@@ -693,6 +742,68 @@ class TestLifecycleCrawler(BaseTestCase):
         )
         self._create_objects_for_rule(None, prefix="foo/", count=10)
         self._create_objects_for_rule(None, prefix="bar/", count=10)
+        self._wait_n_days(4)
+        self._run_scenario(configuration, callback, passes=2)
+
+    def test_expiration_mpu(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Expiration": {
+                        "1": {"Days": 10},
+                        "__time_type": "Days",
+                    },
+                },
+                "2": {
+                    "ID": "rule-3",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": " OR 1=1 "},
+                    "Expiration": {
+                        "2": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "2-2", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 2,
+            },
+        )
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/", count=10, action=ExpectedAction.DELETE, mpu=True
+        )
+        self._create_objects_for_rule(None, prefix="foo/", count=10, mpu=True)
+        self._create_objects_for_rule(None, prefix="bar/", count=10, mpu=True)
         self._wait_n_days(4)
         self._run_scenario(configuration, callback, passes=2)
 
@@ -1949,8 +2060,8 @@ class TestLifecycleCrawler(BaseTestCase):
             {
                 **self.DEFAULT_STATS,
                 "successes": 2,
-                "total_events": 10,
-                "total_delete": 10,
+                "total_events": 20,
+                "total_delete": 20,
             },
             {
                 **self.DEFAULT_STATS,
@@ -1963,6 +2074,14 @@ class TestLifecycleCrawler(BaseTestCase):
             tags={"key3": "value3"},
             count=10,
             action=ExpectedAction.DELETE,
+        )
+        self._create_objects_for_rule(
+            "rule-1",
+            prefix="doc/",
+            tags={"key3": "value3"},
+            count=10,
+            action=ExpectedAction.DELETE,
+            mpu=True,
         )
         self._create_objects_for_rule(None, prefix="foo/", count=10)
         self._create_objects_for_rule(None, prefix="bar/", count=10)
@@ -1998,8 +2117,8 @@ class TestLifecycleCrawler(BaseTestCase):
         delete_expectations = [
             e for e in self.expectations if e.action == ExpectedAction.DELETE
         ]
-
-        self.assertEqual(len(delete_expectations), produced_events)
+        expected_events = sum(1 + len(e.parts) for e in delete_expectations)
+        self.assertEqual(expected_events, produced_events)
 
         for i, expect in enumerate(delete_expectations, start=1):
             evt = self.wait_for_kafka_event(
@@ -2146,6 +2265,21 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_expiration()
+
+    def test_expiration_mpu(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 6,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "processed": 6,
+            },
+        )
+        super().test_expiration_mpu()
 
     def test_expiration_no_filter(self):
         self.metrics_by_passes_with_sharding = (
@@ -2451,13 +2585,13 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
         self.metrics_by_passes_with_sharding = (
             {
                 **self.DEFAULT_STATS,
-                "successes": 4,
-                "total_events": 10,
-                "total_delete": 10,
+                "successes": 6,
+                "total_events": 20,
+                "total_delete": 20,
             },
             {
                 **self.DEFAULT_STATS,
-                "processed": 4,
+                "processed": 6,
             },
         )
         super().test_expiration_restore()
