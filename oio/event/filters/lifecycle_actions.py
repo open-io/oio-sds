@@ -20,7 +20,11 @@ from urllib.parse import quote
 
 from urllib3.util.request import make_headers
 
-from oio.common.constants import LIFECYCLE_USER_AGENT, OBJECT_REPLICATION_PENDING
+from oio.common.constants import (
+    LIFECYCLE_USER_AGENT,
+    MULTIUPLOAD_SUFFIX,
+    OBJECT_REPLICATION_PENDING,
+)
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import (
     NotFound,
@@ -76,6 +80,9 @@ class LifecycleOperationLog(str, Enum):
 
 
 DEFAULT_REQUESTER = "OVHcloudS3"
+
+UPLOAD_ID = "x-object-sysmeta-s3api-upload-id"
+SLO = "x-static-large-object"
 
 
 def event_to_s3_operation(event):
@@ -298,6 +305,45 @@ class LifecycleActions(Filter):
             reqid=context.reqid,
         )
 
+    def _process_transition_parts(self, context: LifecycleActionContext, upload_id):
+        prefix = f"{context.path}/{upload_id}/"
+        segment_name = f"{context.container}{MULTIUPLOAD_SUFFIX}"
+
+        marker = None
+        while True:
+            headers, content_list = self.container_client.content_list(
+                account=context.account,
+                reference=segment_name,
+                limit=self.limit_listing,
+                marker=marker,
+                prefix=prefix,
+            )
+            for obj in content_list["objects"]:
+                # What's after the prefix should be an integer (the part number)
+                part_number = obj["name"].rsplit("/", 1)[-1]
+                try:
+                    part_number_int = int(part_number)
+                    if part_number_int < 1 or part_number_int > 10000:
+                        raise ValueError("part number should be between 1 and 10000")
+                    part_name = obj["name"]
+                    object_size = obj.get("size", None)
+                    policy = obj.get("policy", None)
+                    version = obj.get("version", None)
+                    part_context = LifecycleActionContext(context.event)
+                    # Force some info
+                    part_context.event.data["container"] = segment_name
+                    part_context.event.data["object"] = part_name
+                    part_context.event.data["version"] = version
+                    part_context.size = object_size
+                    self._process_transition(part_context, policy)
+                except ValueError:
+                    # Ignore this object (not a part of the MPU)
+                    continue
+            truncated = boolean_value(headers.get("x-oio-list-truncated"))
+            marker = headers.get("x-oio-list-marker")
+            if not truncated:
+                break
+
     def _should_log(self, context: LifecycleActionContext):
         if not context.event.data:
             return False
@@ -383,7 +429,7 @@ class LifecycleActions(Filter):
             context.size = obj_meta.get("size", None)
             policy = obj_meta.get("policy", None)
             metadata = obj_meta.get("properties") or {}
-            is_mpu = boolean_value(metadata.get("x-static-large-object"), False)
+            is_mpu = boolean_value(metadata.get(SLO), False)
             replication_status = metadata.get(
                 "x-object-sysmeta-s3api-replication-status"
             )
@@ -405,7 +451,13 @@ class LifecycleActions(Filter):
                 self._process_expiration(context, is_mpu)
             elif context.action in ("Transition", "NoncurrentVersionTransition"):
                 action_type = LifecycleAction.TRANSITION
+                upload_id = metadata.get(UPLOAD_ID, None)
+                # transition object or manifest
                 self._process_transition(context, policy)
+                # Transition parts if manifest
+                if is_mpu:
+                    self._process_transition_parts(context, upload_id)
+
             elif context.action == "AbortIncompleteMultipartUpload":
                 action_type = LifecycleAction.ABORT_MPU
                 self._process_abort_mpu(context)
