@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,8 +34,21 @@ Basic object storage example:
 
 import importlib
 import sys
+import warnings
 
 import pkg_resources
+
+# To be removed when Python 3.7 is no longer used
+warnings.filterwarnings(
+    "ignore",
+    category=UserWarning,
+    message=(
+        "Python 3\.7 is no longer supported by the Python core team "
+        "and support for it is deprecated in cryptography\. "
+        "A future release of cryptography will remove support "
+        "for Python 3\.7\."
+    )
+)
 
 
 class ObjectStorageApi(object):
