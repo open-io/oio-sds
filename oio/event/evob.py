@@ -29,6 +29,10 @@ def is_retryable(status):
     return status == 503
 
 
+def is_outdated(status):
+    return status == 410
+
+
 def is_pausable(event):
     return event.get("_internal", {}).get("allow_pause", False)
 

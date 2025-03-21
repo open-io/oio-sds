@@ -23,9 +23,20 @@ from oio.common.green import get_watchdog
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.conscience.client import ConscienceClient
-from oio.event.evob import EventTypes, ResponseCallBack, is_retryable, is_success
+from oio.event.evob import (
+    EventTypes,
+    ResponseCallBack,
+    is_outdated,
+    is_retryable,
+    is_success,
+)
 from oio.event.filters.base import Filter
-from oio.event.kafka_consumer import KafkaConsumerWorker, RejectMessage, RetryLater
+from oio.event.kafka_consumer import (
+    KafkaConsumerWorker,
+    OutdatedMessage,
+    RejectMessage,
+    RetryLater,
+)
 from oio.event.loader import loadhandlers
 from oio.event.utils import log_context_from_msg
 from oio.rdir.client import RdirClient
@@ -204,15 +215,15 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     f"event.{self.topic}.{event}.retry",
                     int((time.monotonic() - start) * 1000),
                 )
-
                 raise RetryLater(delay=kwargs.get("delay"))
-            else:
-                self.logger.error(
-                    "event handling failure (rejecting): %s reqid=%s", msg, reqid
-                )
-                raise RejectMessage(
-                    f"Failed to process message {msg}: ({reqid}) {status}"
-                )
+
+            if is_outdated(status):
+                raise OutdatedMessage("Message requeued for too long")
+
+            self.logger.debug(
+                "event handling failure (rejecting): %s reqid=%s", msg, reqid
+            )
+            raise RejectMessage(f"Failed to process message {msg}: ({reqid}) {status}")
 
         if event in EventTypes.INTERNAL_EVENTS:
             handlers = self.handlers_with_internal

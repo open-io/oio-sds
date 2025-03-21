@@ -78,7 +78,8 @@ class DelayFilter(Filter):
         expirency_date = when_sec + self._events_time_to_live
         if now + delta_time > expirency_date:
             return EventError(
-                body=f"Event expired (older than {self._events_time_to_live}s)"
+                body=f"Event expired (older than {self._events_time_to_live}s)",
+                status=410,
             )
 
         if delta_time > 0:

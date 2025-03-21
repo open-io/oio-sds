@@ -219,6 +219,12 @@ class RetryLater(RejectMessage):
         self.delay = delay
 
 
+class OutdatedMessage(RejectMessage):
+    """
+    Raise this exception when the current message is requeue for too long.
+    """
+
+
 class KafkaOffsetHelperMixin:
     def __init__(self):
         self._offsets_to_commit = {}
@@ -473,6 +479,8 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
                     delay = exc.delay
                 if delay:
                     self.logger.debug("Retry later message %s: %s", event, exc)
+                elif isinstance(exc, OutdatedMessage):
+                    self.logger.debug("Message reached its expiration %s", exc)
                 else:
                     self.logger.error(
                         "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
