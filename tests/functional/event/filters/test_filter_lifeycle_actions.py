@@ -13,12 +13,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 import time
 
+from oio.common.constants import MULTIUPLOAD_SUFFIX
 from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.filters.lifecycle_actions import LifecycleActions
-from tests.utils import BaseTestCase
+from tests.utils import BaseTestCase, random_str
 
 
 class _App:
@@ -43,15 +45,6 @@ class TestFilterLifecycleActions(BaseTestCase):
                 "statsd_client": get_statsd(),
             }
         )
-        self.object = "policy-transition/obj"
-        _, _, _, self.obj_meta = self.storage.object_create_ext(
-            account=self.account,
-            container=self.container,
-            obj_name=self.object,
-            data="test",
-            policy="TWOCOPIES",
-        )
-
         self.container_client = self.storage.container
         syst = self.container_client.container_get_properties(
             self.account, self.container
@@ -60,6 +53,15 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.conf["redis_host"] = "127.0.0.1:6379"
         self.conf["storage_class.STANDARD"] = "EC21,TWOCOPIES:0,EC21:100000"
         self.conf["storage_class.STANDARD_IA"] = "SINGLE"
+
+    def _create_object(self):
+        _, _, _, self.obj_meta = self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=self.object,
+            data="test",
+            policy="TWOCOPIES",
+        )
 
     def _create_event(
         self,
@@ -101,8 +103,49 @@ class TestFilterLifecycleActions(BaseTestCase):
 
         return event
 
+    def _create_mpu(self, nb_parts=1, size=1):
+        upload_id = random_str(48)
+        part_size = size // nb_parts
+        parts = []
+        container_segment = f"{self.container}{MULTIUPLOAD_SUFFIX}"
+
+        for i in range(1, nb_parts + 1):
+            obj = f"{self.object}/{upload_id}/{i}"
+            _, _, _, part_meta = self.storage.object_create_ext(
+                account=self.account,
+                container=container_segment,
+                obj_name=obj,
+                data=b"a" * part_size,
+                policy="TWOCOPIES",
+            )
+            parts.append(
+                {
+                    "name": obj,
+                    "bytes": part_size,
+                    "hash": "272913026300e7ae9b5e2d51f138e674",
+                    "content_type": "application/octet-stream",
+                    "last_modified": "2025-03-19T09:36:32.000000",
+                }
+            )
+        # Create manifest
+        _, _, _, self.obj_meta = self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=self.object,
+            data=json.dumps(parts),
+            properties={
+                "x-static-large-object": "True",
+                "x-object-sysmeta-s3api-upload-id": upload_id,
+            },
+            policy="TWOCOPIES",
+        )
+        self.clean_later(container_segment)
+        return self.obj_meta, parts
+
     def test_transition(self):
+        self.object = "policy-transition/obj"
         reqid = request_id("lifecycle-actions-")
+        self._create_object()
         event = self._create_event(
             self.object,
             reqid=reqid,
@@ -118,3 +161,31 @@ class TestFilterLifecycleActions(BaseTestCase):
         # policy changed from TWOCOPIES to SINGLE
         self.assertIn("policy", props)
         self.assertEqual("SINGLE", props["policy"])
+
+    def test_transition_mpu(self):
+        self.object = "policy-transition/obj-mpu"
+        reqid = request_id("lifecycle-actions-")
+        _, parts = self._create_mpu(nb_parts=3, size=10)
+        event = self._create_event(
+            self.object,
+            reqid=reqid,
+        )
+
+        self.lifeycle_actions = LifecycleActions(app=self.app, conf=self.conf)
+        self.lifeycle_actions.process(event, None)
+
+        time.sleep(3)
+        props = self.storage.object_get_properties(
+            self.account, self.container, self.object, version=self.obj_meta["version"]
+        )
+        # policy changed from TWOCOPIES to SINGLE
+        self.assertIn("policy", props)
+        self.assertEqual("SINGLE", props["policy"])
+
+        for el in parts:
+            props = self.storage.object_get_properties(
+                self.account, f"{self.container}{MULTIUPLOAD_SUFFIX}", el["name"]
+            )
+            # policy changed from TWOCOPIES to SINGLE
+            self.assertIn("policy", props)
+            self.assertEqual("SINGLE", props["policy"])
