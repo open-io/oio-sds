@@ -16,7 +16,7 @@
 import hashlib
 from copy import deepcopy
 
-from oio.common.exceptions import ClientException, Conflict
+from oio.common.exceptions import ClientException, Conflict, NotFound
 from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
 from oio.common.statsd import get_statsd
 from oio.container.client import ContainerClient
@@ -48,6 +48,10 @@ class Context:
         self.root_container_id = root_container_id
         self.container_to_process = None
         self.request_id = request_id
+
+
+class ShardingInProgress(Exception):
+    pass
 
 
 class CheckpointCreatorFilter(Filter):
@@ -100,18 +104,15 @@ class CheckpointCreatorFilter(Filter):
         return None, False
 
     def _check_no_sharding(self):
-        cid = self._event_context.container_id
-
+        cid = self._event_context.container_to_process
         # Retrieve container status
         meta = self._container_client.container_get_properties(
             cid=cid, params={"urgent": 1}, reqid=self._event_context.request_id
         )
-
         # Ensure no sharding is in progress
         if self._sharding_client.sharding_in_progress(meta):
-            self.logger.warning("Sharding in progress, cid=%s", cid)
-            return RetryableEventError(f"Sharding in progress for {cid}")
-        return None
+            self.logger.debug("Sharding in progress, cid=%s", cid)
+            raise ShardingInProgress(f"Sharding in progress for {cid}")
 
     def _check_container_up_to_date(self, root_cid, cid, bounds, env):
         lower, upper = bounds
@@ -130,16 +131,16 @@ class CheckpointCreatorFilter(Filter):
         if not shards:
             # There are no shards. We can checkpoint the root container
             cid_to_process = root_cid
-        elif len(shards) == 1 and bounds == (shards[0]["lower"], shards[0]["upper"]):
+        elif (
+            len(shards) == 1
+            and bounds == (shards[0]["lower"], shards[0]["upper"])
+            and shards[0]["cid"] == cid
+        ):
             # The shard is up to date.
             cid_to_process = cid
         else:
             # Container has been sharded or shrunk
             err_resp = self._generate_sub_events(shards, env)
-            if not err_resp and root_cid == cid:
-                has_shards = True
-                cid_to_process = root_cid
-
         return cid_to_process, has_shards, err_resp
 
     def _generate_sub_events(self, shards, env):
@@ -234,32 +235,66 @@ class CheckpointCreatorFilter(Filter):
                 run_id, account_id, bucket_id, cid, root_cid, request_id=event.reqid
             )
 
-            err = self._check_no_sharding()
-            if err:
-                return err(env, cb)
-
             # Retrieve container bounds
             _bounds = data.get("bounds", {})
             bounds = (_bounds.get("lower", ""), _bounds.get("upper", ""))
-
             # Ensure bounds are up to date (container has not been sharded nor shrunk)
-            cid_to_process, has_shards, err = self._check_container_up_to_date(
-                root_cid, cid, bounds, env
-            )
+            try:
+                cid_to_process, has_shards, err = self._check_container_up_to_date(
+                    root_cid, cid, bounds, env
+                )
+            except NotFound:
+                self.logger.debug("Bucket deleted")
+                self._update_metrics(LifecycleStep.SKIPPED)
+                return self.app(env, cb)
 
-            if err:
+            self._event_context.container_to_process = cid_to_process
+            step = LifecycleStep.SKIPPED
+            try:
+                self._check_no_sharding()
+            except ShardingInProgress:
+                # Postpone event when sharding would be complete
+                err = RetryableEventError(
+                    f"Sharding in progress for {cid}", delay=self._retry_delay
+                )
                 return err(env, cb)
-            step = LifecycleStep.PROCESSED
-            if cid_to_process is None:
-                # Container has been replaced (sharding or shrinking), new chetkpoint
-                # events should have been issued
-                step = LifecycleStep.SKIPPED
-            else:
-                self._event_context.container_to_process = cid_to_process
+            except NotFound:
+                self.logger.debug("Container %s not found", cid_to_process)
+                if cid_to_process == root_cid:
+                    # Root container is missing, bucket should have been deleted
+                    cid_to_process = None
+                    pass
+                else:
+                    # The container could have been deleted after (shard or shrink
+                    # process). Emit events for the shards hanling the range.
+                    try:
+                        cid_to_process, _, err = self._check_container_up_to_date(
+                            root_cid, cid_to_process, bounds, env
+                        )
+                        if err:
+                            # Failed to emit sub events
+                            return err(env, cb)
+                        if cid_to_process == cid:
+                            # The missing container is still registerd as one handling
+                            # the range. This case should not happen. We raise an
+                            # exception to let the event end in the dead-letter topic
+                            # to conduct further investigations
+                            self._update_metrics(LifecycleStep.ERROR)
+                            raise Exception(f"Container {cid} in undefined state")
+                    except NotFound:
+                        # Root container is missing (bucket deleted) since last call.
+                        # What are the odds!
+                        cid_to_process = None
+
+            if cid_to_process:
+                if cid_to_process == root_cid:
+                    # Override bounds
+                    bounds = ("", "")
                 suffix_hash = self._get_suffix_hash(has_shards, bounds)
                 err = self._create_checkpoint(suffix_hash)
                 if err:
                     return err(env, cb)
+                step = LifecycleStep.PROCESSED
 
             self._update_metrics(step)
             return self.app(env, cb)
