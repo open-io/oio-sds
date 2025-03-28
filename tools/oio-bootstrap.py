@@ -670,6 +670,9 @@ endpoint = ${EVENT_CNXSTRING}
 topic = oio-lifecycle-checkpoint
 redis_host = ${IP}:${REDIS_PORT}
 
+syslog_prefix = OIO,${NS},${SRVTYPE}
+log_level = INFO
+
 lifecycle_configuration_backup_account = internal
 lifecycle_configuration_backup_bucket = internal_lifecycle
 

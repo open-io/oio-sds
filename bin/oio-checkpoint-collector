@@ -26,9 +26,7 @@ import json
 import signal
 import sys
 import time
-from collections import OrderedDict
-from multiprocessing.queues import Empty
-from os.path import exists, join
+from collections import Counter
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.configuration import read_conf
@@ -37,11 +35,16 @@ from oio.common.constants import (
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     MULTIUPLOAD_SUFFIX,
 )
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import NoSuchContainer, NoSuchObject, NotFound
-from oio.common.green import GreenPool, LightQueue, sleep
+from oio.common.green import GreenPool, LightQueue
 from oio.common.kafka import KafkaSender
-from oio.common.logger import get_logger
+from oio.common.logger import (
+    OioAccessLog,
+    get_oio_log_context,
+    get_oio_logger,
+    redirect_stdio,
+)
 from oio.common.statsd import StatsdTiming, get_statsd
 from oio.common.timestamp import Timestamp
 from oio.common.utils import cid_from_name, get_hasher, request_id
@@ -62,6 +65,10 @@ class BucketAlreadyProcessed(Exception):
     pass
 
 
+class BucketTimeBypassDisabled(Exception):
+    pass
+
+
 class LifecycleConfigurationNotFound(Exception):
     pass
 
@@ -71,6 +78,8 @@ class LifecycleBackupContainerNotFound(Exception):
 
 
 class CheckpointCollector:
+    status_codes = (200, 208, 404, 412, 500)
+
     def __init__(self, conf, logger, feature, run_id, with_time_bypass=False):
         self._conf = conf
         self._logger = logger
@@ -116,46 +125,17 @@ class CheckpointCollector:
         )
 
         # Metrics helper
-        self._metrics = LifecycleMetricTracker(self._conf)
+        self._metrics = LifecycleMetricTracker(self._conf, logger=self._logger)
+        self._process_stats = Counter()
 
         # Statsd helpers
         self._statsd = get_statsd(self._conf)
 
-        # Progress tracking
-        self._progress_dir = self._conf.get("progress_dir", ".")
         self._run_id = run_id
-        self._progress = OrderedDict()
         self._last_commited_marker = None
         self.has_error = False
 
         self._request_id = request_id(f"lc-{self._run_id}-")
-
-        self._reload_progress()
-
-    def _reload_progress(self):
-        # load marker
-        self._logger.debug("Retrieve progress from file: '%s'", self._progress_file)
-        if exists(self._progress_file):
-            with open(self._progress_file, "r", encoding="utf-8") as progress_file:
-                line = progress_file.readline()
-                if not line:
-                    return
-                parts = line.split(";")
-                if len(parts) != 2:
-                    return
-                account, bucket = parts
-                self._logger.debug(
-                    "Reload marker account=%s, bucket=%s", account, bucket
-                )
-                self._last_commited_marker = self._marker = (account, bucket)
-
-    @property
-    def _progress_file(self):
-        return join(self._progress_dir, f"checkpoint-collector.progress.{self._run_id}")
-
-    @property
-    def _error_file(self):
-        return join(self._progress_dir, f"checkpoint-collector.error.{self._run_id}")
 
     def _make_payload(self, account, bucket, cid, shard_info):
         shard_info = shard_info or {}
@@ -178,10 +158,7 @@ class CheckpointCollector:
             }
         )
 
-    def _increment_snapshot_counter(self, ctx, cid, step):
-        if not ctx:
-            return
-        account, bucket = ctx
+    def _increment_snapshot_counter(self, account, bucket, cid, step):
         with self._statsd.pipeline() as pipe:
             pipe.incr(statsd_key(self._run_id, step, LifecycleAction.CHECKPOINT))
         self._metrics.increment_counter(
@@ -193,24 +170,41 @@ class CheckpointCollector:
             LifecycleAction.CHECKPOINT,
         )
 
-    def _process_container(self, account, bucket, container, ctx=None):
+    def _process_container(self, account, bucket, container, cid):
         cid = cid_from_name(account, container)
-        # Produce event for root container
-        self._produce_event(account, bucket, container, cid)
-        self._increment_snapshot_counter(ctx, cid, LifecycleStep.SUBMITTED)
+        with get_oio_log_context(cid=cid, container=container):
+            try:
+                self._logger.debug("Get info on container")
+                props = self._api.container_get_properties(
+                    account,
+                    container,
+                    reqid=self._request_id,
+                )
+                if not container.endswith(MULTIUPLOAD_SUFFIX):
+                    # Processing main container
+                    if self._with_time_bypass and not boolean_value(
+                        props.get(M2_PROP_LIFECYCLE_TIME_BYPASS), False
+                    ):
+                        raise BucketTimeBypassDisabled()
+                    self._upload_configuration(account, bucket, props)
+
+                # Produce event for root container
+                self._produce_event(account, bucket, container, cid)
+                self._increment_snapshot_counter(
+                    account, bucket, cid, LifecycleStep.SUBMITTED
+                )
+            except NoSuchContainer:
+                self._logger.debug("Container not found")
+                if not container.endswith(MULTIUPLOAD_SUFFIX):
+                    raise
 
     def _produce_event(self, account, bucket, container, cid, shard_info=None):
         payload = self._make_payload(account, container, cid, shard_info)
-        self._logger.info(
-            "Produce event account=%s bucket=%s container=%s cid=%s",
-            account,
-            bucket,
-            container,
-            cid,
-        )
+        self._logger.debug("Produce event")
         self._kafka_producer.send(self._topic, payload, flush=True)
 
     def _upload_configuration(self, account, bucket, props):
+        version = None
         lifecycle_config = props["properties"].get(LIFECYCLE_PROPERTY_KEY)
         if not lifecycle_config:
             self._logger.error(
@@ -231,6 +225,7 @@ class CheckpointCollector:
                     obj_name,
                     reqid=self._request_id,
                 )
+                version = object_props["version"]
                 # Compute lifecycle configuration hash
                 hasher = get_hasher("md5")
                 hasher.update(lifecycle_config.encode("utf-8"))
@@ -245,13 +240,14 @@ class CheckpointCollector:
                 )
 
             if should_upload:
-                self._api.object_create(
+                props = self._api.object_create(
                     self._lc_backup_account,
                     self._lc_backup_bucket,
                     obj_name=obj_name,
                     data=lifecycle_config,
                     reqid=self._request_id,
                 )
+                version = props["version"]
         except NoSuchContainer as exc:
             self._logger.error(
                 "Failed to access lifecycle configuration backup container, "
@@ -260,76 +256,57 @@ class CheckpointCollector:
                 self._lc_backup_bucket,
             )
             raise LifecycleBackupContainerNotFound() from exc
+        return version
 
     def _process_bucket(self, account, bucket):
-        error = None
-        self._progress[(account, bucket)] = None
-
+        code = 200
         try:
-            with StatsdTiming(
-                self._statsd, "openio.lifecycle.checkpoint-collector.{code}.duration"
-            ) as st:
-                if self._metrics.is_bucket_triggered(self._run_id, account, bucket):
-                    st.code = 208
-                    raise BucketAlreadyProcessed()
-
-                ctx = (account, bucket)
-                self._logger.debug("Processing %s %s", account, bucket)
-                for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
-                    is_main_container = ct_suffix == ""
-                    container = f"{bucket}{ct_suffix}"
+            with OioAccessLog(
+                self._logger,
+                account=account,
+                bucket=bucket,
+                request_id=self._request_id,
+                run_id=self._run_id,
+            ) as access:
+                with StatsdTiming(
+                    self._statsd,
+                    "openio.lifecycle.checkpoint-collector.{code}.duration",
+                ) as st:
+                    if self._metrics.is_bucket_triggered(self._run_id, account, bucket):
+                        code = access.status = st.code = 208
+                        raise BucketAlreadyProcessed()
                     try:
-                        if self._with_time_bypass and not ct_suffix:
-                            props = self._api.container_get_properties(
-                                account,
-                                container,
-                                reqid=self._request_id,
-                            )
-                            if props.get(M2_PROP_LIFECYCLE_TIME_BYPASS, False):
-                                break
-
-                        self._logger.debug(
-                            "Get info on container: acct=%s, ref=%s", account, bucket
-                        )
-                        props = self._api.container_show(
-                            account,
-                            container,
-                            reqid=self._request_id,
-                        )
-                        if is_main_container:
-                            self._upload_configuration(account, bucket, props)
-
-                        self._process_container(account, bucket, container, ctx=ctx)
-                    except NoSuchContainer:
-                        self._logger.debug(
-                            "Container not found account: %s, container: %s",
-                            account,
-                            container,
-                        )
-                        if not is_main_container:
-                            continue
-                        st.code = 404
+                        self._logger.debug("Processing")
+                        for ct_suffix in ("", MULTIUPLOAD_SUFFIX):
+                            container = f"{bucket}{ct_suffix}"
+                            cid = cid_from_name(account, container)
+                            with get_oio_log_context(cid=cid, container=container):
+                                try:
+                                    self._process_container(
+                                        account, bucket, container, cid
+                                    )
+                                except NoSuchContainer:
+                                    self._logger.debug("Container not found")
+                                    code = access.status = st.code = 404
+                                    raise
+                    except BucketTimeBypassDisabled:
+                        code = access.status = st.code = 412
                         raise
-
                 self._metrics.mark_bucket_as_triggered(self._run_id, account, bucket)
         except BucketAlreadyProcessed:
-            self._logger.debug(
-                "Bucket (acct=%s name=%s) already processed for run %s",
-                account,
-                bucket,
-                self._run_id,
+            self._logger.debug("Bucket already processed")
+        except Exception:
+            self._logger.error("Failed to process bucket")
+            cid = cid_from_name(account, bucket)
+            self._increment_snapshot_counter(
+                account, bucket, cid, LifecycleStep.SUBMIT_ERROR
             )
-        except Exception as exc:
-            self._logger.error("Failed to process bucket %s, reason: %s", bucket, exc)
-            cid = cid_from_name(account, container)
-            self._increment_snapshot_counter(ctx, cid, LifecycleStep.SUBMIT_ERROR)
-            error = exc
-        self._result_queue.put((account, bucket, error))
+            if code == 200:
+                code = 500
+        return code
 
-    def _fetch_buckets(self, marker=None):
-        if isinstance(marker, tuple):
-            marker = "|".join(marker)
-
+    def _fetch_buckets(self):
+        marker = None
         while True:
             resp = self._api.bucket.buckets_list_by_feature(
                 self._feature_name,
@@ -338,6 +315,8 @@ class CheckpointCollector:
                 reqid=self._request_id,
             )
             for entry in resp.get("buckets", []):
+                if not self._running:
+                    return
                 yield entry["account"], entry["bucket"]
             if not resp.get("truncated", False):
                 break
@@ -345,106 +324,44 @@ class CheckpointCollector:
             if not marker:
                 break
 
-    def _compute_progress(self, account, bucket, status):
-        self._progress[(account, bucket)] = status
-        marker = None
-
-        while True:
-            key = None
-            value = None
-            if self._progress:
-                # Retrieve first item
-                key, value = next(iter(self._progress.items()))
-            if value is None:
-                break
-            _, _ = self._progress.popitem(last=False)
-            marker = key
-
-        if marker is not None:
-            self._last_commited_marker = marker
-
-    def _fetch_progression(self):
-        last_marker = None
-        with open(self._progress_file, "w", encoding="utf-8") as progress_file:
-            with open(self._error_file, "w", encoding="utf-8") as error_file:
-                while True:
-                    try:
-                        result = self._result_queue.get(timeout=1)
-                    except Empty:
-                        if not self._progress:
-                            break
-                    account, bucket, error = result
-                    if error:
-                        error_file.write(f"{account};{bucket};{error}")
-                        self.has_error = True
-                    self._compute_progress(account, bucket, error or True)
-                    if (
-                        self._last_commited_marker
-                        and self._last_commited_marker != last_marker
-                    ):
-                        self._logger.debug(
-                            "Update progress file %s", self._last_commited_marker
-                        )
-                        account, bucket = self._last_commited_marker
-                        progress_file.truncate(0)
-                        progress_file.seek(0)
-                        progress_file.write(f"{account};{bucket}\n")
-                        last_marker = self._last_commited_marker
-
     def __stop(self):
-        self._logger.info("Stopping")
+        self._logger.debug("Stopping")
         self._running = False
 
     def run(self):
-        """ """
+        with OioAccessLog(
+            self._logger,
+            request_id=self._request_id,
+            run_id=self._run_id,
+        ) as access:
+            with StatsdTiming(
+                self._statsd,
+                "openio.lifecycle.checkpoint-collector.run.{code}.duration",
+            ) as st:
+                # Install signal handlers
+                signal.signal(signal.SIGINT, lambda _sig, _stack: self.__stop())
+                signal.signal(signal.SIGTERM, lambda _sig, _stack: self.__stop())
+                self._running = True
 
-        start_time = time.monotonic()
+                metrics = Counter({c: 0 for c in self.status_codes})
+                for code in self._pool.imap(
+                    lambda args: self._process_bucket(*args), self._fetch_buckets()
+                ):
+                    if code not in metrics:
+                        self._logger.warning("Code %s is not recognized", code)
+                    metrics[code] += 1
+                    self.has_error = self.has_error or code >= 500
 
-        # Install signal handlers
-        signal.signal(signal.SIGINT, lambda _sig, _stack: self.__stop())
-        signal.signal(signal.SIGTERM, lambda _sig, _stack: self.__stop())
-        self._running = True
+                for code, value in metrics.items():
+                    self._statsd.gauge(
+                        f"openio.lifecycle.checkpoint-collector.run.buckets.{code}",
+                        value,
+                    )
 
-        task_progression = self._pool.spawn(self._fetch_progression)
+                self._kafka_producer.close()
 
-        tasks = [task_progression]
-
-        def cancel_pending_tasks():
-            self._logger.warning("Aborting pending tasks")
-            for task in tasks:
-                task.cancel()
-
-        self._logger.info(
-            "Starting with listing of buckets with %s", self._feature_name
-        )
-        has_process_bucket = bool(self._marker)
-        for account, bucket in self._fetch_buckets(self._marker):
-            if not self._running:
-                cancel_pending_tasks()
-                break
-            has_process_bucket = True
-            task = self._pool.spawn(self._process_bucket, account, bucket)
-            tasks.append(task)
-        if not has_process_bucket:
-            self._logger.info(
-                "No buckets found with feature '%s'. Ensure the feature is tracked"
-                "(features_whitelist)",
-                self._feature_name,
-            )
-
-        while (self._pool.running() + self._pool.waiting()) > 0:
-            if not self._running:
-                cancel_pending_tasks()
-                break
-            sleep(1)
-        # Let all threads end
-        self._pool.waitall()
-
-        self._kafka_producer.close()
-
-        # to be also added as statsd to track the total runtime of the script
-        # + convert logs to LTSV
-        self._logger.info("Stopped duration=%f", time.monotonic() - start_time)
+                if self.has_error:
+                    access.status = st.code = 500
 
 
 def make_arg_parser():
@@ -472,10 +389,19 @@ def make_arg_parser():
 def main():
     args = make_arg_parser().parse_args()
     conf = read_conf(args.configuration, "checkpoint-collector")
-    logger = get_logger(conf, verbose=args.verbose)
+    logger = get_oio_logger(conf, verbose=args.verbose)
+    redirect_stdio(logger)
 
-    collector = CheckpointCollector(conf, logger, "lifecycle", args.run_id)
-    collector.run()
+    with get_oio_log_context(run_id=args.run_id):
+        logger.info("Starting")
+        collector = CheckpointCollector(
+            conf,
+            logger,
+            "lifecycle",
+            args.run_id,
+            with_time_bypass=args.only_with_time_bypass,
+        )
+        collector.run()
     return 1 if collector.has_error else 0
 
 
