@@ -48,7 +48,7 @@ class Meta2Worker(PipelineWorker):
         db_id = path.rsplit("/")[-1].split(".", 4)
 
         if len(db_id) < 3:
-            self.logger.warning("Malformed db file name: %s", path)
+            self.logger.debug("Malformed db file name: %s", path)
             self.invalid_paths += 1
             return False
 
@@ -64,13 +64,14 @@ class Meta2Worker(PipelineWorker):
             db_suffix = None
 
         if db_type != "meta2":
-            self.logger.warning("Bad extension filename: %s", path)
+            self.logger.debug("Bad extension filename: %s", path)
             self.invalid_paths += 1
             return False
 
         cid_seq = ".".join([db_cid, db_seq])
         if len(cid_seq) < STRLEN_REFERENCEID:
             self.logger.warning("Not a valid CID: %s", cid_seq)
+            self.invalid_paths += 1
             return False
 
         meta2db = Meta2DB(self.app_env, {})
@@ -82,6 +83,7 @@ class Meta2Worker(PipelineWorker):
             meta2db.seq = int(db_seq)
         except ValueError:
             self.logger.warning("Bad sequence number: %s", db_seq)
+            self.invalid_paths += 1
             return False
 
         try:
