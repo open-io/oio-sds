@@ -21,9 +21,13 @@ import re
 import socket
 import string
 import sys
+import time
 import traceback
 from collections import defaultdict
-from logging import Formatter, PercentStyle
+from contextlib import contextmanager
+from contextvars import ContextVar
+from itertools import chain
+from logging import Filter, Formatter, PercentStyle
 from logging.handlers import SocketHandler, SysLogHandler
 
 # Match LTSV log format configuration
@@ -39,6 +43,25 @@ class LogStringFormatter(string.Formatter):
         if not value:
             return self.default
         return super().format_field(value, format_spec)
+
+
+class FieldStringFormatter(string.Formatter):
+    def format_field(self, value, format_spec):
+        if format_spec == "u":
+            return str(value).upper()
+        if format_spec == "l":
+            return str(value).lower()
+        return super().format_field(value, format_spec)
+
+
+class LtsvFieldStringFormatter(FieldStringFormatter):
+    def format_field(self, value, format_spec):
+        if value is None:
+            return "-"
+        if isinstance(value, bytes):
+            return value.decode("utf-8", "surrogateescape")
+        data = super().format_field(value, format_spec)
+        return data.replace("\n", "#012").replace("\t", "#009")
 
 
 class StreamToLogger(object):
@@ -104,7 +127,10 @@ def redirect_stdio(logger):
     stdio_fd = (sys.stdin, sys.stdout)
     console_fds = [
         h.stream.fileno()
-        for _, h in getattr(get_logger, "console_handler4logger", {}).items()
+        for h in chain(
+            getattr(get_logger, "console_handler4logger", {}).values(),
+            getattr(get_oio_logger, "console_handler4logger", {}).values(),
+        )
     ]
     stdio_fd = [fd for fd in stdio_fd if fd.fileno() not in console_fds]
 
@@ -120,8 +146,12 @@ def redirect_stdio(logger):
             except OSError:
                 pass
 
-    handler = get_logger.handler4logger[logger]
-    handler.handleError = switch_to_real_stderr(handler.handleError)
+    for log in (get_logger, get_oio_logger):
+        handler4logger = getattr(log, "handler4logger", {})
+        if logger in handler4logger:
+            handler = handler4logger[logger]
+            handler.handleError = switch_to_real_stderr(handler.handleError)
+            break
 
     sys.stdout = StreamToLogger(logger)
     sys.stderr = StreamToLogger(logger, "STDERR")
@@ -349,3 +379,254 @@ class LTSVFormatter(Formatter):
             return self._fmt % data
 
         return self._fmt.format(**data)
+
+
+class OioAccessLog:
+    def __init__(self, logger, **kwargs):
+        self._extras = kwargs
+        self.context = None
+        self._logger = logger
+        self._start_time = None
+        self.status = None
+
+    def __enter__(self):
+        self._start_time = time.monotonic()
+        self.context = _oio_log_context.get()
+        self.context.push(**self._extras)
+        return self
+
+    def __exit__(self, exc_type, _exc_val, _exc_tb):
+        if self.status is None:
+            self.status = 500 if exc_type else 200
+        duration = time.monotonic() - self._start_time
+        with get_oio_log_context(
+            log_type="access", duration=duration, status=self.status
+        ):
+            self._logger.info("")
+        self.context.pop()
+
+
+class OioLogContext:
+    def __init__(self):
+        self.__context_stack = [{"log_type": "log"}]
+
+    @property
+    def attributes(self):
+        return self.__context_stack[-1]
+
+    def amend(self, **kwargs):
+        self.__context_stack[-1].update(kwargs)
+
+    def push(self, **kwargs):
+        prev_ctx = self.__context_stack[-1]
+        ctx = {**prev_ctx, **kwargs}
+        self.__context_stack.append(ctx)
+
+    def pop(self):
+        if len(self.__context_stack) > 1:
+            self.__context_stack.pop()
+
+
+@contextmanager
+def get_oio_log_context(**kwargs):
+    ctx = _oio_log_context.get()
+    if ctx is None:
+        ctx = OioLogContext()
+        _oio_log_context.set(ctx)
+    try:
+        ctx.push(**kwargs)
+        yield ctx
+    finally:
+        ctx.pop()
+
+
+class OioContextInjectFilter(Filter):
+    def filter(self, record):
+        ctx = _oio_log_context.get()
+        record.oio_fields = set()
+        for key, value in ctx.attributes.items():
+            setattr(record, key, value)
+            record.oio_fields.add(key)
+        return record
+
+
+class OioLogFormatter(Formatter):
+    field_formatter_class = FieldStringFormatter
+    default_fields_mapping = {
+        "process": "pid",
+        "levelname": "log_level:l",
+        "exc_text": "exc_text",
+        "exc_filename": "exc_filename",
+        "exc_lineno": "exc_lineno",
+    }
+
+    def __init__(self, fmt=None, fields_mapping=None, **kwargs):
+        super().__init__(fmt=fmt, style="%")
+        self._field_formatter = self.field_formatter_class()
+        self._fields_mapping = {}
+        if fields_mapping is None:
+            fields_mapping = {}
+        for src, dest in chain(
+            self.default_fields_mapping.items(), fields_mapping.items()
+        ):
+            parts = dest.split(":", 1)
+            self._fields_mapping[src] = (
+                parts[0],
+                f":{parts[1]}" if len(parts) == 2 else "",
+            )
+        self.__extras = self._prepare_content(kwargs)
+
+    def _prepare_content(self, data, filter_func=None):
+        content = {}
+        for k, v in data.items():
+            if v is None:
+                continue
+            if filter_func and not filter_func(k):
+                continue
+            mapped = self._fields_mapping.get(k, (k, ""))
+            content[mapped[0]] = (v, mapped[1])
+        return content
+
+    def _get_format_string(self, data):
+        raise NotImplementedError()
+
+    def format(self, record):
+        exception = {}
+        if getattr(record, "exc_info", None):
+            exception["exc_text"] = self.formatException(record.exc_info)
+            exc = traceback.extract_tb(record.exc_info[2])
+            if exc:
+                exception["exc_filename"] = exc[-1][0]
+                exception["exc_lineno"] = exc[-1][1]
+
+        def filter_func(k):
+            return k in self._fields_mapping or k in record.oio_fields
+
+        content = {
+            **self.__extras,
+            **self._prepare_content(record.__dict__, filter_func=filter_func),
+            **self._prepare_content(exception, filter_func=filter_func),
+        }
+        # Ensure message is formatted
+        msg = record.getMessage()
+        if msg:
+            content[self._fields_mapping.get("message", ("message",))[0]] = (msg, "")
+
+        fmt_str = self._get_format_string(content)
+        return self._field_formatter.format(
+            fmt_str, **{k: v[0] for k, v in content.items()}
+        )
+
+
+class OioLTSVFormatter(OioLogFormatter):
+    field_formatter_class = LtsvFieldStringFormatter
+
+    def _get_format_string(self, data):
+        return "\t".join(f"{k}:{{{k}{v[1]}}}" for k, v in data.items())
+
+
+class OioConsoleFormatter(OioLogFormatter):
+    def formatException(self, ei):
+        return super().formatException(ei).replace("\n", "")
+
+    def _get_format_string(self, data):
+        fmt_str = "|".join(
+            f"{k}={{{k}{v[1]}}}" for k, v in data.items() if k != "message"
+        )
+        if data.get("message"):
+            fmt_str += " {message}"
+        return fmt_str
+
+
+def get_oio_logger(conf, name=None, verbose=False):
+    if not conf:
+        conf = {}
+
+    if not name:
+        name = "oio-log"
+
+    logger = logging.getLogger(name)
+    logger.propagate = False
+
+    logger_fmt = conf.get("log_format", "LTSV").upper()
+    if logger_fmt == "LTSV":
+        fmt = OioLTSVFormatter
+    else:
+        raise ValueError(f"Formatter '{logger_fmt}' is not supported")
+
+    extras_lines = [line.strip() for line in conf.get("logger_extras", "").split("\n")]
+    extras = {
+        line.split("=", 1)[0]: line.split("=", 1)[1] for line in extras_lines if line
+    }
+
+    fields_mapping_lines = [
+        line.strip() for line in conf.get("logger_fields_mapping", "").split("\n")
+    ]
+    fields_mapping = {
+        line.split("=", 1)[0]: line.split("=", 1)[1]
+        for line in fields_mapping_lines
+        if line
+    }
+
+    formatter = fmt(fields_mapping=fields_mapping, **extras)
+
+    if not hasattr(get_oio_logger, "handler4logger"):
+        get_oio_logger.handler4logger = {}
+    if logger in get_oio_logger.handler4logger:
+        logger.removeHandler(get_oio_logger.handler4logger[logger])
+
+    # Prepare Handler
+    facility = getattr(
+        SysLogHandler, conf.get("log_facility", "LOG_LOCAL0"), SysLogHandler.LOG_LOCAL0
+    )
+    udp_host = conf.get("log_udp_host")
+    if udp_host:
+        udp_port = int(conf.get("log_udp_port", logging.handlers.SYSLOG_UDP_PORT))
+        handler = SysLogHandler(address=(udp_host, udp_port), facility=facility)
+    else:
+        log_address = conf.get("log_address", "/dev/log")
+        if os.path.exists(log_address):
+            try:
+                handler = SysLogHandler(address=log_address, facility=facility)
+            except socket.error as exc:
+                if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
+                    raise exc
+                handler = SysLogHandler(facility=facility)
+        else:
+            handler = SysLogHandler(facility=facility)
+
+    syslog_prefix = conf.get("syslog_prefix", "")
+    if syslog_prefix:
+        handler.ident = "%s: " % syslog_prefix
+
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    get_oio_logger.handler4logger[logger] = handler
+    ctx_filter = OioContextInjectFilter()
+    logger.addFilter(ctx_filter)
+
+    logging_level = getattr(
+        logging, conf.get("log_level", "INFO").upper(), logging.INFO
+    )
+
+    if (
+        verbose
+        or conf.get("is_cli")
+        or hasattr(get_oio_logger, "console_handler4logger")
+    ):
+        if not hasattr(get_oio_logger, "console_handler4logger"):
+            get_oio_logger.console_handler4logger = {}
+        if logger in get_oio_logger.console_handler4logger:
+            logger.removeHandler(get_oio_logger.console_handler4logger[logger])
+        console_handler = logging.StreamHandler(sys.__stderr__)
+        console_handler.setFormatter(
+            OioConsoleFormatter(fmt="%(asctime)s.%(msecs)03d ", **extras)
+        )
+        logger.addHandler(console_handler)
+        get_oio_logger.console_handler4logger[logger] = console_handler
+
+    logger.setLevel(logging_level)
+    return logger
+
+
+_oio_log_context = ContextVar("oio_log_context", default=OioLogContext())
