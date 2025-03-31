@@ -778,10 +778,14 @@ meta2_filter_action_request_policy_transition(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GSList *transitioned = NULL;
+	gboolean skip_data_move = FALSE;
 
 	const gchar* policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY);
-
-	err = meta2_backend_request_policy_transition(m2b, url, policy);
+	const gchar* skip_data_move_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_SKIP_DATA_MOVE);
+	if (skip_data_move_str != NULL) {
+		skip_data_move = TRUE;
+	}
+	err = meta2_backend_request_policy_transition(m2b, url, policy, skip_data_move);
 	if (err != NULL) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;

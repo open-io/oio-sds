@@ -32,6 +32,11 @@ class _App:
 
 
 class TestFilterPolicyTransition(BaseTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._cls_tests_consumer = cls._register_consumer(topic="oio-transitioned")
+
     def setUp(self):
         super().setUp()
         # Create container
@@ -97,3 +102,23 @@ class TestFilterPolicyTransition(BaseTestCase):
             self.assertIn("Invalid policy", cb)
 
         transition_filter.process(third_evt, callback)
+
+    def test_transition_skip_data_move(self):
+        reqid = request_id("pol-chg-skip")
+        self.storage.object_request_transition(
+            self.account,
+            self.container,
+            self.object,
+            "SINGLE",
+            reqid=reqid,
+            skip_data_move=True,
+        )
+        evt = self.wait_for_kafka_event(
+            reqid=reqid,
+            fields={"account": self.account, "user": self.container},
+            types=[EventTypes.CONTENT_TRANSITIONED],
+            timeout=5.0,
+            kafka_consumer=self._cls_tests_consumer,
+        )
+
+        self.assertIsNone(evt)

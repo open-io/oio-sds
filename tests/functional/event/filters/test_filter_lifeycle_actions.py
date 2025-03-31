@@ -19,6 +19,7 @@ import time
 from oio.common.constants import MULTIUPLOAD_SUFFIX
 from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
+from oio.event.evob import EventTypes
 from oio.event.filters.lifecycle_actions import LifecycleActions
 from tests.utils import BaseTestCase, random_str
 
@@ -53,6 +54,7 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.conf["redis_host"] = "127.0.0.1:6379"
         self.conf["storage_class.STANDARD"] = "EC21,TWOCOPIES:0,EC21:100000"
         self.conf["storage_class.STANDARD_IA"] = "SINGLE"
+        self.conf["skip_data_move_storage_classes"] = "ONEZONE_IA"
 
     def _create_object(self):
         _, _, _, self.obj_meta = self.storage.object_create_ext(
@@ -154,7 +156,13 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.lifeycle_actions = LifecycleActions(app=self.app, conf=self.conf)
         self.lifeycle_actions.process(event, None)
 
-        time.sleep(3)
+        evt = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED),
+            data_fields={"target_policy":"SINGLE"}
+        )
+        self.assertIsNotNone(evt)
+
         props = self.storage.object_get_properties(
             self.account, self.container, self.object, version=self.obj_meta["version"]
         )
@@ -174,7 +182,14 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.lifeycle_actions = LifecycleActions(app=self.app, conf=self.conf)
         self.lifeycle_actions.process(event, None)
 
-        time.sleep(3)
+        evt = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED),
+            fields={"path": self.object},
+            data_fields={"target_policy":"SINGLE"}
+        )
+        self.assertIsNotNone(evt)
+
         props = self.storage.object_get_properties(
             self.account, self.container, self.object, version=self.obj_meta["version"]
         )
@@ -183,9 +198,49 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.assertEqual("SINGLE", props["policy"])
 
         for el in parts:
+            evt = self.wait_for_kafka_event(
+                reqid=reqid,
+                types=(EventTypes.CONTENT_TRANSITIONED),
+                fields={"path": el["name"]},
+                data_fields={"target_policy":"SINGLE"}
+            )
+            self.assertIsNotNone(evt)
             props = self.storage.object_get_properties(
                 self.account, f"{self.container}{MULTIUPLOAD_SUFFIX}", el["name"]
             )
             # policy changed from TWOCOPIES to SINGLE
             self.assertIn("policy", props)
             self.assertEqual("SINGLE", props["policy"])
+
+    def test_transition_skip_copy(self):
+        self.object = "policy-transition-skip/obj"
+        reqid = request_id("lifecycle-actions-")
+        self._create_object()
+        event = self._create_event(
+            self.object,
+            reqid=reqid,
+        )
+
+        self.lifeycle_actions = LifecycleActions(app=self.app, conf={
+            **self.conf,
+            "skip_data_move_storage_class.STANDARD": "GLACIER,STANDARD_IA"
+        })
+        self.lifeycle_actions.process(event, None)
+
+        props = self.storage.object_get_properties(
+            self.account, self.container, self.object, version=self.obj_meta["version"]
+        )
+        # policy changed from TWOCOPIES to SINGLE
+        self.assertIn("policy", props)
+        self.assertEqual("TWOCOPIES", props["policy"])
+        self.assertEqual("SINGLE", props["target_policy"])
+
+        evt = self.wait_for_kafka_event(
+                reqid=reqid,
+                types=(EventTypes.CONTENT_TRANSITIONED),
+                fields={"path": self.object},
+                data_fields={"target_policy":"SINGLE"},
+                timeout=5
+
+            )
+        self.assertIsNone(evt)

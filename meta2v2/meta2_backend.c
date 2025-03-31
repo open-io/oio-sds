@@ -1833,7 +1833,7 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
-		struct oio_url_s *url, const gchar* new_policy)
+		struct oio_url_s *url, const gchar* new_policy, gboolean skip_data_move)
 {
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1860,7 +1860,7 @@ meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
 				m2b_add_modified_container(m2, sq3);
 			}
 
-			if (emit_event) {
+			if (emit_event && !skip_data_move) {
 				// Send event
 				GString *event = oio_event__create_with_id(
 					"storage.content.transitioned", url, oio_ext_get_reqid());

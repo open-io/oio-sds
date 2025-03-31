@@ -1304,13 +1304,13 @@ class ContainerClient(ProxyClient):
         del_cached_object_metadata(
             account=account, reference=reference, path=path, cid=cid, **kwargs
         )
-
         self._direct_request(
             "POST",
             uri,
             params=params,
             json={
                 "policy": policy,
+                "skip_data_move": kwargs.pop("skip_data_move", False),
             },
             **kwargs,
         )

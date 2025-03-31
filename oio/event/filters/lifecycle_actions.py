@@ -187,6 +187,7 @@ class LifecycleActions(Filter):
             "s3_access_requester", DEFAULT_REQUESTER
         )
         self.stg_classes = {}
+        self.mapping_policy_2_storage_classes = {}
         for stg_class_conf, pol_conf in self.conf.items():
             if not stg_class_conf.startswith("storage_class."):
                 continue
@@ -200,10 +201,23 @@ class LifecycleActions(Filter):
                     if not name:
                         raise ValueError("Offset without storage policy")
                     auto_storage_policies.append((name, int(offset)))
+                    self.mapping_policy_2_storage_classes[name] = storage_class
                 else:
                     auto_storage_policies.append((storage_policy, -1))
+                    self.mapping_policy_2_storage_classes[
+                        storage_policy
+                    ] = storage_class
             auto_storage_policies.sort(key=lambda x: x[1])
             self.stg_classes[storage_class] = auto_storage_policies
+
+        # storage_classes config for which data move is skipped
+        self.storage_classes_skip_move = {}
+        for stg_class_conf, skipped_stg_class_conf in self.conf.items():
+            if not stg_class_conf.startswith("skip_data_move_storage_class."):
+                continue
+            storage_class = stg_class_conf[29:].upper()
+            storage_skipped = [x.strip() for x in skipped_stg_class_conf.split(",")]
+            self.storage_classes_skip_move[storage_class] = storage_skipped
 
     def _get_headers(self):
         return make_headers(user_agent=LIFECYCLE_USER_AGENT)
@@ -239,11 +253,11 @@ class LifecycleActions(Filter):
     def _process_transition(self, context: LifecycleActionContext, policy):
         if context.size is None:
             raise ValueError("Missing object size for transition object")
-        storage_class = context.storage_class
-        policies = self.stg_classes.get(storage_class, None)
+        target_storage_class = context.storage_class
+        policies = self.stg_classes.get(target_storage_class, None)
         if policies is None:
             raise ValueError(
-                "No policies for storage_class transition %s", storage_class
+                "No policies for storage_class transition %s", target_storage_class
             )
         target_policy = None
         for pol, size in reversed(policies):
@@ -251,10 +265,18 @@ class LifecycleActions(Filter):
                 target_policy = pol
                 break
         if target_policy is None:
-            raise ValueError("No policy found for storage class %s ", storage_class)
+            raise ValueError(
+                "No policy found for storage class %s ", target_storage_class
+            )
         if target_policy == policy:
             raise TransitionSamePolicy()
+        current_storage_class = self.mapping_policy_2_storage_classes[policy]
+        if current_storage_class is None:
+            raise ValueError("No storage class found for current policy %s ", policy)
 
+        skip = target_storage_class in self.storage_classes_skip_move.get(
+            current_storage_class, []
+        )
         self.container_client.content_request_transition(
             account=context.account,
             reference=context.container,
@@ -262,6 +284,7 @@ class LifecycleActions(Filter):
             policy=target_policy,
             version=context.version,
             reqid=context.reqid,
+            skip_data_move=skip,
         )
 
     def _process_abort_mpu(self, context: LifecycleActionContext):

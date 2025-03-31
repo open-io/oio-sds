@@ -5049,10 +5049,12 @@ static enum http_rc_e
 action_m2_content_policy_transition(struct req_args_s *args,struct json_object *jargs)
 {
 	GError *err = NULL;
-	struct json_object *jpolicy = NULL;
+	struct json_object *jpolicy = NULL, *jskip_data_move = NULL;
 
 	struct oio_ext_json_mapping_s m[] = {
 		{"policy", &jpolicy, json_type_string, 1},
+		{"skip_data_move", &jskip_data_move, json_type_boolean, 0},
+
 		{NULL, NULL, 0, 0}
 	};
 
@@ -5062,8 +5064,9 @@ action_m2_content_policy_transition(struct req_args_s *args,struct json_object *
 	}
 
 	const gchar *policy = json_object_get_string(jpolicy);
+	gboolean skip_data_move = json_object_get_boolean(jskip_data_move);
 	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_POLICY_TRANSITION(args->url, policy, DL());
+		return m2v2_remote_pack_POLICY_TRANSITION(args->url, policy, skip_data_move, DL());
 	};
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
@@ -5079,7 +5082,8 @@ action_m2_content_policy_transition(struct req_args_s *args,struct json_object *
 // .. code-block:: json
 //
 //    {
-//      "policy": "new_policy"
+//      "policy": "new_policy",
+//      "skip_data_move": False
 //    }
 //
 // .. code-block:: http
