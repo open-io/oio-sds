@@ -255,20 +255,6 @@ context_clue_for_decache(struct client_ctx_s *ctx)
 	return FALSE;
 }
 
-gboolean
-error_is_bad_redirect(GError *err)
-{
-	return err && err->code == CODE_FAILED_REDIRECT;
-}
-
-gboolean
-error_is_exiting(GError *err)
-{
-	// Some modules prefix the error message (e.g. "cache error: ")
-	return err && err->code == CODE_UNAVAILABLE
-			&& g_str_has_suffix(err->message, "service exiting");
-}
-
 /** Evaluate the probability of success of a retry.
  * Crawl the list of past errors and guess if they are due to a service
  * being restarted. The classic scheme is that 2 slave services redirect

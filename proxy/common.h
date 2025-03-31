@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <json-c/json.h>
 
 #include <core/lrutree.h>
+#include <core/oioerrors.h>
 #include <core/url_ext.h>
 #include <core/client_variables.h>
 
@@ -332,12 +333,6 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out);
 gboolean lb_cache_reload(void);
 
 /* -------------------------------------------------------------------------- */
-
-/** Tell if the specified error is a redirection to an unreachable service */
-gboolean error_is_bad_redirect(GError *err);
-
-/** Tell if the specified error is due to the requested service being stopped */
-gboolean error_is_exiting(GError *err);
 
 enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
 

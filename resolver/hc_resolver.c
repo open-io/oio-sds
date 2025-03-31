@@ -2,7 +2,7 @@
 OpenIO SDS resolver
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <core/lrutree.h>
+#include <core/oioerrors.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta1v2/meta1_remote.h>
 #include <resolver/resolver_variables.h>
@@ -411,7 +412,7 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 		}
 	}
 
-	for (const char * const *purl=urlv; *purl ;++purl) {
+	for (const char * const *purl=urlv; *purl; ++purl) {
 
 		gchar *m1 = meta1_strurl_get_address(*purl);
 		GError *err = meta1v2_remote_list_reference_services(m1, u, s, result, deadline);
@@ -421,12 +422,16 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 
 		if (!err)
 			return NULL;
-		if (!CODE_IS_NETWORK_ERROR(err->code)) {
+		if (!(CODE_IS_NETWORK_ERROR(err->code)
+				|| error_is_exiting(err))) {
 			if (error_clue_for_decache(err)) {
 				hc_decache_reference(r, u);
 			}
 			return err;
 		}
+		GRID_WARN("Failed to resolve %s for %s with meta1 %s: %s (reqid=%s)",
+				s, oio_url_get(u, OIOURL_WHOLE), m1, err->message,
+				oio_ext_get_reqid());
 		g_clear_error(&err);
 	}
 

@@ -56,6 +56,7 @@ add_library(oiocore SHARED
 	url.c
 	cfg.c
 	str.c
+	errors.c
 	ext.c
 	log.c
 	loc.c
