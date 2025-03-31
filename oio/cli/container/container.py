@@ -33,6 +33,7 @@ from oio.common.constants import (
     M2_PROP_DEL_EXC_VERSIONS,
     M2_PROP_DRAINING_STATE,
     M2_PROP_DRAINING_TIMESTAMP,
+    M2_PROP_LIFECYCLE_CUSTOM_BUDGET,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
@@ -411,6 +412,11 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             choices=self.time_bypass_value.keys(),
             help="Apply time factor (reducing day duration) for lifecycle actions",
         )
+        parser.add_argument(
+            "--lifecycle-custom-budget",
+            type=int,
+            help="Override lifecycle per bucket budget",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -423,6 +429,11 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             system[M2_PROP_LIFECYCLE_TIME_BYPASS] = self.time_bypass_value[
                 parsed_args.lifecycle_bypass_time
             ]
+        if parsed_args.lifecycle_custom_budget is not None:
+            system[M2_PROP_LIFECYCLE_CUSTOM_BUDGET] = str(
+                parsed_args.lifecycle_custom_budget
+            )
+
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.storage_policy is not None:
@@ -784,11 +795,11 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         }
         for key, value in sys.items():
             if key.startswith(M2_PROP_USAGE + "."):
-                key = f'bytes_usage.{key[len(M2_PROP_USAGE + "."):]}'
+                key = f"bytes_usage.{key[len(M2_PROP_USAGE + '.') :]}"
                 if parsed_args.formatter == "table":
                     value = convert_size(int(value), unit="iB")
             elif key.startswith(M2_PROP_OBJECTS + "."):
-                key = f'objects.{key[len(M2_PROP_OBJECTS + "."):]}'
+                key = f"objects.{key[len(M2_PROP_OBJECTS + '.') :]}"
                 if parsed_args.formatter == "table":
                     value = convert_size(int(value))
             else:
@@ -870,6 +881,12 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             info["lifecyle.time_bypass"] = (
                 "Enabled" if lifecycle_time_bypass == "1" else "Disabled"
             )
+
+        lifecycle_custom_budget = int_value(
+            sys.get(M2_PROP_LIFECYCLE_CUSTOM_BUDGET), -1
+        )
+        if lifecycle_custom_budget != -1:
+            info["lifecyle.custom_budget"] = lifecycle_custom_budget
 
         for k in ("stats.page_count", "stats.freelist_count", "stats.page_size"):
             info[k] = int_value(sys.get(k), 0)
@@ -1142,6 +1159,12 @@ class UnsetContainer(ContainerCommandMixin, Command):
             action="store_true",
             help="Reset the deletion of the exceeding versions to the default value",
         )
+
+        parser.add_argument(
+            "--lifecycle-custom-budget",
+            action="store_true",
+            help="Reset the lifecycle per bucket budget to the namespace default",
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -1158,6 +1181,8 @@ class UnsetContainer(ContainerCommandMixin, Command):
             system[M2_PROP_VERSIONING_POLICY] = ""
         if parsed_args.delete_exceeding_versions:
             system[M2_PROP_DEL_EXC_VERSIONS] = ""
+        if parsed_args.lifecycle_custom_budget:
+            system[M2_PROP_LIFECYCLE_CUSTOM_BUDGET] = ""
 
         if properties or not system:
             self.app.client_manager.storage.container_del_properties(

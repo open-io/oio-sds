@@ -24,6 +24,7 @@ from oio.common.constants import (
     LIFECYCLE_USER_AGENT,
     LOGGING_PROPERTY_KEY,
     M2_PROP_BUCKET_NAME,
+    M2_PROP_LIFECYCLE_CUSTOM_BUDGET,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_VERSIONING_POLICY,
     TAGGING_KEY,
@@ -1625,6 +1626,155 @@ class TestLifecycleCrawler(BaseTestCase):
             passes=6,
         )
 
+    def test_override_bucket_budget_larger(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/1.0"},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/1.2"},
+                    "Expiration": {
+                        "1": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "container_budget_reached": 1,
+                "successes": 2,
+                "total_events": 7,
+                "total_delete": 7,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "bucket_budget_reached": 1,
+                "processed": 1,
+                "successes": 1,
+                "total_events": 3,
+                "total_delete": 3,
+            },
+        )
+
+        self.storage.container_set_properties(
+            self.account,
+            self.container,
+            system={
+                M2_PROP_LIFECYCLE_CUSTOM_BUDGET: "10",
+            },
+        )
+
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/1.0", count=7, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, prefix="doc/1.1", count=3)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/1.2", count=3, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, prefix="foo/", count=7)
+        self._wait_n_days(4)
+        self._run_scenario(
+            configuration,
+            callback,
+            passes=2,
+            filter_conf={"budget_per_bucket": 3, "container_budget_per_pass": 7},
+        )
+
+    def test_override_bucket_budget_smaller(self):
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/1.0"},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/1.2"},
+                    "Expiration": {
+                        "1": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "container_budget_reached": 1,
+                "successes": 2,
+                "total_events": 7,
+                "total_delete": 7,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "bucket_budget_reached": 1,
+                "processed": 1,
+                "successes": 1,
+                "total_events": 3,
+                "total_delete": 3,
+            },
+        )
+        self.storage.container_set_properties(
+            self.account,
+            self.container,
+            system={
+                M2_PROP_LIFECYCLE_CUSTOM_BUDGET: "10",
+            },
+        )
+
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/1.0", count=7, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, prefix="doc/1.1", count=3)
+        self._create_objects_for_rule(
+            "rule-1", prefix="doc/1.2", count=3, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, prefix="foo/", count=7)
+        self._wait_n_days(4)
+        self._run_scenario(
+            configuration,
+            callback,
+            passes=2,
+            filter_conf={"budget_per_bucket": 20, "container_budget_per_pass": 7},
+        )
+
     def test_expiration_versioned(self):
         self._enable_versioning()
 
@@ -2538,6 +2688,48 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_non_current_budget_reached()
+
+    def test_override_bucket_budget_larger(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "container_budget_reached": 1,
+                "bucket_budget_reached": 1,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "bucket_budget_reached": 2,
+                "processed": 2,
+                "successes": 2,
+                "total_events": 0,
+                "total_delete": 0,
+            },
+        )
+        super().test_override_bucket_budget_larger()
+
+    def test_override_bucket_budget_smaller(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "bucket_budget_reached": 1,
+                "container_budget_reached": 1,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "bucket_budget_reached": 2,
+                "processed": 2,
+                "successes": 2,
+                "total_events": 0,
+                "total_delete": 0,
+            },
+        )
+        super().test_override_bucket_budget_smaller()
 
     def test_expiration_versioned(self):
         self.metrics_by_passes_with_sharding = (

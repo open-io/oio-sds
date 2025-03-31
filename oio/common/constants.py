@@ -238,6 +238,8 @@ M2_PROP_DRAINING_STATE = "sys.m2.draining.state"
 M2_PROP_DRAINING_TIMESTAMP = "sys.m2.draining.timestamp"
 # Lifecycle time bypass flag for testing purpose only.
 M2_PROP_LIFECYCLE_TIME_BYPASS = "sys.m2.lifecycle.time_bypass"
+# Lifecyle custom budget
+M2_PROP_LIFECYCLE_CUSTOM_BUDGET = "sys.m2.lifecycle.custom_budget"
 
 # HTTP Content-Type
 HTTP_CONTENT_TYPE_BINARY = "application/octet-stream"

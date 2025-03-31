@@ -20,6 +20,7 @@ from oio.common.client import ProxyClient
 from oio.common.constants import (
     ACL_PROPERTY_KEY,
     LOGGING_PROPERTY_KEY,
+    M2_PROP_LIFECYCLE_CUSTOM_BUDGET,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_UPPER,
@@ -78,6 +79,7 @@ class Context:
         self.has_bucket_logging = False
         self.bucket_owner = None
         self.has_time_bypass = False
+        self.bucket_budget = None
 
     @property
     def root_account(self):
@@ -288,12 +290,12 @@ class Lifecycle(Meta2Filter):
                 if key not in self.ACTIONS_ALLOWED:
                     continue
                 total += int(value)
-            budget_left = max(0, self.budget_per_bucket - total)
+            budget_left = max(0, self.context.bucket_budget - total)
 
             if budget_left == 0:
                 raise BucketBudgetReached(
                     f"produced {total} actions globally "
-                    f"over {self.budget_per_bucket} allowed per bucket and per day "
+                    f"over {self.context.bucket_budget} allowed per bucket and per day "
                     f"for run {self.context.run_id}"
                 )
             return budget_left
@@ -348,10 +350,27 @@ class Lifecycle(Meta2Filter):
         self.context.has_time_bypass = time_bypass_property == "1"
         if self.context.has_time_bypass:
             self.logger.debug(
-                "Time bypass enabled for root_container %s, account: %s",
+                "Time bypass enabled for root_container: %s, account: %s",
                 self.context.root_container,
                 self.context.root_account,
             )
+
+        # Retrieve bucket custom budget if any
+        self.context.bucket_budget = int_value(
+            properties["system"].get(M2_PROP_LIFECYCLE_CUSTOM_BUDGET), -1
+        )
+        if self.context.bucket_budget >= 0:
+            self.logger.debug(
+                "Override bucket budget(%d => %d) for root_container: %s, account: %s.",
+                self.budget_per_bucket,
+                self.context.bucket_budget,
+                self.context.root_container,
+                self.context.root_account,
+            )
+        else:
+            # Fallback to default budget
+            self.context.bucket_budget = self.budget_per_bucket
+
         return True
 
     def _process(self, env, cb):
