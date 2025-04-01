@@ -71,6 +71,7 @@ randomize_env () {
 }
 
 test_oio_tool () {
+	set -x
 	oio-tool -h >/dev/null
 	oio-tool config "$OIO_NS" >/dev/null
 	if oio-tool >/dev/null ; then exit 1 ; fi
@@ -89,6 +90,7 @@ test_oio_tool () {
 	if [ 1 -ne $(oio-tool addr a 127.0.0.1:1234 | wc -l) ] ; then exit 1 ; fi
 	if [ 1 -ne $(oio-tool cid OPENIO/ACCT/JFS | wc -l) ] ; then exit 1 ; fi
 	oio-tool hash XXX | head -n 2 >/dev/null
+	set +x
 }
 
 test_oio_file_tool () {
@@ -356,6 +358,7 @@ if is_running_test_suite "repli" ; then
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-local.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
