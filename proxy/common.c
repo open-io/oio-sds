@@ -522,7 +522,7 @@ label_retry:
 					 * For requests on master, let the client decide to try again.
 					 * Retrying may trigger an error (such as a conflict),
 					 * if the request has already been executed. */
-					err = BUSY("No service replied (last error: (%d) %s)",
+					err = BUSY("Known master did not reply (error: (%d) %s)",
 							last_err->code, last_err->message);
 					stop = TRUE;
 				}
