@@ -38,7 +38,7 @@ from oio.common.constants import (
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import NoSuchContainer, NoSuchObject, NotFound
 from oio.common.green import GreenPool, LightQueue
-from oio.common.kafka import KafkaSender
+from oio.common.kafka import DEFAULT_LIFECYCLE_CHECKPOINT_TOPIC, KafkaSender
 from oio.common.logger import (
     OioAccessLog,
     get_oio_log_context,
@@ -47,7 +47,7 @@ from oio.common.logger import (
 )
 from oio.common.statsd import StatsdTiming, get_statsd
 from oio.common.timestamp import Timestamp
-from oio.common.utils import cid_from_name, get_hasher, request_id
+from oio.common.utils import cid_from_name, get_hasher, initialize_coverage, request_id
 from oio.container.lifecycle import lifecycle_backup_path
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
@@ -57,8 +57,6 @@ from oio.lifecycle.metrics import (
     LifecycleStep,
     statsd_key,
 )
-
-CHECKPOINT_TOPIC_DEFAULT = "oio-lifecycle-checkpoint"
 
 
 class BucketAlreadyProcessed(Exception):
@@ -90,7 +88,7 @@ class CheckpointCollector:
 
         # Configuration
         self._concurrency = int_value(self._conf.get("concurrency"), 100)
-        self._topic = self._conf.get("topic", CHECKPOINT_TOPIC_DEFAULT)
+        self._topic = self._conf.get("topic", DEFAULT_LIFECYCLE_CHECKPOINT_TOPIC)
 
         # Global bucket to save versions fof lifecyce configs
         self._lc_backup_account = self._conf.get(
@@ -171,32 +169,30 @@ class CheckpointCollector:
         )
 
     def _process_container(self, account, bucket, container, cid):
-        cid = cid_from_name(account, container)
-        with get_oio_log_context(cid=cid, container=container):
-            try:
-                self._logger.debug("Get info on container")
-                props = self._api.container_get_properties(
-                    account,
-                    container,
-                    reqid=self._request_id,
-                )
-                if not container.endswith(MULTIUPLOAD_SUFFIX):
-                    # Processing main container
-                    if self._with_time_bypass and not boolean_value(
-                        props.get(M2_PROP_LIFECYCLE_TIME_BYPASS), False
-                    ):
-                        raise BucketTimeBypassDisabled()
-                    self._upload_configuration(account, bucket, props)
+        try:
+            self._logger.debug("Get info on container")
+            props = self._api.container_get_properties(
+                account,
+                container,
+                reqid=self._request_id,
+            )
+            if not container.endswith(MULTIUPLOAD_SUFFIX):
+                # Processing main container
+                if self._with_time_bypass and not boolean_value(
+                    props.get(M2_PROP_LIFECYCLE_TIME_BYPASS), False
+                ):
+                    raise BucketTimeBypassDisabled()
+                self._upload_configuration(account, bucket, props)
 
-                # Produce event for root container
-                self._produce_event(account, bucket, container, cid)
-                self._increment_snapshot_counter(
-                    account, bucket, cid, LifecycleStep.SUBMITTED
-                )
-            except NoSuchContainer:
-                self._logger.debug("Container not found")
-                if not container.endswith(MULTIUPLOAD_SUFFIX):
-                    raise
+            # Produce event for root container
+            self._produce_event(account, bucket, container, cid)
+            self._increment_snapshot_counter(
+                account, bucket, cid, LifecycleStep.SUBMITTED
+            )
+        except NoSuchContainer:
+            self._logger.debug("Container not found")
+            if not container.endswith(MULTIUPLOAD_SUFFIX):
+                raise
 
     def _produce_event(self, account, bucket, container, cid, shard_info=None):
         payload = self._make_payload(account, container, cid, shard_info)
@@ -240,7 +236,7 @@ class CheckpointCollector:
                 )
 
             if should_upload:
-                props = self._api.object_create(
+                _, _, _, props = self._api.object_create_ext(
                     self._lc_backup_account,
                     self._lc_backup_bucket,
                     obj_name=obj_name,
@@ -295,8 +291,8 @@ class CheckpointCollector:
                 self._metrics.mark_bucket_as_triggered(self._run_id, account, bucket)
         except BucketAlreadyProcessed:
             self._logger.debug("Bucket already processed")
-        except Exception:
-            self._logger.error("Failed to process bucket")
+        except Exception as exc:
+            self._logger.error("Failed to process bucket, reason: %s", exc)
             cid = cid_from_name(account, bucket)
             self._increment_snapshot_counter(
                 account, bucket, cid, LifecycleStep.SUBMIT_ERROR
@@ -382,6 +378,14 @@ def make_arg_parser():
         default=False,
         action="store_true",
     )
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help=(
+            "Import code coverage lib, and measure coverage "
+            "if COVERAGE_PROCESS_START is also set."
+        ),
+    )
     parser.add_argument("configuration", help="Path to the legacy configuration file")
     return parser
 
@@ -391,6 +395,9 @@ def main():
     conf = read_conf(args.configuration, "checkpoint-collector")
     logger = get_oio_logger(conf, verbose=args.verbose)
     redirect_stdio(logger)
+
+    if args.coverage:
+        initialize_coverage(logger, "checkpoint-collector")
 
     with get_oio_log_context(run_id=args.run_id):
         logger.info("Starting")

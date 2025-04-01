@@ -296,6 +296,8 @@ class CommonTestCase(unittest.TestCase):
 
         # Set of containers to flush and remove at teardown
         self._containers_to_clean = []
+        # Set of buckets to remove at teardown
+        self._buckets_to_clean = []
         self._deregister_at_teardown = []
 
         self._cached_events = {}
@@ -360,6 +362,12 @@ class CommonTestCase(unittest.TestCase):
                     self.storage.container_delete(acct, ct, force=True)
                 except Exception as exc:
                     self.logger.info("Failed to clean container %s", exc)
+
+        for acct, bucket in self._buckets_to_clean:
+            try:
+                self.storage.bucket.bucket_delete(bucket, acct)
+            except Exception as exc:
+                self.logger.info("Failed to remove bucket, %s", exc)
 
         # Reset namespace configuration as it was before we mess with it
         if self._ns_conf != self._ns_conf_backup:
@@ -503,6 +511,9 @@ class CommonTestCase(unittest.TestCase):
             self._containers_to_clean.insert(0, (account or self.account, container))
         else:
             self._containers_to_clean.append((account or self.account, container))
+
+    def bucket_clean_later(self, bucket, account=None):
+        self._buckets_to_clean.append((account or self.account, bucket))
 
     def set_ns_opts(self, opts, remove=None):
         """

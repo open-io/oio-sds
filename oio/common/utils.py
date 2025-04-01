@@ -765,3 +765,16 @@ def get_bucket_owner_from_acl(acl_config):
     else:
         acl_config = {}
     return acl_config.get("Owner", "unknown")
+
+
+def initialize_coverage(logger, context):
+    import coverage
+
+    cov = coverage.process_startup()
+    if cov:
+        cov.switch_context(context)
+    else:
+        logger.warning(
+            "code coverage not started, missing environment? COVERAGE_PROCESS_START=%s",
+            os.getenv("COVERAGE_PROCESS_START"),
+        )

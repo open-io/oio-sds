@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,7 @@ from oio.cli import add_common_parser_options
 from oio.cli.common.clientmanager import ClientManager, get_plugin_module
 from oio.cli.common.commandmanager import CommandManager
 from oio.common.json import json
-from oio.common.utils import request_id
+from oio.common.utils import initialize_coverage, request_id
 
 json.encoder.FLOAT_REPR = lambda o: format(o, ".6f")
 LOG = logging.getLogger(__name__)
@@ -139,19 +139,7 @@ class CommonShell(App):
         if self.options.profile and self.options.profile_early:
             self.start_profiling()
         if self.options.coverage:
-            import coverage
-
-            cov = coverage.process_startup()
-            if cov:
-                cov.switch_context("cli")
-            else:
-                from os import getenv
-
-                LOG.warning(
-                    "code coverage not started, missing environment? "
-                    "COVERAGE_PROCESS_START=%s",
-                    getenv("COVERAGE_PROCESS_START"),
-                )
+            initialize_coverage(LOG, "cli")
 
     def prepare_to_run_command(self, cmd):
         LOG.debug(
