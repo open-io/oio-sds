@@ -34,7 +34,7 @@ class LoggerFilter(Filter):
         return ctx
 
     def process(self, env, cb):
-        self.logger.info("")
+        self.logger.info("%s", env)
         return self.app(env, cb)
 
 

@@ -1835,6 +1835,40 @@ topic = oio-preserved
 broker_endpoint = ${QUEUE_URL}
 """
 
+template_event_agent_deadletter_consumer_handlers = """
+# THIS IS NOT A COMPLETE EXAMPLE.
+# This is a minimal configuration for testing purposes.
+
+[handler:delayed]
+pipeline = consume_deadletter
+
+[handler:storage.chunk.new]
+pipeline = consume_deadletter
+
+[handler:storage.container.new]
+pipeline = consume_deadletter
+
+[handler:storage.content.deleted]
+pipeline = consume_deadletter
+
+[handler:storage.content.transitioned]
+pipeline = consume_deadletter
+
+[handler:test.grouping]
+pipeline = consume_deadletter
+
+[filter:consume_deadletter]
+# Move the event from deadletter to the original topic.
+use = egg:oio#deadletter
+max_deadletter_count = 2
+#redirect_event.name = destination_topic
+redirect_storage_chunk_new = oio-chunks-127.0.0.1
+redirect_storage_container_new = oio
+redirect_storage_content_deleted = oio-delete
+redirect_storage_content_transitioned = oio-transitioned
+redirect_test.grouping = oio-graveyard
+"""
+
 template_xcute_event_agent = """
 [event-agent]
 topic = ${QUEUE_NAME}
@@ -3477,6 +3511,22 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent for deadletter analysis
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-deadletter",
+            url,
+            workers="1",
+            srv_type="event-agent-deadletter",
+            group_id="event-agent-deadletter",
+            template_handler=template_event_agent_deadletter_consumer_handlers,
+        )
+
+        # We need only one service
+        break
+
     # Xcute event-agents
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3627,6 +3677,7 @@ def generate(options):
         ("oio-delayed", None),
         ("oio-delete-mpu-parts", None),
         ("oio-drained", None),
+        ("oio-graveyard", None),
         ("oio-lifecycle", None),
         ("oio-lifecycle-checkpoint", None),
         ("oio-lifecycle-backup", {"partitions": 4}),
