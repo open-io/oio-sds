@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 from oio.common.exceptions import ContentDrained, ContentNotFound, OrphanChunk
 from oio.common.logger import get_logger
 from oio.content.factory import ContentFactory
-from oio.content.quality import get_current_items
+from oio.content.quality import count_local_items
 from oio.rdir.client import RdirClient
 
 
@@ -98,7 +98,7 @@ class ChunkOperator(object):
             if chunk is None:
                 raise OrphanChunk(
                     "Chunk not found in content: possible orphan chunk: "
-                    + "%s" % (candidates.all(),)
+                    + str(candidates.all())
                 )
             elif rawx_id and chunk.host != rawx_id:
                 raise ValueError("Chunk does not belong to this rawx")
@@ -121,7 +121,7 @@ class ChunkOperator(object):
                 # Here data["id"] represents the rawx service id
                 self.rawx_srv_locations[data["id"]] = loc
         # Calculate the current items on the same host with the chunk to rebuild
-        cur_items = get_current_items(
+        cur_items = count_local_items(
             chunk_id, rawx_id, chunks, self.rawx_srv_locations, self.logger
         )
         rebuilt_bytes = content.rebuild_chunk(

@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS
-# Copyright (C) 2022-2023 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,8 +20,8 @@ from oio.common import exceptions
 from oio.content.content import Chunk
 from oio.content.quality import (
     compare_chunk_quality,
+    count_local_items,
     ensure_better_chunk_qualities,
-    get_current_items,
 )
 
 CRAPPY = {
@@ -167,7 +167,7 @@ class TestContentFunctions(unittest.TestCase):
         # threshold=0 -> accept no improvement
         ensure_better_chunk_qualities([chunk], {chunk.url: chunk.quality}, threshold=0)
 
-    def test_get_current_items(self):
+    def test_get_count_local_items(self):
         chunk0_data = {
             "url": "http://OPENIO-rawx-12/AABBCC",
             "pos": "0",
@@ -201,7 +201,7 @@ class TestContentFunctions(unittest.TestCase):
 
         self.assertEqual(
             "3.3.2.1",
-            get_current_items(
+            count_local_items(
                 None,
                 "OPENIO-rawx-12",
                 [chunk0, chunk1, chunk2],
@@ -211,7 +211,7 @@ class TestContentFunctions(unittest.TestCase):
 
         self.assertEqual(
             "3.3.1.1",
-            get_current_items(
+            count_local_items(
                 None,
                 "OPENIO-rawx-10",
                 [chunk0, chunk1, chunk2],
@@ -221,7 +221,7 @@ class TestContentFunctions(unittest.TestCase):
 
         self.assertEqual(
             "3.3.2.1",
-            get_current_items(
+            count_local_items(
                 "AABBCC",
                 None,
                 [chunk0, chunk1, chunk2],
@@ -230,7 +230,7 @@ class TestContentFunctions(unittest.TestCase):
         )
 
         self.assertIsNone(
-            get_current_items(
+            count_local_items(
                 None,
                 None,
                 [chunk0, chunk1, chunk2],

@@ -1,4 +1,4 @@
-# Copyright (C) 2020-2024 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -203,9 +203,9 @@ def count_items_per_loc(loc_list):
     return counters
 
 
-def get_current_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=None):
+def count_local_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=None):
     """
-    Calculate current items on the host of the chunk passed in parameters
+    Count the number of items on the host of the chunk passed in parameters.
 
     :param current: chunk representation or a chunk_id.
     :type current: ChunkWrapper
@@ -222,7 +222,7 @@ def get_current_items(current, rawx_id, all_chunks, rawx_srv_locations, logger=N
     """
     if not current and not rawx_id:
         if logger:
-            logger.warning("Cannot calculate current items without chunk id or rawx id")
+            logger.warning("Cannot count items without chunk id or rawx id")
         return None
     try:
         counters = {}

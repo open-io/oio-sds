@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@ from oio.common.logger import get_logger
 from oio.common.utils import get_nb_chunks, is_chunk_id_valid, service_pool_to_dict
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
-from oio.content.quality import NB_LOCATION_LEVELS, format_location, get_current_items
+from oio.content.quality import NB_LOCATION_LEVELS, count_local_items, format_location
 
 RawxService = namedtuple("RawxService", ("status", "last_time"))
 
@@ -275,7 +275,7 @@ class ChunkSymlinkFilter(Filter):
                     self.logger.exception("Failed to fetch %s policy data", policy)
                     continue
             self.last_services_update = now
-        return get_current_items(
+        return count_local_items(
             chunk, None, chunks, self.rawx_srv_locations, self.logger
         )
 
