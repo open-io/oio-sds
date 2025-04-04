@@ -108,8 +108,13 @@ A lot of variables are available, consider reading [Variables.md](./Variables.md
 
 # Step by step
 
+### Run redpanda server and console
+- docker compose file is available in `./docker/` folder
+- just rename env_file to .env and fill the variables to be able to use it (locally or not)
+- update `./etc/bootstrap-option-kafka.yml` file with IPs and ports
+
 ### FoundationDB install
-- install et conf FondationDB (cf script `oio-sds/tools/oio-install-fdb.sh`)
+- install et conf FondationDB (cf script `./tools/oio-install-fdb.sh`)
 
 ### Zookeeper install
 We need a zookeeper >= 3.6.0.

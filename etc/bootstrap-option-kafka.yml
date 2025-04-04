@@ -1,0 +1,5 @@
+kafka:
+  endpoint:
+    - "127.0.0.1:19092"
+  metrics_endpoints:
+    - "127.0.0.1:9644"

@@ -68,7 +68,9 @@ jobs:
           rm -rf fdb-packages
           docker login -u {{ .cds.proj.artifactory_user }} -p {{ .cds.proj.artifactory_token }} pu-objectstorage-default-docker.artifactory.ovhcloud.tools
           # Start Redpanda (kafka)
-          docker-compose -f docker/redpanda.docker-compose.yml up -d
+          pushd docker
+          cp env_file .env
+          docker-compose -f redpanda.docker-compose.yml up -d
           until [ "$(docker inspect -f "{{.State.Status}}" redpanda-0)" = "running" ]
           do
             sleep 1
@@ -76,6 +78,7 @@ jobs:
           sleep 1
           # Disable topic autocreation
           docker exec redpanda-0 rpk redpanda config set auto_create_topics_enabled false
+          popd
 
       - name: Run functional tests
         script: |+

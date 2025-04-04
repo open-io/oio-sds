@@ -1,4 +1,4 @@
-version: "3.3"
+version: "3.7"
 # name: redpanda-quickstart
 networks:
   redpanda_network:
@@ -16,10 +16,10 @@ services:
       # from inside the same Docker network.
       # Use the external addresses to connect to the Redpanda brokers'
       # from outside the Docker network.
-      - --advertise-kafka-addr internal://redpanda-0:9092,external://127.0.0.1:19092
+      - --advertise-kafka-addr internal://redpanda-0:9092,external://${ADVERTISED_IP}:${ADVERTISED_PORT}
       - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
       # Address the broker advertises to clients that connect to the HTTP Proxy.
-      - --advertise-pandaproxy-addr internal://redpanda-0:8082,external://127.0.0.1:18082
+      - --advertise-pandaproxy-addr internal://redpanda-0:8082,external://localhost:18082
       - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
       # Redpanda brokers use the RPC API to communicate with eachother internally.
       - --rpc-addr redpanda-0:33145
@@ -32,20 +32,22 @@ services:
       - --mode dev-container
       # enable logs for debugging.
       - --default-log-level=warn
-    image: pu-objectstorage-default-docker.artifactory.ovhcloud.tools/redpandadata/redpanda:v23.2.8
+    image: pu-objectstorage-default-docker.artifactory.ovhcloud.tools/redpandadata/redpanda:v23.3.5
     container_name: redpanda-0
     volumes:
       - redpanda-0:/var/lib/redpanda/data
     networks:
       - redpanda_network
     ports:
-      - 18081:18081
-      - 18082:18082
-      - 19092:19092
-      - 19644:9644
+    # ports not used
+    #  - 18081:18081
+    #  - 18082:18082
+      - ${ADVERTISED_PORT}:19092
+      - ${METRICS_PORT}:9644
+    restart: always
   console:
     container_name: redpanda-console
-    image: pu-objectstorage-default-docker.artifactory.ovhcloud.tools/redpandadata/console:v2.3.1
+    image: pu-objectstorage-default-docker.artifactory.ovhcloud.tools/redpandadata/console:v2.7.2
     networks:
       - redpanda_network
     entrypoint: /bin/sh
@@ -63,6 +65,7 @@ services:
             enabled: true
             urls: ["http://redpanda-0:9644"]
     ports:
-      - 8080:8080
+      - ${CONSOLE_PORT}:8080
     depends_on:
       - redpanda-0
+    restart: always

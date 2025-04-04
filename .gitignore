@@ -59,3 +59,7 @@ CMakeCache.txt
 Makefile
 Temporary
 cmake-build-debug/
+
+# misc
+docker/.env
+
