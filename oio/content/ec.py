@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 from random import shuffle
 
 from oio.api.ec import ECRebuildHandler, ECWriteHandler
-from oio.common.exceptions import ChunkException, OrphanChunk
+from oio.common.exceptions import ChunkException, Conflict, OrphanChunk
 from oio.common.storage_functions import (
     _get_weighted_random_score,
     _sort_chunks,
@@ -35,10 +35,12 @@ class ECContent(Content):
         allow_same_rawx=False,
         chunk_pos=None,
         allow_frozen_container=True,
-        reqid=None,
         cur_items=None,
+        max_attempts=3,
         read_all_available_sources=False,
+        reqid=None,
     ):
+        # TODO(FVE): factorize with similar code in oio/content/plain.py
         if reqid is None:
             reqid = request_id("eccontent-")
         # Identify the chunk to rebuild
@@ -76,11 +78,47 @@ class ECContent(Content):
         if cur_items:  # If cur_items is defined
             current_chunk.quality["cur_items"] = cur_items
 
+        last_error = None
+        for attempt in range(max_attempts):
+            try:
+                return self._actually_rebuild(
+                    chunk_id,
+                    current_chunk=current_chunk,
+                    source_chunks=chunks,
+                    allow_same_rawx=allow_same_rawx,
+                    read_all_available_sources=read_all_available_sources,
+                    reqid=reqid,
+                )
+            # TODO(FVE): catch more exception types?
+            except Conflict as err:
+                # Conflict happens when the chunk already exists on the selected
+                # rawx service. This happens for example when there is a missing
+                # chunk entry in the meta2 database.
+                last_error = err
+                self.logger.warning(
+                    "Failed to rebuild chunk %s (attempt=%d/%d, reqid=%s): %s",
+                    chunk_id or chunk_pos,
+                    attempt + 1,
+                    max_attempts,
+                    reqid,
+                    err,
+                )
+        raise last_error
+
+    def _actually_rebuild(
+        self,
+        chunk_id,
+        current_chunk,
+        source_chunks,
+        allow_same_rawx=False,
+        read_all_available_sources=False,
+        reqid=None,
+    ):
         # Find a spare chunk address
         broken_list = []
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
-        candidates = list(chunks.all())
+        candidates = list(source_chunks.all())
         if read_all_available_sources:
             shuffle(candidates)  # Workaround bug with silently corrupt chunks
         spare_url, _quals = self._get_spare_chunk(
@@ -97,7 +135,7 @@ class ECContent(Content):
 
         # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
-            chunks.raw(),
+            source_chunks.raw(),
             current_chunk.subpos,
             self.storage_method,
             read_all_available_sources=read_all_available_sources,
@@ -154,18 +192,11 @@ class ECContent(Content):
             )
 
         # Register the spare chunk in object's metadata
-        # TODO(FVE): remove the parameter "frozen" once meta2 are up-to-date
         if chunk_id is None:
-            self._add_raw_chunk(
-                current_chunk, spare_url[0], frozen=allow_frozen_container, reqid=reqid
-            )
+            self._add_raw_chunk(current_chunk, spare_url[0], reqid=reqid)
         else:
-            self._update_spare_chunk(
-                current_chunk, spare_url[0], frozen=allow_frozen_container, reqid=reqid
-            )
-        self.logger.debug(
-            "Chunk %s repaired in %s", chunk_id or chunk_pos, spare_url[0]
-        )
+            self._update_spare_chunk(current_chunk, spare_url[0], reqid=reqid)
+        self.logger.debug("Chunk %s repaired in %s", chunk_id, spare_url[0])
 
         return bytes_transferred
 
