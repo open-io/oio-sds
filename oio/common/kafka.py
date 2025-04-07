@@ -150,7 +150,7 @@ class KafkaClient:
             **options,
         }
 
-        self._logger.info(
+        self._logger.debug(
             "Instantiate %s (options: %s)",
             self.__client_class.__name__,
             ", ".join(f"{k}={v}" for k, v in conf.items()),
