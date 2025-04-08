@@ -168,8 +168,11 @@ class OpenIOShell(CommonShell):
         Otherwise, generate one with the specified prefix.
         """
         if self.options.request_id:
-            return self.options.request_id
-        return request_id(prefix)
+            reqid = self.options.request_id
+        else:
+            reqid = request_id(prefix)
+        LOG.debug("request_id: %s", reqid)
+        return reqid
 
     def run(self, argv):
         try:
