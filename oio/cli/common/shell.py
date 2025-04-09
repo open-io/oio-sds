@@ -160,6 +160,7 @@ class CommonShell(App):
 class OpenIOShell(CommonShell):
     def __init__(self):
         super(OpenIOShell, self).__init__("oiopy.cli")
+        self.req_count = 0
 
     def request_id(self, prefix="CLI-"):
         """
@@ -168,9 +169,10 @@ class OpenIOShell(CommonShell):
         Otherwise, generate one with the specified prefix.
         """
         if self.options.request_id:
-            reqid = self.options.request_id
+            reqid = f"{self.options.request_id}-{self.req_count}"
         else:
-            reqid = request_id(prefix)
+            reqid = request_id(f"{prefix}{self.req_count}-")
+        self.req_count += 1
         LOG.debug("request_id: %s", reqid)
         return reqid
 
