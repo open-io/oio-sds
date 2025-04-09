@@ -103,6 +103,7 @@ class RdirBootstrap(Lister):
 
     def take_action(self, parsed_args):
         dispatcher = self.app.client_manager.rdir_dispatcher
+        reqid = self.app.request_id("CLI-rdir-bootstrap")
         try:
             all_services = dispatcher.assign_services(
                 parsed_args.service_type,
@@ -114,6 +115,7 @@ class RdirBootstrap(Lister):
                 connection_timeout=30.0,
                 read_timeout=90.0,
                 request_attempts=3,
+                reqid=reqid,
             )
         except OioException as exc:
             self.success = False
@@ -121,7 +123,10 @@ class RdirBootstrap(Lister):
                 "Failed to assign all %s services: %s", parsed_args.service_type, exc
             )
             all_services, _ = dispatcher.get_assignments(
-                parsed_args.service_type, connection_timeout=30.0, read_timeout=90.0
+                parsed_args.service_type,
+                connection_timeout=30.0,
+                read_timeout=90.0,
+                reqid=reqid,
             )
 
         return _format_assignments(all_services, parsed_args.service_type.capitalize())
@@ -179,10 +184,14 @@ class RdirAssignments(Lister):
             raise ValueError("--aggregated and --check are mutually exclusive")
 
         dispatcher = self.app.client_manager.rdir_dispatcher
+        reqid = self.app.request_id("CLI-rdir-assignments")
         results = []
         if not parsed_args.aggregated:
             all_services, _all_rdir = dispatcher.get_assignments(
-                parsed_args.service_type, connection_timeout=30.0, read_timeout=90.0
+                parsed_args.service_type,
+                connection_timeout=30.0,
+                read_timeout=90.0,
+                reqid=reqid,
             )
 
             if parsed_args.check:
@@ -222,13 +231,16 @@ class RdirAssignments(Lister):
             )
         else:
             managed_svc = dispatcher.get_aggregated_assignments(
-                parsed_args.service_type, connection_timeout=30.0, read_timeout=90.0
+                parsed_args.service_type,
+                connection_timeout=30.0,
+                read_timeout=90.0,
+                reqid=reqid,
             )
             for rdir, managed in managed_svc.items():
                 results.append((rdir, len(managed), " ".join(managed)))
             results.sort()
             if parsed_args.stats:
-                all_rdir = dispatcher.cs.all_services("rdir", True)
+                all_rdir = dispatcher.cs.all_services("rdir", True, reqid=reqid)
                 by_id = {
                     x["tags"].get("tag.service_id", x["addr"]): x for x in all_rdir
                 }
@@ -320,6 +332,7 @@ class RdirReassign(Lister):
 
     def take_action(self, parsed_args):
         dispatcher = self.app.client_manager.rdir_dispatcher
+        reqid = self.app.request_id("ACLI-rdir-reassign")
         try:
             all_services = dispatcher.assign_services(
                 parsed_args.service_type,
@@ -332,6 +345,7 @@ class RdirReassign(Lister):
                 allow_down_known_services=parsed_args.allow_down_services,
                 connection_timeout=30.0,
                 read_timeout=90.0,
+                reqid=reqid,
             )
         except OioException as exc:
             self.success = False
@@ -339,7 +353,10 @@ class RdirReassign(Lister):
                 "Failed to assign all %s services: %s", parsed_args.service_type, exc
             )
             all_services, _ = dispatcher.get_assignments(
-                parsed_args.service_type, connection_timeout=30.0, read_timeout=90.0
+                parsed_args.service_type,
+                connection_timeout=30.0,
+                read_timeout=90.0,
+                reqid=reqid,
             )
         return _format_assignments(all_services, parsed_args.service_type.capitalize())
 
@@ -390,7 +407,7 @@ class RdirCopyBase(Lister):
                 parsed_args.source, "Must specify a source or a destination."
             )
 
-        reqid = self.app.request_id("ACLI-")
+        reqid = self.app.request_id("ACLI-rdir-copy")
         copy_func = {
             "meta2": self.app.client_manager.rdir.meta2_copy_vol,
             "rawx": self.app.client_manager.rdir.chunk_copy_vol,

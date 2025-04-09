@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -111,16 +111,13 @@ class ClusterList(Lister):
         return parser
 
     def _list_services(self, parsed_args):
-        req_count = 0
-        reqid = self.app.request_id("CLI-list-%d" % req_count)
+        reqid = self.app.request_id("CLI-list-")
         if not parsed_args.srv_types:
-            req_count += 1
             parsed_args.srv_types = self.app.client_manager.conscience.service_types(
                 reqid=reqid
             )
         for srv_type in parsed_args.srv_types:
-            reqid = self.app.request_id("CLI-list-%d" % req_count)
-            req_count += 1
+            reqid = self.app.request_id("CLI-list-")
             try:
                 data = self.app.client_manager.conscience.all_services(
                     srv_type, parsed_args.stats, reqid=reqid
@@ -311,10 +308,8 @@ class ClusterUnlock(Lister):
                     parsed_args.srv_type, srv_id, tags=tags
                 )
             )
-        req_count = 0
         for batch in _bounded_batches(srv_definitions):
-            reqid = self.app.request_id("CLI-unlock-%d" % req_count)
-            req_count += 1
+            reqid = self.app.request_id("CLI-unlock-")
             result = "unlocked"
             try:
                 self.app.client_manager.conscience.unlock_score(batch, reqid=reqid)
@@ -346,14 +341,12 @@ class ClusterUnlockAll(Lister):
         return parser
 
     def _unlock_all_services(self, parsed_args):
-        reqid = self.app.request_id("CLI-unlock-0")
+        reqid = self.app.request_id("CLI-unlock-")
         srv_types = parsed_args.srv_types
         if not parsed_args.srv_types:
             srv_types = self.app.client_manager.conscience.service_types(reqid=reqid)
-        req_count = 0
         for srv_type in srv_types:
-            req_count += 1
-            reqid = self.app.request_id("CLI-unlock-%d" % req_count)
+            reqid = self.app.request_id("CLI-unlock-")
             try:
                 srv_definitions = self.app.client_manager.conscience.all_services(
                     srv_type, reqid=reqid
@@ -365,8 +358,7 @@ class ClusterUnlockAll(Lister):
             for srv_definition in srv_definitions:
                 srv_definition["type"] = srv_type
             for batch in _bounded_batches(srv_definitions):
-                req_count += 1
-                reqid = self.app.request_id("CLI-unlock-%d" % req_count)
+                reqid = self.app.request_id("CLI-unlock-")
                 result = "unlocked"
                 try:
                     self.app.client_manager.conscience.unlock_score(batch, reqid=reqid)
@@ -469,7 +461,6 @@ class ClusterWait(Lister):
         exc_msg = (
             "Timeout ({0}s) while waiting for the services to get a score >= {1}, {2}"
         )
-        req_count = 0
 
         def service_ready(srv):
             scores = srv.get("scores", {})
@@ -512,8 +503,7 @@ class ClusterWait(Lister):
                 check_deadline()
                 sleep(next(interval))
 
-                reqid = self.app.request_id("CLI-wait-%d" % req_count)
-                req_count += 1
+                reqid = self.app.request_id("CLI-wait-")
                 try:
                     types = self.app.client_manager.conscience.service_types(
                         reqid=reqid
@@ -527,8 +517,7 @@ class ClusterWait(Lister):
         interval = _sleep_interval(0.0, 1.0, 2.0, 4.0)
         while True:
             check_deadline()
-            reqid = self.app.request_id("CLI-wait-%d" % req_count)
-            req_count += 1
+            reqid = self.app.request_id("CLI-wait-")
             maybe_unlock(descr, reqid=reqid)
             sleep(next(interval))
 
@@ -628,7 +617,8 @@ class ClusterLock(Lister):
         result = "locked to " + format_detailed_scores({"scores": scores})
         for batch in _bounded_batches(srv_definitions):
             try:
-                self.app.client_manager.conscience.lock_score(batch)
+                reqid = self.app.request_id("CLI-lock-")
+                self.app.client_manager.conscience.lock_score(batch, reqid=reqid)
             except Exception as exc:
                 self.success = False
                 result = str(exc)
@@ -659,7 +649,8 @@ class ClusterFlush(Lister):
     def _flush_srv_types(self, parsed_args):
         srv_types = parsed_args.srv_types
         if not parsed_args.srv_types:
-            srv_types = self.app.client_manager.conscience.service_types()
+            reqid = self.app.request_id("CLI-flush-")
+            srv_types = self.app.client_manager.conscience.service_types(reqid=reqid)
         for srv_type in srv_types:
             result = "flushed"
             try:
@@ -699,7 +690,8 @@ class ClusterDeregister(Lister):
         for batch in _bounded_batches(srv_definitions):
             result = "deregistered"
             try:
-                self.app.client_manager.conscience.deregister(batch)
+                reqid = self.app.request_id("CLI-deregister-")
+                self.app.client_manager.conscience.deregister(batch, reqid=reqid)
             except Exception as exc:
                 self.success = False
                 result = str(exc)
@@ -725,8 +717,9 @@ class ClusterResolve(ShowOne):
         return parser
 
     def take_action(self, parsed_args):
+        reqid = self.app.request_id("CLI-resolve-")
         resolved = self.app.client_manager.conscience.resolve(
-            parsed_args.srv_type, parsed_args.srv_id
+            parsed_args.srv_type, parsed_args.srv_id, reqid=reqid
         )
         return zip(*resolved.items())
 

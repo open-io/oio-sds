@@ -188,8 +188,9 @@ class CreateObject(ContainerCommandMixin, Lister):
         key_file = parsed_args.key_file
         autocreate = parsed_args.autocreate
         if cid is not None:
+            reqid = self.app.request_id("CLI-object-create-")
             data = self.app.client_manager.storage.container_get_properties(
-                self.app.client_manager.account, None, cid=cid
+                self.app.client_manager.account, None, cid=cid, reqid=reqid
             )
             container = data["system"]["sys.user.name"]
         if key_file and key_file[0] != "/":
@@ -202,6 +203,7 @@ class CreateObject(ContainerCommandMixin, Lister):
         if names and len(objs) != len(names):
             raise CommandError("Mismatch between number of objects and names")
         for obj in objs:
+            reqid = self.app.request_id("CLI-object-create-")
             use_stdin = False if obj != "-" else True
             name = None
             if names:
@@ -226,6 +228,7 @@ class CreateObject(ContainerCommandMixin, Lister):
                         "properties": properties,
                         "restore_drained": parsed_args.restore_drained,
                         "tls": parsed_args.tls,
+                        "reqid": reqid,
                     }
                     kwargs["file_or_path"] = f if not use_stdin else f.buffer
                     # Send all arguments from kwargs that are not None.
@@ -288,11 +291,13 @@ class TouchObject(ContainerCommandMixin, Command):
         if len(parsed_args.objects) > 1 and parsed_args.object_version:
             raise Exception("Cannot specify a version for several objects")
         if cid is not None:
+            reqid = self.app.request_id("CLI-object-touch-")
             data = self.app.client_manager.storage.container_get_properties(
-                self.app.client_manager.account, None, cid=cid
+                self.app.client_manager.account, None, cid=cid, reqid=reqid
             )
             container = data["system"]["sys.user.name"]
         for obj in parsed_args.objects:
+            reqid = self.app.request_id("CLI-object-touch-")
             if parsed_args.auto:
                 container = self.flatns_manager(obj)
             self.app.client_manager.storage.object_touch(
@@ -301,6 +306,7 @@ class TouchObject(ContainerCommandMixin, Command):
                 obj,
                 version=parsed_args.object_version,
                 cid=cid,
+                reqid=reqid,
             )
 
 
@@ -330,6 +336,7 @@ class DeleteObject(ContainerCommandMixin, Lister):
         container = ""
         results = []
         account = self.app.client_manager.account
+        reqid = self.app.request_id("CLI-object--delete-")
 
         if len(parsed_args.objects) <= 1:
             if parsed_args.auto:
@@ -347,6 +354,7 @@ class DeleteObject(ContainerCommandMixin, Lister):
                     parsed_args.objects[0],
                     version=parsed_args.object_version,
                     cid=parsed_args.cid,
+                    reqid=reqid,
                 )
                 # If we specify a version, something is deleted each time (supposedly).
                 # If we don't specify a version, something is deleted only if no
@@ -370,8 +378,9 @@ class DeleteObject(ContainerCommandMixin, Lister):
                     objs[container].append(obj)
 
                 for key, value in objs:
+                    reqid = self.app.request_id("CLI-object--delete-")
                     tmp = self.app.client_manager.storage.object_delete_many(
-                        account, key, value
+                        account, key, value, reqid=reqid
                     )
                     results += tmp
             else:
@@ -379,11 +388,11 @@ class DeleteObject(ContainerCommandMixin, Lister):
                 cid = parsed_args.cid
                 if cid is not None:
                     data = self.app.client_manager.storage.container_get_properties(
-                        self.app.client_manager.account, None, cid=cid
+                        self.app.client_manager.account, None, cid=cid, reqid=reqid
                     )
                     container = data["system"]["sys.user.name"]
                 results = self.app.client_manager.storage.object_delete_many(
-                    account, container, parsed_args.objects
+                    account, container, parsed_args.objects, reqid=reqid
                 )
 
         columns = ("Name", "Deleted")
@@ -415,7 +424,12 @@ class ShowObject(ObjectCommandMixin, ShowOne):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
         data = self.app.client_manager.storage.object_get_properties(
-            account, container, obj, version=parsed_args.object_version, cid=cid
+            account,
+            container,
+            obj,
+            version=parsed_args.object_version,
+            cid=cid,
+            reqid=self.app.request_id("CLI-object-show-"),
         )
         info = {"account": account, "container": container, "object": obj}
         conv = {
@@ -517,6 +531,7 @@ class SetObject(ObjectCommandMixin, Command):
                 version=parsed_args.object_version,
                 clear=parsed_args.clear,
                 cid=cid,
+                reqid=self.app.request_id("CLI-object-set-"),
             )
 
         if new_hash:
@@ -527,6 +542,7 @@ class SetObject(ObjectCommandMixin, Command):
                 new_hash,
                 version=parsed_args.object_version,
                 cid=cid,
+                reqid=self.app.request_id("CLI-object-set-"),
             )
 
 
@@ -579,6 +595,7 @@ class SaveObject(ObjectCommandMixin, Command):
             properties=False,
             cid=cid,
             tls=parsed_args.tls,
+            reqid=self.app.request_id("CLI-object-save-"),
         )
         if not os.path.exists(os.path.dirname(filename)):
             if len(os.path.dirname(filename)) > 0:
@@ -787,11 +804,13 @@ class ListObject(ContainerCommandMixin, Lister):
                     account=account,
                     container=container,
                     cid=cid,
+                    reqid=self.app.request_id("CLI-object-list-"),
                     **kwargs,
                 )
             else:
+                reqid = self.app.request_id("CLI-object-list-")
                 resp = self.app.client_manager.storage.object_list(
-                    account, container, cid=cid, **kwargs
+                    account, container, cid=cid, reqid=reqid, **kwargs
                 )
                 obj_gen = resp["objects"]
                 if resp.get("truncated"):
@@ -927,6 +946,7 @@ class UnsetObject(ObjectCommandMixin, Command):
             properties,
             version=parsed_args.object_version,
             cid=cid,
+            reqid=self.app.request_id("CLI-object-unset-"),
         )
 
 
@@ -954,8 +974,9 @@ but no action needing the removed chunks are accepted\
         container = parsed_args.container
         cid = parsed_args.cid
         for obj in parsed_args.objects:
+            reqid = self.app.request_id("CLI-object-drain-")
             self.app.client_manager.storage.object_drain(
-                account, container, obj, cid=cid
+                account, container, obj, cid=cid, reqid=reqid
             )
 
 
@@ -1003,6 +1024,7 @@ class LocateObject(ObjectCommandMixin, Lister):
             cid=cid,
             version=parsed_args.object_version,
             chunk_info=parsed_args.chunk_info,
+            reqid=self.app.request_id("CLI-object-locate-"),
         )
 
         if "shard_hexid" in obj_md:
@@ -1062,6 +1084,7 @@ class PurgeObject(ObjectCommandMixin, Command):
             parsed_args.object,
             maxvers=parsed_args.max_versions,
             cid=cid,
+            reqid=self.app.request_id("CLI-object-purge-"),
         )
 
 
@@ -1155,5 +1178,6 @@ class LinkObject(ObjectCommandMixin, Command):
             link_content_id=parsed_args.dest_content_id,
             properties_directive=directive,
             cid=cid,
+            reqid=self.app.request_id("CLI-object-link-"),
             **kwargs,
         )

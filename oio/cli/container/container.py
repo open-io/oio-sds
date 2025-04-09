@@ -64,7 +64,7 @@ from oio.common.exceptions import (
     OioException,
 )
 from oio.common.timestamp import Timestamp
-from oio.common.utils import depaginate, request_id, timeout_to_deadline
+from oio.common.utils import depaginate, timeout_to_deadline
 
 
 class SetPropertyCommandMixin(object):
@@ -168,6 +168,7 @@ class CreateBucket(Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid = self.app.request_id(prefix="CLI-bucket-create-")
         results = []
         account = self.app.client_manager.account
         for bucket in parsed_args.buckets:
@@ -175,7 +176,7 @@ class CreateBucket(Lister):
             # We are about to create a root container, reserve its name.
             try:
                 self.app.client_manager.storage.bucket.bucket_reserve(
-                    bucket, account, region=parsed_args.region
+                    bucket, account, region=parsed_args.region, reqid=reqid
                 )
             except Exception as exc:
                 self.log.error("Failed to reserve bucket name %s: %s", bucket, exc)
@@ -185,11 +186,15 @@ class CreateBucket(Lister):
                 try:
                     system = {M2_PROP_BUCKET_NAME: bucket}
                     created = self.app.client_manager.storage.container_create(
-                        account, bucket, region=parsed_args.region, system=system
+                        account,
+                        bucket,
+                        region=parsed_args.region,
+                        system=system,
+                        reqid=reqid,
                     )
                     if not created:
                         self.app.client_manager.storage.container_set_properties(
-                            account, bucket, system=system
+                            account, bucket, system=system, reqid=reqid
                         )
                 except Exception as exc:
                     self.log.error(
@@ -199,7 +204,7 @@ class CreateBucket(Lister):
                     # Container creation failed, remove reservation
                     try:
                         self.app.client_manager.storage.bucket.bucket_release(
-                            bucket, account, region=parsed_args.region
+                            bucket, account, region=parsed_args.region, reqid=reqid
                         )
                     except Exception as exc2:
                         self.log.error("Failed to release bucket %s: %s", bucket, exc2)
@@ -208,7 +213,7 @@ class CreateBucket(Lister):
                 # confirm reservation by creating the bucket.
                 try:
                     self.app.client_manager.storage.bucket.bucket_create(
-                        bucket, account, region=parsed_args.region
+                        bucket, account, region=parsed_args.region, reqid=reqid
                     )
                 except Exception as exc:
                     self.log.error("Failed to create bucket %s: %s", bucket, exc)
@@ -217,10 +222,10 @@ class CreateBucket(Lister):
                     try:
                         if created:
                             self.app.client_manager.storage.container_delete(
-                                account, bucket
+                                account, bucket, reqid=reqid
                             )
                         self.app.client_manager.storage.bucket.bucket_release(
-                            bucket, account, region=parsed_args.region
+                            bucket, account, region=parsed_args.region, reqid=reqid
                         )
                     except Exception as exc2:
                         self.log.error("Failed to release bucket %s: %s", bucket, exc2)
@@ -269,6 +274,7 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid = self.app.request_id(prefix="CLI-container-create-")
         properties = parsed_args.property
         system = {}
         if parsed_args.bucket_name:
@@ -291,18 +297,20 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
                 properties=properties,
                 region=parsed_args.region,
                 system=system,
+                reqid=reqid,
             )
 
         else:
-            for container in parsed_args.containers:
-                success = self.app.client_manager.storage.container_create(
-                    account,
-                    container,
-                    properties=properties,
-                    region=parsed_args.region,
-                    system=system,
-                )
-                results.append((container, success))
+            container = parsed_args.containers[0]
+            success = self.app.client_manager.storage.container_create(
+                account,
+                container,
+                properties=properties,
+                region=parsed_args.region,
+                system=system,
+                reqid=reqid,
+            )
+            results.append((container, success))
 
         return ("Name", "Created"), (r for r in results)
 
@@ -339,7 +347,7 @@ class SetBucket(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        reqid = request_id(prefix="CLI-BUCKET-")
+        reqid = self.app.request_id(prefix="CLI-bucket-set-")
         try:
             account = self.app.client_manager.account
         except CommandError:
@@ -423,6 +431,7 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
         self.log.debug("take_action(%s)", parsed_args)
 
         super(SetContainer, self).take_action_container(parsed_args)
+        reqid = self.app.request_id(prefix="CLI-container-set-")
         properties = parsed_args.property
         system = {}
         if parsed_args.lifecycle_bypass_time:
@@ -454,6 +463,7 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             clear=parsed_args.clear,
             system=system,
             cid=parsed_args.cid,
+            reqid=reqid,
         )
 
 
@@ -476,6 +486,7 @@ class TouchContainer(ContainersCommandMixin, Command):
 
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
+        reqid = self.app.request_id(prefix="CLI-container-set-")
         if parsed_args.is_cid:
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_touch(
@@ -483,6 +494,7 @@ class TouchContainer(ContainersCommandMixin, Command):
                     None,
                     recompute=parsed_args.recompute,
                     cid=container,
+                    reqid=reqid,
                 )
         else:
             for container in parsed_args.containers:
@@ -490,6 +502,7 @@ class TouchContainer(ContainersCommandMixin, Command):
                     self.app.client_manager.account,
                     container,
                     recompute=parsed_args.recompute,
+                    reqid=reqid,
                 )
 
 
@@ -508,13 +521,15 @@ class DeleteBucket(Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid = self.app.request_id(prefix="CLI-bucket-delete-")
+
         results = []
         account = self.app.client_manager.account
         for bucket in parsed_args.buckets:
             success = True
             try:
                 meta = self.app.client_manager.storage.bucket.bucket_show(
-                    bucket, account
+                    bucket, account, reqid=reqid
                 )
                 if meta["containers"] > 1:
                     raise OioException("Too many containers in bucket")
@@ -529,7 +544,9 @@ class DeleteBucket(Lister):
                 success = False
             if success:
                 try:
-                    self.app.client_manager.storage.container_delete(account, bucket)
+                    self.app.client_manager.storage.container_delete(
+                        account, bucket, reqid=reqid
+                    )
                 except NoSuchContainer:
                     self.log.info("Root container %s does not exist", bucket)
                 except Exception as exc:
@@ -542,7 +559,7 @@ class DeleteBucket(Lister):
                     for i in range(1, 11):
                         try:
                             self.app.client_manager.storage.bucket.bucket_delete(
-                                bucket, account
+                                bucket, account, reqid=reqid
                             )
                             break
                         except Conflict:
@@ -580,6 +597,7 @@ class DeleteContainer(ContainersCommandMixin, Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid = self.app.request_id(prefix="CLI-container-create-")
         if parsed_args.is_cid:
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_delete(
@@ -587,11 +605,15 @@ class DeleteContainer(ContainersCommandMixin, Command):
                     None,
                     cid=container,
                     force=parsed_args.force,
+                    reqid=reqid,
                 )
         else:
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_delete(
-                    self.app.client_manager.account, container, force=parsed_args.force
+                    self.app.client_manager.account,
+                    container,
+                    force=parsed_args.force,
+                    reqid=reqid,
                 )
 
 
@@ -644,13 +666,14 @@ class FlushContainer(ContainerCommandMixin, Command):
             kwargs["delay"] = parsed_args.delay
 
         self.take_action_container(parsed_args)
+        reqid = self.app.request_id(prefix="CLI-container-flush-")
         if parsed_args.cid is None:
             account = self.app.client_manager.account
             container = parsed_args.container
         else:
             account, container = self.app.client_manager.storage.resolve_cid(
                 parsed_args.cid,
-                reqid=self.app.request_id(),
+                reqid=reqid,
                 timeout=self.app.options.timeout,
             )
         self.app.client_manager.storage.container_flush(
@@ -658,8 +681,8 @@ class FlushContainer(ContainerCommandMixin, Command):
             container,
             fast=parsed_args.quick,
             all_versions=parsed_args.all_versions,
-            reqid=self.app.request_id(),
             timeout=self.app.options.timeout,
+            reqid=reqid,
             **kwargs,
         )
 
@@ -691,8 +714,14 @@ class DrainContainer(ContainersCommandMixin, Command):
                 cid = container
 
             self.app.client_manager.storage.container_set_properties(
-                account, container, cid=cid, system=system, propagate_to_shards=True
+                account,
+                container,
+                cid=cid,
+                system=system,
+                propagate_to_shards=True,
+                reqid=self.app.request_id(prefix="CLI-container-drain-")
             )
+
 
 
 class ShowBucket(ShowOne):
@@ -714,7 +743,6 @@ class ShowBucket(ShowOne):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        reqid = request_id(prefix="CLI-BUCKET-")
         try:
             account = self.app.client_manager.account
         except CommandError:
@@ -725,7 +753,7 @@ class ShowBucket(ShowOne):
             account=account,
             check_owner=parsed_args.check_owner,
             details=True,
-            reqid=reqid,
+            reqid=self.app.request_id(prefix="CLI-bucket-show-"),
         )
         if parsed_args.formatter == "table":
             from oio.common.easy_value import convert_size, convert_timestamp
@@ -770,6 +798,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             admin_mode=True,
             params={"urgent": 1},
             extra_counters=parsed_args.extra_counters,
+            reqid=self.app.request_id(prefix="CLI-container-show-"),
         )
         sys = data["system"]
         ctime = float(sys[M2_PROP_CTIME]) / 1000000.0
@@ -964,7 +993,7 @@ class ListBuckets(Lister):
 
         self.log.debug("take_action(%s)", parsed_args)
 
-        kwargs = {"reqid": request_id(prefix="CLI-BUCKET-")}
+        kwargs = {}
         if parsed_args.prefix:
             kwargs["prefix"] = parsed_args.prefix
         if parsed_args.region:
@@ -979,6 +1008,7 @@ class ListBuckets(Lister):
         account = self.app.client_manager.account
         acct_client = self.app.client_manager.storage.account
         storage = self.app.client_manager.storage
+        reqid = self.app.request_id(prefix="CLI-bucket-list-")
 
         if parsed_args.full_listing:
             listing = depaginate(
@@ -987,10 +1017,11 @@ class ListBuckets(Lister):
                 marker_key=lambda x: x.get("next_marker"),
                 truncated_key=lambda x: x["truncated"],
                 account=account,
+                reqid=reqid,
                 **kwargs,
             )
         else:
-            acct_meta = acct_client.bucket_list(account, **kwargs)
+            acct_meta = acct_client.bucket_list(account, reqid=reqid, **kwargs)
             listing = acct_meta["listing"]
 
         columns = ("Name", "Objects", "Bytes", "Mtime", "Region")
@@ -998,7 +1029,7 @@ class ListBuckets(Lister):
         def versioning(bucket):
             try:
                 data = storage.container_get_properties(
-                    account, bucket, reqid=kwargs["reqid"]
+                    account, bucket, reqid=reqid
                 )
             except NoSuchContainer:
                 self.log.info("Bucket %s does not exist", bucket)
@@ -1083,7 +1114,7 @@ class ListContainer(Lister):
         self.log.debug("take_action(%s)", parsed_args)
         from oio.common.utils import cid_from_name
 
-        kwargs = {"reqid": request_id(prefix="CLI-CONTAINER-")}
+        kwargs = {}
         if parsed_args.prefix:
             kwargs["prefix"] = parsed_args.prefix
         if parsed_args.region:
@@ -1099,6 +1130,7 @@ class ListContainer(Lister):
 
         account = self.app.client_manager.account
         acct_client = self.app.client_manager.storage.account
+        reqid = self.app.request_id(prefix="CLI-container-list-")
 
         if parsed_args.full_listing:
             listing = depaginate(
@@ -1108,10 +1140,11 @@ class ListContainer(Lister):
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
                 account=account,
+                reqid=reqid,
                 **kwargs,
             )
         else:
-            acct_meta = acct_client.container_list(account, **kwargs)
+            acct_meta = acct_client.container_list(account, reqid=reqid, **kwargs)
             listing = acct_meta["listing"]
 
         columns = ("Name", "Count", "Bytes", "Mtime", "CID")
@@ -1172,7 +1205,7 @@ class UnsetContainer(ContainerCommandMixin, Command):
 
         self.take_action_container(parsed_args)
         properties = parsed_args.property
-        system = dict()
+        system = {}
         if parsed_args.bucket_name:
             system[M2_PROP_BUCKET_NAME] = ""
         if parsed_args.storage_policy:
@@ -1183,6 +1216,7 @@ class UnsetContainer(ContainerCommandMixin, Command):
             system[M2_PROP_DEL_EXC_VERSIONS] = ""
         if parsed_args.lifecycle_custom_budget:
             system[M2_PROP_LIFECYCLE_CUSTOM_BUDGET] = ""
+        reqid = self.app.request_id(prefix="CLI-container-unset-")
 
         if properties or not system:
             self.app.client_manager.storage.container_del_properties(
@@ -1190,6 +1224,7 @@ class UnsetContainer(ContainerCommandMixin, Command):
                 parsed_args.container,
                 properties,
                 cid=parsed_args.cid,
+                reqid=reqid,
             )
         if system:
             self.app.client_manager.storage.container_set_properties(
@@ -1197,6 +1232,7 @@ class UnsetContainer(ContainerCommandMixin, Command):
                 parsed_args.container,
                 system=system,
                 cid=parsed_args.cid,
+                reqid=reqid,
             )
 
 
@@ -1225,7 +1261,6 @@ class UnsetBucket(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        reqid = request_id(prefix="CLI-BUCKET-")
         try:
             account = self.app.client_manager.account
         except CommandError:
@@ -1240,7 +1275,7 @@ class UnsetBucket(Command):
             check_owner=parsed_args.check_owner,
             metadata=None,
             to_delete=to_delete,
-            reqid=reqid,
+            reqid=self.app.request_id(prefix="CLI-bucket-unset-"),
         )
 
 
@@ -1263,12 +1298,16 @@ class SaveContainer(ContainerCommandMixin, Command):
         account = self.app.client_manager.account
         container = parsed_args.container
         cid = parsed_args.cid
-        objs = self.app.client_manager.storage.object_list(account, container, cid=cid)
+        reqid = self.app.request_id(prefix="CLI-container-save-")
+        objs = self.app.client_manager.storage.object_list(
+            account, container, cid=cid, reqid=reqid
+        )
 
         for obj in objs["objects"]:
             obj_name = obj["name"]
+            reqid = self.app.request_id(prefix="CLI-container-save-")
             _, stream = self.app.client_manager.storage.object_fetch(
-                account, container, obj_name, properties=False, cid=cid
+                account, container, obj_name, properties=False, cid=cid, reqid=reqid
             )
 
             if not os.path.exists(os.path.dirname(obj_name)):
@@ -1296,8 +1335,9 @@ class LocateContainer(ContainerCommandMixin, ShowOne):
         account = self.app.client_manager.account
         container = parsed_args.container
         cid = parsed_args.cid
+        reqid = self.app.request_id(prefix="CLI-container-locate-")
         m2_sys = self.app.client_manager.storage.container_get_properties(
-            account, container, cid=cid
+            account, container, cid=cid, reqid=reqid
         )["system"]
 
         data_dir = self.app.client_manager.storage.directory.list(
@@ -1364,6 +1404,7 @@ class PurgeContainer(ContainerCommandMixin, Command):
             parsed_args.container,
             maxvers=parsed_args.max_versions,
             cid=parsed_args.cid,
+            reqid=self.app.request_id(prefix="CLI-container-purge-"),
         )
 
 
@@ -1391,7 +1432,6 @@ class RefreshBucket(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        reqid = request_id(prefix="CLI-BUCKET-")
         try:
             account = self.app.client_manager.account
         except CommandError:
@@ -1401,7 +1441,7 @@ class RefreshBucket(Command):
             parsed_args.bucket,
             account=account,
             check_owner=parsed_args.check_owner,
-            reqid=reqid,
+            reqid=self.app.request_id(prefix="CLI-bucket-refresh-"),
         )
 
 
@@ -1418,15 +1458,19 @@ class RefreshContainer(ContainerCommandMixin, Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
         self.take_action_container(parsed_args)
+        reqid = self.app.request_id(prefix="CLI-container-refresh-")
         if parsed_args.cid is None:
             account = self.app.client_manager.account
             container = parsed_args.container
         else:
             account, container = self.app.client_manager.storage.resolve_cid(
-                parsed_args.cid
+                parsed_args.cid,
+                reqid=reqid,
             )
         self.app.client_manager.storage.container_refresh(
-            account=account, container=container
+            account=account,
+            container=container,
+            reqid=reqid,
         )
 
 
@@ -1483,11 +1527,15 @@ class SnapshotContainer(ContainerCommandMixin, Lister):
         self.log.debug("take_action(%s)", parsed_args)
         self.take_action_container(parsed_args)
         cid = parsed_args.cid
+        reqid = self.app.request_id(prefix="CLI-container-snapshot-")
         if cid is None:
             account = self.app.client_manager.account
             container = parsed_args.container
         else:
-            account, container = self.app.client_manager.storage.resolve_cid(cid)
+            account, container = self.app.client_manager.storage.resolve_cid(
+                cid,
+                reqid=reqid,
+            )
         deadline = timeout_to_deadline(parsed_args.timeout)
         dst_account = parsed_args.dst_account or account
         dst_container = parsed_args.dst_container or (
@@ -1502,6 +1550,7 @@ class SnapshotContainer(ContainerCommandMixin, Lister):
             dst_container,
             batch_size=batch_size,
             deadline=deadline,
+            reqid=reqid,
         )
         lines = [(dst_account, dst_container, "OK")]
         return ("Account", "Container", "Status"), lines

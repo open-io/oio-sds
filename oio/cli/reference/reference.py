@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,11 +40,16 @@ class ListReference(Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid = self.app.request_id("CLI-reference-list")
         if parsed_args.is_cid:
-            data = self.app.client_manager.directory.list(cid=parsed_args.reference)
+            data = self.app.client_manager.directory.list(
+                cid=parsed_args.reference, reqid=reqid
+            )
         else:
             data = self.app.client_manager.directory.list(
-                self.app.client_manager.account, reference=parsed_args.reference
+                self.app.client_manager.account,
+                reference=parsed_args.reference,
+                reqid=reqid,
             )
         columns = ("Type", "Host", "Args", "Seq")
         results = ((d["type"], d["host"], d["args"], d["seq"]) for d in data["srv"])
@@ -72,15 +77,20 @@ class ShowReference(ShowOne):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid = self.app.request_id("CLI-reference-show")
         if parsed_args.is_cid:
-            data = self.app.client_manager.directory.list(cid=parsed_args.reference)
+            data = self.app.client_manager.directory.list(
+                cid=parsed_args.reference, reqid=reqid
+            )
             account = data.get("account")
             reference = data.get("name")
         else:
             account = self.app.client_manager.account
             reference = parsed_args.reference
 
-        data = self.app.client_manager.directory.get_properties(account, reference)
+        data = self.app.client_manager.directory.get_properties(
+            account, reference, reqid=reqid
+        )
         info = {"account": account, "name": reference, "cid": data.get("cid", None)}
         for k, v in data["properties"].items():
             info["meta." + k] = v
@@ -110,8 +120,9 @@ class CreateReference(Lister):
         results = []
         account = self.app.client_manager.account
         for reference in parsed_args.references:
+            reqid = self.app.request_id("CLI-reference-create")
             created = self.app.client_manager.directory.create(
-                account, reference=reference
+                account, reference=reference, reqid=reqid
             )
             results.append((reference, created))
 
@@ -141,8 +152,9 @@ class DeleteReference(Command):
         self.log.debug("take_action(%s)", parsed_args)
 
         for reference in parsed_args.references:
+            reqid = self.app.request_id("CLI-reference-delete")
             self.app.client_manager.directory.delete(
-                self.app.client_manager.account, reference=reference
+                self.app.client_manager.account, reference=reference, reqid=reqid
             )
 
 
@@ -168,9 +180,10 @@ class LinkReference(Command):
 
         reference = parsed_args.reference
         srv_type = parsed_args.srv_type
+        reqid = self.app.request_id("CLI-reference-link")
 
         self.app.client_manager.directory.link(
-            self.app.client_manager.account, reference, srv_type
+            self.app.client_manager.account, reference, srv_type, reqid=reqid
         )
 
 
@@ -196,9 +209,10 @@ class UnlinkReference(Command):
 
         reference = parsed_args.reference
         srv_type = parsed_args.srv_type
+        reqid = self.app.request_id("CLI-reference-unlink")
 
         self.app.client_manager.directory.unlink(
-            self.app.client_manager.account, reference, srv_type
+            self.app.client_manager.account, reference, srv_type, reqid=reqid
         )
 
 
@@ -225,9 +239,10 @@ class PollReference(Command):
     def take_action(self, parsed_args):
         reference = parsed_args.reference
         srv_type = parsed_args.srv_type
+        reqid = self.app.request_id("CLI-reference-poll")
 
         self.app.client_manager.directory.renew(
-            self.app.client_manager.account, reference, srv_type
+            self.app.client_manager.account, reference, srv_type, reqid=reqid
         )
 
 
@@ -290,6 +305,7 @@ class ForceReference(Command):
             parsed_args.type,
             service,
             replace=parsed_args.replace,
+            reqid=self.app.request_id("CLI-reference-force"),
         )
 
 
@@ -328,6 +344,7 @@ class SetReference(Command):
             parsed_args.reference,
             parsed_args.property,
             parsed_args.clear,
+            reqid=self.app.request_id("CLI-reference-set"),
         )
 
 
@@ -355,7 +372,10 @@ class UnsetReference(Command):
         self.log.debug("take_action(%s)", parsed_args)
 
         self.app.client_manager.directory.del_properties(
-            self.app.client_manager.account, parsed_args.reference, parsed_args.property
+            self.app.client_manager.account,
+            parsed_args.reference,
+            parsed_args.property,
+            reqid=self.app.request_id("CLI-reference-unset"),
         )
 
 
@@ -376,8 +396,9 @@ class LocateReference(ShowOne):
 
         account = self.app.client_manager.account
         reference = parsed_args.reference
+        reqid = self.app.request_id("CLI-reference-locate")
 
-        data = self.app.client_manager.directory.list(account, reference)
+        data = self.app.client_manager.directory.list(account, reference, reqid=reqid)
 
         info = {
             "account": account,

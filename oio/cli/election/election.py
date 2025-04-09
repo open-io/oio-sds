@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,7 +35,6 @@ class ElectionCmd(Lister):
     """Base class for election subcommands"""
 
     log = getLogger(__name__ + ".Election")
-    reqid_prefix = "ACLI-EL-"
 
     def get_parser(self, prog_name):
         parser = super(ElectionCmd, self).get_parser(prog_name)
@@ -94,6 +93,7 @@ class ElectionPing(ElectionCmd):
             cid=cid,
             timeout=parsed_args.timeout,
             service_id=parsed_args.service_id,
+            reqid=self.app.request_id("CLI-election-ping-"),
         )
 
         columns = ("Id", "Status", "Message")
@@ -117,6 +117,7 @@ class ElectionStatus(ElectionCmd):
             cid=cid,
             timeout=parsed_args.timeout,
             service_id=parsed_args.service_id,
+            reqid=self.app.request_id("CLI-election-status-"),
         )
 
         columns = ("Id", "Status", "Message")
@@ -145,7 +146,6 @@ class ElectionCheckPeers(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        reqid = self.app.request_id(self.reqid_prefix)
         data = self.app.client_manager.admin.election_debug(
             service_type=service_type,
             account=account,
@@ -153,7 +153,7 @@ class ElectionCheckPeers(ElectionCmd):
             cid=cid,
             timeout=parsed_args.timeout,
             service_id=parsed_args.service_id,
-            reqid=reqid,
+            reqid=self.app.request_id("CLI-election-check-"),
         )
         valid_resps = [x for x in data.items() if x[1]["status"]["status"] == 200]
         zk_servers = ",".join(x[1]["body"]["base"]["zk_server"] for x in valid_resps)
@@ -227,7 +227,6 @@ class ElectionDebug(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        reqid = self.app.request_id(self.reqid_prefix)
         data = self.app.client_manager.admin.election_debug(
             service_type=service_type,
             account=account,
@@ -235,7 +234,7 @@ class ElectionDebug(ElectionCmd):
             cid=cid,
             timeout=parsed_args.timeout,
             service_id=parsed_args.service_id,
-            reqid=reqid,
+            reqid=self.app.request_id("CLI-election-debug-"),
         )
 
         columns = ("Id", "Status", "Message", "Body")
@@ -301,6 +300,7 @@ class ElectionSync(ElectionCmd):
             check_type=parsed_args.check_type,
             timeout=parsed_args.timeout,
             service_id=parsed_args.service_id,
+            reqid=self.app.request_id("CLI-election-sync-"),
         )
 
         columns = ("Id", "Status", "Message", "Body")
@@ -332,6 +332,7 @@ class ElectionLeave(ElectionCmd):
             cid=cid,
             timeout=parsed_args.timeout,
             service_id=parsed_args.service_id,
+            reqid=self.app.request_id("CLI-election-leave-"),
         )
 
         columns = ("Id", "Status", "Message")
@@ -393,6 +394,7 @@ class ElectionBalance(Lister):
             max_ops=max_,
             inactivity=inactivity,
             rejoin=rejoin,
+            reqid=self.app.request_id("CLI-election-balance-"),
         )
 
     def _srvtypes(self, parsed_args):
@@ -410,7 +412,9 @@ class ElectionBalance(Lister):
                 yield id_, max_, inactivity
         else:
             for _st in self._srvtypes(parsed_args):
-                srvs = self.app.client_manager.conscience.all_services(_st, full=False)
+                srvs = self.app.client_manager.conscience.all_services(
+                    _st, full=False, reqid=self.app.request_id("CLI-election-balance-")
+                )
                 for srv in srvs:
                     yield srv.get("id", srv["addr"]), max_, inactivity
 
@@ -420,7 +424,9 @@ class ElectionBalance(Lister):
         for id_, max_, inactivity in allids:
             masters = 0
             try:
-                conf = self.app.client_manager.admin.service_get_info(id_)
+                conf = self.app.client_manager.admin.service_get_info(
+                    id_, reqid=self.app.request_id("CLI-election-balance-")
+                )
                 masters = conf.get("elections", {}).get("master", 0)
             except Exception:
                 pass

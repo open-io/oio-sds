@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -42,7 +42,7 @@ class ShowAdminVolume(ShowOne):
         output.append(("volume", parsed_args.volume))
         data = self.app.client_manager.volume.volume_admin_show(
             volume=parsed_args.volume,
-            reqid=self.app.request_id(),
+            reqid=self.app.request_id("CLI-volume-admin-show"),
         )
         for k, v in sorted(data.items()):
             output.append((k, v))
@@ -91,7 +91,6 @@ class ClearAdminVolume(Lister):
         volumes = parsed_args.volumes
 
         results = []
-        reqid = self.app.request_id()
         for volume in volumes:
             try:
                 resp_body = self.app.client_manager.volume.volume_admin_clear(
@@ -99,7 +98,7 @@ class ClearAdminVolume(Lister):
                     clear_all=parsed_args.clear_all,
                     before_incident=parsed_args.before_incident,
                     repair=parsed_args.repair,
-                    reqid=reqid,
+                    reqid=self.app.request_id("CLI-volume-admin-clear"),
                 )
                 results.append((volume, True, resp_body))
             except OioException as exc:
@@ -132,7 +131,7 @@ class ShowVolume(ShowOne):
         data = self.app.client_manager.volume.volume_show(
             volume=parsed_args.volume,
             read_timeout=60.0,
-            reqid=self.app.request_id(),
+            reqid=self.app.request_id("CLI-volume-show"),
         )
         return list(zip(*sorted(data.items())))
 
@@ -169,13 +168,12 @@ class IncidentAdminVolume(Lister):
         dates = parsed_args.date
 
         results = []
-        reqid = self.app.request_id()
         for volume in volumes:
             date = dates.pop(0) if dates else int(time())
             self.app.client_manager.volume.volume_admin_incident(
                 volume,
                 date,
-                reqid=reqid,
+                reqid=self.app.request_id("CLI-volume-admin-incident"),
             )
             results.append((volume, date))
         columns = ("Volume", "Date")
@@ -210,12 +208,11 @@ class LockAdminVolume(Lister):
         key = parsed_args.key
 
         results = []
-        reqid = self.app.request_id()
         for volume in volumes:
             self.app.client_manager.volume.volume_admin_lock(
                 volume,
                 key,
-                reqid=reqid,
+                reqid=self.app.request_id("CLI-volume-admin-lock"),
             )
             results.append((volume, True))
         columns = ("Volume", "Success")
@@ -240,8 +237,8 @@ class UnlockAdminVolume(Lister):
         volumes = parsed_args.volumes
 
         results = []
-        reqid = self.app.request_id()
         for volume in volumes:
+            reqid = self.app.request_id("CLI-volume-admin-unlock")
             self.app.client_manager.volume.volume_admin_unlock(volume, reqid=reqid)
             results.append((volume, True))
         columns = ("Volume", "Success")

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,7 @@ from logging import getLogger
 
 from oio.cli import Command, Lister, ShowOne
 from oio.common.constants import ACCOUNT_BETA_FEATURE_PREFIX
-from oio.common.utils import depaginate, request_id
+from oio.common.utils import depaginate
 
 
 class ShowAccount(ShowOne):
@@ -38,7 +38,10 @@ class ShowAccount(ShowOne):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        data = self.app.client_manager.storage.account_show(account=parsed_args.account)
+        data = self.app.client_manager.storage.account_show(
+            account=parsed_args.account,
+            reqid=self.app.request_id("CLI-account-show-"),
+        )
         data["account"] = data["id"]
         del data["id"]
         if parsed_args.formatter == "table":
@@ -66,7 +69,10 @@ class DeleteAccount(Command):
         self.log.debug("take_action(%s)", parsed_args)
 
         for account in parsed_args.accounts:
-            self.app.client_manager.storage.account_delete(account=account)
+            self.app.client_manager.storage.account_delete(
+                account=account,
+                reqid=self.app.request_id("CLI-account-delete-"),
+            )
 
 
 class CreateAccount(Lister):
@@ -86,7 +92,10 @@ class CreateAccount(Lister):
 
         results = []
         for account in parsed_args.accounts:
-            result = self.app.client_manager.storage.account_create(account=account)
+            result = self.app.client_manager.storage.account_create(
+                account=account,
+                reqid=self.app.request_id("CLI-account-delete-"),
+            )
             results.append((account, result))
 
         return ("Name", "Created"), (r for r in results)
@@ -150,7 +159,9 @@ class SetAccount(Command):
             ValueError("No property")
 
         self.app.client_manager.storage.account_set_properties(
-            account=parsed_args.account, properties=properties
+            account=parsed_args.account,
+            properties=properties,
+            reqid=self.app.request_id("CLI-account-set-"),
         )
 
 
@@ -204,7 +215,9 @@ class UnsetAccount(Command):
             ValueError("No property")
 
         self.app.client_manager.storage.account_del_properties(
-            account=parsed_args.account, properties=properties
+            account=parsed_args.account,
+            properties=properties,
+            reqid=self.app.request_id("CLI-account-unset-"),
         )
 
 
@@ -252,7 +265,7 @@ class ListAccounts(Lister):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        kwargs = {"reqid": request_id(prefix="CLI-ACCOUNT-")}
+        kwargs = {"reqid": self.app.request_id(prefix="CLI-account-list-")}
         if parsed_args.prefix:
             kwargs["prefix"] = parsed_args.prefix
         if parsed_args.marker:
@@ -349,16 +362,19 @@ class RefreshAccount(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
+        reqid=self.app.request_id("CLI-account-refresh-")
         if parsed_args.all_accounts:
             self.app.client_manager.storage.account_refresh(
                 recompute=parsed_args.recompute,
                 container_refresh=parsed_args.touch or parsed_args.recompute,
+                reqid=reqid,
             )
         elif parsed_args.account is not None:
             self.app.client_manager.storage.account_refresh(
                 account=parsed_args.account,
                 recompute=parsed_args.recompute,
                 container_refresh=parsed_args.touch or parsed_args.recompute,
+                reqid=reqid,
             )
         else:
             from argparse import ArgumentError
@@ -392,4 +408,7 @@ class FlushAccount(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        self.app.client_manager.storage.account_flush(account=parsed_args.account)
+        self.app.client_manager.storage.account_flush(
+            account=parsed_args.account,
+            reqid=self.app.request_id("CLI-account-flush-"),
+        )
