@@ -15,8 +15,6 @@
 # License along with this library.
 
 
-from __future__ import absolute_import
-
 import os
 import time
 import warnings
@@ -2083,20 +2081,31 @@ class ObjectStorageApi(object):
 
     def _delete_orphan_chunks(self, chunks, cid, **kwargs):
         """Delete chunks that have been orphaned by an unfinished upload."""
-        del_resps = self.blob_client.chunk_delete_many(chunks, cid, **kwargs)
-        for resp in del_resps:
-            if isinstance(resp, Exception):
-                self.logger.warning(
-                    "failed to delete chunk %s (%s)",
-                    resp.chunk.get("real_url", resp.chunk["url"]),
-                    resp,
-                )
-            elif resp.status not in (204, 404):
-                self.logger.warning(
-                    "failed to delete chunk %s (HTTP %s)",
-                    resp.chunk.get("real_url", resp.chunk["url"]),
-                    resp.status,
-                )
+
+        # In case we cancelled the upload because of the deadline being reached,
+        # we must postpone it now or no deletion will be executed.
+        kwargs.setdefault("read_timeout", 5.0)
+        set_deadline_from_read_timeout(kwargs, force=True)
+
+        try:
+            del_resps = self.blob_client.chunk_delete_many(chunks, cid, **kwargs)
+            for resp in del_resps:
+                if isinstance(resp, Exception):
+                    self.logger.warning(
+                        "failed to delete chunk %s (%s)",
+                        resp.chunk.get("real_url", resp.chunk["url"]),
+                        resp,
+                    )
+                elif resp.status not in (204, 404):
+                    self.logger.warning(
+                        "failed to delete chunk %s (HTTP %s)",
+                        resp.chunk.get("real_url", resp.chunk["url"]),
+                        resp.status,
+                    )
+        except Exception:
+            # chunk_delete_many is supposed to catch individual delete errors,
+            # if we are here, something bad happened, we need the stack trace.
+            self.logger.exception("Error during orphan chunk deletion")
 
     @handle_container_not_found
     @patch_kwargs
