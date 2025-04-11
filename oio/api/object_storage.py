@@ -153,6 +153,8 @@ class ObjectStorageApi(object):
         self._conscience_client = None
         self._directory_client = None
         self._proxy_client = None
+        self._rdir_client = None
+        self._admin_client = None
 
     @property
     def account(self):
@@ -290,6 +292,42 @@ class ObjectStorageApi(object):
                 {"namespace": self.namespace}, logger=self.logger, **self._init_kwargs
             )
         return self._directory_client
+
+    @property
+    def rdir(self):
+        """
+        Get an instance of RdirClient.
+
+        :rtype: `oio.rdir.client.RdirClient`
+        """
+        if self._rdir_client is None:
+            from oio.rdir.client import RdirClient
+
+            self._rdir_client = RdirClient(
+                {"namespace": self.namespace}, directory=self.directory, logger=self.logger, **self._acct_kwargs
+            )
+            # Share the connection pool
+            self._acct_kwargs["pool_manager"] = self._rdir_client.pool_manager
+        return self._rdir_client
+
+    @property
+    def admin(self):
+        """
+        Get an instance of AdminClient.
+
+        :rtype: `oio.directory.admin.AdminClient`
+        """
+        if self._admin_client is None:
+            from oio.directory.admin import AdminClient
+
+            print(self._acct_kwargs)
+            self._admin_client = AdminClient(
+                {"namespace": self.namespace}, logger=self.logger, **self._acct_kwargs
+            )
+            # Share the connection pool
+            self._acct_kwargs["pool_manager"] = self._admin_client.pool_manager
+
+        return self._admin_client
 
     # FIXME(FVE): this method should not exist
     # This high-level API should use lower-level APIs,
