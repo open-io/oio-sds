@@ -383,12 +383,12 @@ class CommonTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        super(CommonTestCase, cls).tearDownClass()
         for consumer in cls._consumers:
             if consumer is not None:
                 # Close consumer
                 consumer.close()
         cls._cls_kafka_consumer = None
+        super(CommonTestCase, cls).tearDownClass()
 
     @property
     def conscience(self):
@@ -966,7 +966,7 @@ class BaseTestCase(CommonTestCase):
                 timeout,
             )
         except ResponseError as err:
-            logging.warning("%s", err)
+            self._cls_logger.warning("%s", err)
         return None
 
     def wait_until_empty(
@@ -1050,10 +1050,10 @@ class BaseTestCase(CommonTestCase):
                 account=None, container=None, cid=shard["cid"]
             )
             cname = props["system"][M2_PROP_CONTAINER_NAME]
-            # self.clean_later(
-            #     container=cname,
-            #     account=shard_account,
-            #     prepend=True,
-            # )
+            self.clean_later(
+                container=cname,
+                account=shard_account,
+                prepend=True,
+            )
             new_containers.append((shard_account, cname))
         return new_containers

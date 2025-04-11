@@ -115,6 +115,7 @@ class TestLifecycleCrawler(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        cls._service("oio-crawler.target", "stop", wait=3)
         cls._cls_lifecycle_consumer = cls._register_consumer(
             topic=DEFAULT_LIFECYCLE_TOPIC
         )
@@ -125,6 +126,11 @@ class TestLifecycleCrawler(BaseTestCase):
         cls._cls_producer = KafkaSender(
             cls._cls_conf["kafka_endpoints"], cls._cls_logger
         )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-crawler.target", "start", wait=2)
+        super().tearDownClass()
 
     def setUp(self):
         super().setUp()
@@ -205,7 +211,7 @@ class TestLifecycleCrawler(BaseTestCase):
 
     def _create_mpu(self, obj_name, nb_parts=1, size=1):
         upload_id = random_str(48)
-        # Create mmanifest
+        # Create manifest
         chunks, _, _, obj_meta = self.storage.object_create_ext(
             account=self.account,
             container=self.container,
@@ -433,6 +439,7 @@ class TestLifecycleCrawler(BaseTestCase):
                         "run_id": self.run_id,
                         **expect.extra_fields,
                     },
+                    timeout=60.0,
                 )
                 self.assertIsNotNone(
                     event,
@@ -3196,16 +3203,6 @@ class TestLifecycleCrawler(BaseTestCase):
 
 
 class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
-    @classmethod
-    def setUpClass(cls):
-        super().setUpClass()
-        # Prevent shrinking to happen
-        cls._service("oio-crawler.target", "stop", wait=3)
-
-    @classmethod
-    def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
-        super().tearDownClass()
 
     def setUp(self):
         super().setUp()
