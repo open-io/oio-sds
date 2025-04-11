@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
@@ -107,7 +108,7 @@ def event_to_s3_operation(event):
 
 class LifecycleActionContext:
     def __init__(self, event: Event):
-        self.event = event
+        self.event = deepcopy(event)
         self.reqid = event.reqid or request_id("Lifecycle-actions-")
         self.size = None
 
