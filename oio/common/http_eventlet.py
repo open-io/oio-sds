@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,8 +14,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
 import ssl
-from urllib.parse import quote
+from base64 import b64encode
+from urllib.parse import quote, urlparse
 
 from oio.common.green import (
     HTTPConnection,
@@ -27,6 +29,7 @@ from oio.common.logger import get_logger
 from oio.common.utils import monotonic_time
 
 logger = get_logger({}, __name__)
+PROXY_URL = os.getenv("OIO_PROXY_URL")
 
 
 class CustomHTTPResponse(HTTPResponse):
@@ -127,7 +130,7 @@ class CustomHttpsConnection(HTTPSConnection):
 
 
 def http_connect(
-    host,
+    netloc,
     method,
     path,
     headers=None,
@@ -146,24 +149,37 @@ def http_connect(
         between consecutive blocking operations to/from the server.
     :type socket_timeout: `int`
     """
-    if isinstance(path, str):
-        try:
-            path = path.encode("utf-8")
-        except UnicodeError as uerr:
-            logger.exception("ERROR encoding to UTF-8: %s", uerr)
-    if path.startswith(b"/"):
-        path = quote(path)
+    global PROXY_URL
+    proxy = None
+    if PROXY_URL is not None:
+        if "://" not in PROXY_URL:
+            PROXY_URL = "http://" + PROXY_URL
+        proxy = urlparse(PROXY_URL)
+
+    if not path.startswith("/"):
+        path = "/" + path
+    path = quote(path)
+
+    if proxy:
+        if proxy.port is not None:
+            proxy_or_host = f"{proxy.hostname}:{proxy.port}"
+        else:
+            proxy_or_host = proxy.hostname
     else:
-        path = quote(b"/" + path)
+        proxy_or_host = netloc
+
     # Connect to a server
     if connect_timeout is None:
         connect_timeout = socket_timeout
-    if scheme == "https":
+    if proxy and proxy.scheme == "https" or scheme == "https":
         conn = CustomHttpsConnection(
-            host, context=ssl._create_unverified_context(), timeout=connect_timeout
+            proxy_or_host,
+            context=ssl._create_unverified_context(),
+            timeout=connect_timeout,
         )
     else:
-        conn = CustomHttpConnection(host, timeout=connect_timeout)
+        conn = CustomHttpConnection(proxy_or_host, timeout=connect_timeout)
+
     if query_string:
         path += b"?" + query_string
     if perfdata is not None:
@@ -172,11 +188,12 @@ def http_connect(
         connect_end = monotonic_time()
     else:
         conn.connect()
+
     # Write to the server
     if socket_timeout != connect_timeout:
         conn.settimeout(socket_timeout)
     conn.path = path
-    conn.putrequest(method, path)
+    conn.putrequest(method, f"{scheme}://{netloc}{path}" if proxy else path)
     if headers:
         for header, value in headers.items():
             if isinstance(value, list):
@@ -184,6 +201,12 @@ def http_connect(
                     conn.putheader(header, k)
             else:
                 conn.putheader(header, value)
+
+    if proxy and proxy.username is not None and proxy.password is not None:
+        auth = f"{proxy.username}:{proxy.password}"
+        auth = b64encode(auth.encode("latin-1")).decode()
+        conn.putheader("proxy-authorization", f"Basic {auth}")
+
     conn.endheaders()
     if perfdata is not None:
         headers_end = monotonic_time()

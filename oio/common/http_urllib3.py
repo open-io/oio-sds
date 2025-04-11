@@ -14,9 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
 from urllib.parse import urlparse
 
 from urllib3 import exceptions as urllibexc
+from urllib3 import make_headers
 
 from oio.common.exceptions import (
     EventletUrllibBug,
@@ -55,17 +57,23 @@ URLLIB3_POOLMANAGER_KWARGS = (
     "max_retries",
     "backoff_factor",
     "block",
-    # passed directly to SafePoolManager's init
+    # passed directly to PoolManager's init
     "socket_options",
     "source_address",
     "cert_reqs",
     "ca_certs",
     "cert_file",
     "key_file",
+    "proxy_assert_fingerprint",
+    "proxy_assert_hostname",
+    "proxy_headers",
+    "proxy_ssl_context",
 )
 
+PROXY_URL = os.getenv("OIO_PROXY_URL")
 
-class SafePoolManager(urllib3.PoolManager):
+
+class SafePoolManagerMixin:
     """
     `urllib3.PoolManager` wrapper that filters out keyword arguments
     not recognized by urllib3.
@@ -87,13 +95,21 @@ class SafePoolManager(urllib3.PoolManager):
             raise
 
 
+class SafePoolManager(SafePoolManagerMixin, urllib3.PoolManager):
+    pass
+
+
+class SafeProxyManager(SafePoolManagerMixin, urllib3.ProxyManager):
+    pass
+
+
 def get_pool_manager(
     pool_connections=DEFAULT_NB_POOL_CONNECTIONS,
     pool_maxsize=DEFAULT_POOL_MAXSIZE,
     max_retries=DEFAULT_RETRIES,
     backoff_factor=DEFAULT_BACKOFF,
     block=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Get `urllib3.PoolManager` to manage pools of connections
@@ -114,6 +130,7 @@ def get_pool_manager(
     :type block: `bool`
 
     """
+
     if max_retries == DEFAULT_RETRIES:
         max_retries = urllib3.Retry(0, read=False)
     else:
@@ -123,12 +140,28 @@ def get_pool_manager(
     kw = {k: v for k, v in kwargs.items() if k in URLLIB3_POOLMANAGER_KWARGS[5:]}
     pool_connections = int(pool_connections)
     pool_maxsize = int(pool_maxsize)
+    if PROXY_URL is not None:
+        proxy = urlparse(PROXY_URL)
+        proxy_headers = None
+        if proxy.username is not None and proxy.password is not None:
+            proxy_headers = make_headers(
+                proxy_basic_auth=f"{proxy.username}:{proxy.password}"
+            )
+        return SafeProxyManager(
+            proxy_url=PROXY_URL,
+            proxy_headers=proxy_headers,
+            num_pools=pool_connections,
+            maxsize=pool_maxsize,
+            retries=max_retries,
+            block=block,
+            **kw,
+        )
     return SafePoolManager(
         num_pools=pool_connections,
         maxsize=pool_maxsize,
         retries=max_retries,
         block=block,
-        **kw
+        **kw,
     )
 
 
@@ -137,12 +170,12 @@ def oio_exception_from_httperror(exc, reqid=None, url=None):
     Convert an HTTPError from urllib3 to an OioException,
     and re-raise it.
     """
-    extra_dict = dict()
+    extra_dict = {}
     if reqid:
         extra_dict["reqid"] = reqid
     if url:
         extra_dict["host"] = urlparse(url).netloc
-    extra = ", ".join("%s=%s" % x for x in extra_dict.items())
+    extra = ", ".join(f"{k}={v}" for k, v in extra_dict.items())
     if isinstance(exc, urllibexc.MaxRetryError):
         if isinstance(exc.reason, urllibexc.NewConnectionError):
             reraise(OioNetworkException, exc.reason, extra)

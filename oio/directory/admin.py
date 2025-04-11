@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -77,15 +77,14 @@ def loc_params(func):
 class AdminClient(ProxyClient):
     """Low level database administration client."""
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, conscience_client=None, **kwargs):
         super(AdminClient, self).__init__(conf, request_prefix="/admin", **kwargs)
         kwargs.pop("pool_manager", None)
         kwargs["endpoint"] = self.proxy_scheme + "://" + self.proxy_netloc
         self._kwargs = kwargs
         self._cache_client = None
-        self._conscience_client = None
+        self._conscience_client = conscience_client
         self._forwarder = None
-        self._conscience_client = None
 
     @property
     def cache_client(self):
@@ -127,16 +126,6 @@ class AdminClient(ProxyClient):
                 **self._kwargs,
             )
         return self._forwarder
-
-    @property
-    def conscience_client(self):
-        if self._conscience_client is None:
-            self._conscience_client = ConscienceClient(
-                self.conf,
-                pool_manager=self.pool_manager,
-                **self._kwargs,
-            )
-        return self._conscience_client
 
     @loc_params
     def election_debug(self, params, **kwargs):
@@ -382,7 +371,7 @@ class AdminClient(ProxyClient):
         return body
 
     def _service_get_info(self, svc_type, svc_id, **kwargs):
-        url = self.conscience_client.resolve_service_id(svc_type, svc_id, **kwargs)
+        url = self.conscience.resolve_service_id(svc_type, svc_id, **kwargs)
         _resp, body = self._direct_request("GET", f"http://{url}/info", **kwargs)
         data = body.decode("utf-8")
         info = {}
