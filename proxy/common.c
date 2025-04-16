@@ -274,7 +274,9 @@ context_clue_for_possible_retry(struct client_ctx_s *ctx)
 	// Look for at least one bad redirection
 	gboolean did_bad_redirection = FALSE;
 	for (guint i = 0; i < ctx->count; ++i) {
-		did_bad_redirection |= error_is_bad_redirect(ctx->errorv[i]);
+		did_bad_redirection |=
+				error_is_bad_redirect(ctx->errorv[i])
+				|| error_is_exiting(ctx->errorv[i]);
 	}
 	// Check if the last error is a network error or restart in progress
 	gboolean last_is_network = ctx->errorv[ctx->count - 1]
