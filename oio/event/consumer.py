@@ -26,7 +26,6 @@ from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import ClientException, ExplicitBury, OioNetworkException
 from oio.common.green import Timeout, eventlet, get_watchdog, greenthread
 from oio.common.json import json
-from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.utils import drop_privileges
 from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
@@ -126,13 +125,6 @@ class EventWorker(Worker):
         self.concurrency = 1
         self.graceful_timeout = 1
         self.tube = None
-
-        template = self.conf.get("log_request_format")
-        if template is not None:
-            self.logger_request = get_logger(self.conf, name="request", fmt=template)
-        else:
-            self.logger_request = None
-
         self.statsd = get_statsd(conf=self.conf)
 
     def init(self):
@@ -283,7 +275,7 @@ class EventWorker(Worker):
         if self.logger_request is not None:
             self.logger_request.info("", extra=extra)
 
-        event = extra['event'].replace(".", "-")
+        event = extra["event"].replace(".", "-")
         self.statsd.timing(
             f"openio.event.{extra['tube']}.{event}.{extra['status']}.duration",
             extra["duration"] * 1000,

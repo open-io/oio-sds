@@ -14,7 +14,6 @@
 # License along with this library.
 
 from copy import deepcopy
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from urllib.parse import quote
@@ -35,7 +34,7 @@ from oio.common.exceptions import (
     ServiceBusy,
 )
 from oio.common.kafka import get_retry_delay
-from oio.common.logger import S3AccessLogger
+from oio.common.logger import S3AccessLogger, get_oio_log_context
 from oio.common.utils import oio_versionid_to_str_versionid, request_id
 from oio.container.client import ContainerClient
 from oio.event.evob import (
@@ -44,7 +43,7 @@ from oio.event.evob import (
     EventTypes,
     RetryableEventError,
 )
-from oio.event.filters.base import Filter, FilterContext
+from oio.event.filters.base import Filter
 from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, LifecycleStep
 
 
@@ -150,13 +149,6 @@ class LifecycleActionContext:
         return self.event.data.get("rule_id")
 
 
-@dataclass(init=True)
-class LifecycleFilterContext(FilterContext):
-    action: str = None
-    rule_id: str = None
-    run_id: str = None
-
-
 class LifecycleActions(Filter):
     """Filter to execute Lifecycle actions"""
 
@@ -182,7 +174,7 @@ class LifecycleActions(Filter):
         self.retry_delay = get_retry_delay(self.conf)
         self.limit_listing = int_value(self.conf.get("limit_listing"), 100)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
-        self.metrics = LifecycleMetricTracker(self.conf)
+        self.metrics = LifecycleMetricTracker(self.conf, logger=self.logger)
         self.s3_access_logger = S3AccessLogger(self.conf)
         self.s3_access_requester = self.conf.get(
             "s3_access_requester", DEFAULT_REQUESTER
@@ -205,9 +197,9 @@ class LifecycleActions(Filter):
                     self.mapping_policy_2_storage_classes[name] = storage_class
                 else:
                     auto_storage_policies.append((storage_policy, -1))
-                    self.mapping_policy_2_storage_classes[
-                        storage_policy
-                    ] = storage_class
+                    self.mapping_policy_2_storage_classes[storage_policy] = (
+                        storage_class
+                    )
             auto_storage_policies.sort(key=lambda x: x[1])
             self.stg_classes[storage_class] = auto_storage_policies
 
@@ -252,41 +244,45 @@ class LifecycleActions(Filter):
         )
 
     def _process_transition(self, context: LifecycleActionContext, policy):
-        if context.size is None:
-            raise ValueError("Missing object size for transition object")
-        target_storage_class = context.storage_class
-        policies = self.stg_classes.get(target_storage_class, None)
-        if policies is None:
-            raise ValueError(
-                "No policies for storage_class transition %s", target_storage_class
+        with get_oio_log_context(reuse=True) as log_ctx:
+            if context.size is None:
+                raise ValueError("Missing object size for transition object")
+            target_storage_class = context.storage_class
+            log_ctx.amend(tgt_storage_class=context.storage_class)
+            policies = self.stg_classes.get(target_storage_class, None)
+            if policies is None:
+                raise ValueError(
+                    "No policies for storage_class transition %s", target_storage_class
+                )
+            target_policy = None
+            for pol, size in reversed(policies):
+                if int(context.size) >= size:
+                    target_policy = pol
+                    break
+            if target_policy is None:
+                raise ValueError(
+                    "No policy found for storage class %s ", target_storage_class
+                )
+            if target_policy == policy:
+                raise TransitionSamePolicy()
+            current_storage_class = self.mapping_policy_2_storage_classes[policy]
+            if current_storage_class is None:
+                raise ValueError(
+                    "No storage class found for current policy %s ", policy
+                )
+            log_ctx.amend(src_storage_class=current_storage_class)
+            skip = target_storage_class in self.storage_classes_skip_move.get(
+                current_storage_class, []
             )
-        target_policy = None
-        for pol, size in reversed(policies):
-            if int(context.size) >= size:
-                target_policy = pol
-                break
-        if target_policy is None:
-            raise ValueError(
-                "No policy found for storage class %s ", target_storage_class
+            self.container_client.content_request_transition(
+                account=context.account,
+                reference=context.container,
+                path=context.path,
+                policy=target_policy,
+                version=context.version,
+                reqid=context.reqid,
+                skip_data_move=skip,
             )
-        if target_policy == policy:
-            raise TransitionSamePolicy()
-        current_storage_class = self.mapping_policy_2_storage_classes[policy]
-        if current_storage_class is None:
-            raise ValueError("No storage class found for current policy %s ", policy)
-
-        skip = target_storage_class in self.storage_classes_skip_move.get(
-            current_storage_class, []
-        )
-        self.container_client.content_request_transition(
-            account=context.account,
-            reference=context.container,
-            path=context.path,
-            policy=target_policy,
-            version=context.version,
-            reqid=context.reqid,
-            skip_data_move=skip,
-        )
 
     def _process_abort_mpu(self, context: LifecycleActionContext):
         marker = None
@@ -413,21 +409,6 @@ class LifecycleActions(Filter):
             }
         )
 
-        # Metrics helper
-        self._metrics = LifecycleMetricTracker(self.conf)
-
-    def log_context_from_env(self, env):
-        ctx = super().log_context_from_env(env, LifecycleFilterContext)
-        data = env.get("data", {})
-        ctx.action = data.get("action")
-        ctx.rule_id = data.get("rule_id")
-        ctx.run_id = data.get("run_id")
-        ctx.bucket = data.get("bucket")
-        ctx.account = data.get("main_account", data.get("account"))
-        ctx.path = data.get("object")
-        ctx.version = data.get("version")
-        return ctx
-
     def process(self, env, cb):
         event = Event(env)
 
@@ -550,27 +531,6 @@ class LifecycleActions(Filter):
         )
         self.logger.debug("Processing complete")
         return self.app(env, cb)
-
-    def _update_metrics(self, account, bucket, container, run_id, action):
-        # update metrics
-        step = LifecycleStep.PROCESSED
-        if action in ("Expiration", "NoncurrentVersionExpiration"):
-            action = LifecycleAction.DELETE
-        elif action in ("Transition", "NoncurrentVersionTransition"):
-            action = LifecycleAction.TRANSITION
-        elif action in ("AbortIncompleteMultipartUpload",):
-            action = LifecycleAction.ABORT_MPU
-        else:
-            raise ValueError("Unsopported action  %s for stats ", action)
-        self._metrics.increment_counter(
-            run_id,
-            account,
-            bucket,
-            container,
-            step,
-            action,
-            value=1,
-        )
 
 
 def filter_factory(global_conf, **local_conf):

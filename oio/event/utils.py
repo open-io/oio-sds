@@ -12,41 +12,21 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-from dataclasses import dataclass
 
 
-@dataclass(init=True)
-class MsgContext:
-    request_id: str = None
-    event_type: str = None
-    content: str = None
-    cid: str = None
-    root_cid: str = None
-    container: str = None
-    account: str = None
-    bucket: str = None
-    path: str = None
-    version: str = None
-    action: str = None
-    rule_id: str = None
-    run_id: str = None
-
-    def items(self):
-        return self.__dict__.items()
-
-
-def log_context_from_msg(message, context_class=MsgContext):
-    ctx = context_class()
-    ctx.request_id = message.get("request_id")
-    ctx.event_type = message.get("event")
-    url = message.get("url", {})
+def extract_log_ctx_from_event(event):
+    url = event.get("url", {})
     shard = url.get("shard", {})
-    data = message.get("data", {})
+    data = event.get("data", {})
     match_ctx_name = {
         "user": "container",
         "id": "cid",
         "object": "path",
         "main_account": "account",
+    }
+    ctx = {
+        "request_id": event.get("request_id"),
+        "event_type": event.get("event"),
     }
     for key in (
         "path",
@@ -68,5 +48,5 @@ def log_context_from_msg(message, context_class=MsgContext):
             value = shard.get(key) or url.get(key) or data.get(key)
             if key in match_ctx_name:
                 key = match_ctx_name[key]
-            setattr(ctx, key, value)
+            ctx[key] = value
     return ctx

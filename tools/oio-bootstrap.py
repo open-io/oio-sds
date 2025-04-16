@@ -671,7 +671,7 @@ topic = oio-lifecycle-checkpoint
 redis_host = ${IP}:${REDIS_PORT}
 
 syslog_prefix = OIO,${NS},${SRVTYPE}
-log_level = INFO
+log_level = TRACE
 
 lifecycle_configuration_backup_account = internal
 lifecycle_configuration_backup_bucket = internal_lifecycle
@@ -1434,10 +1434,10 @@ concurrency = 5
 handlers_conf = ${HANDLER_CONF}
 
 log_facility = LOG_LOCAL0
-log_level = INFO
+# TRACE level to show access logs
+log_level = TRACE
 log_address = /dev/log
-log_format = log_type:log	exc_text:%(exc_text)s	exc_filename:%(exc_filename)s	exc_lineno:%(exc_lineno)s	message:%(message)s
-log_request_format = log_type:access	worker_id:%(worker_id)s	request_id:%(request_id)s	status_int:%(status)d	duration_float:%(duration)f	handlers:%(handlers)s	event:%(event_type)s	tube:%(tube)s	topic:%(topic)s	account:%(account)s	container:%(container)s	cid:%(cid)s	bucket:%(bucket)s	object:%(path)s	content_id:%(content)s	version_id:%(version)s
+log_format = LTSV
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 
 broker_endpoint = ${QUEUE_URL}
@@ -1549,7 +1549,6 @@ topic = oio-lifecycle-backup
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended
@@ -1579,7 +1578,6 @@ timeout = 4.5
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended
@@ -1623,7 +1621,6 @@ topic = oio-delayed
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_event_agent_replication_delay_handlers = """
@@ -1636,7 +1633,6 @@ topic = oio-replication-delayed
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_event_agent_rebuilder_handlers = """
@@ -1649,7 +1645,6 @@ topic = oio-rebuild
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_event_agent_lifecycle_checkpoint_handlers = """
@@ -1664,7 +1659,6 @@ checkpoint_prefix = lifecycle
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 """
 
 template_event_agent_lifecycle_actions_handlers = """
@@ -1754,7 +1748,6 @@ timeout_manifest_still_exists = 900
 
 [filter:log]
 use = egg:oio#logger
-log_format=topic:%(topic)s    event:%(event)s
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic.
