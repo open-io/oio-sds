@@ -28,6 +28,7 @@ from oio.event.kafka_consumer import RejectMessage, RetryLater
 
 UPLOAD_ID = "x-object-sysmeta-s3api-upload-id"
 SLO = "x-static-large-object"
+OBJECT_DELETION_CONCURRENCY = 100
 
 
 class MpuPartCleaner(Filter):
@@ -39,7 +40,7 @@ class MpuPartCleaner(Filter):
 
     def init(self):
         self.object_deletion_concurrency = int_value(
-            self.conf.get("object_deletion_concurrency"), 100
+            self.conf.get("object_deletion_concurrency"), OBJECT_DELETION_CONCURRENCY
         )
         self.retry_delay = int_value(self.conf.get("retry_delay"), 60)
         self.retry_delay_remaining_parts = int_value(
@@ -137,6 +138,7 @@ class MpuPartCleaner(Filter):
             # processed. As everything is already deleted, we shouldn't do anything
             # else here.
             return self.app(env, cb)
+        listing_truncated = boolean_value(headers.get("x-oio-list-truncated"))
 
         paths = []
         for obj in content_list["objects"]:
@@ -155,13 +157,12 @@ class MpuPartCleaner(Filter):
             # Only happens if the event is replayed but has already been processed.
             return self.app(env, cb)
 
-        headers = make_headers(user_agent=event.origin)
         deleted = self.container_client.content_delete_many(
             account=account,
             reference=segment_name,
             paths=paths,
             reqid=reqid,
-            headers=headers,
+            headers=make_headers(user_agent=event.origin),
         )
         # Make sure all parts are deleted.
         for obj_name, status in deleted:
@@ -174,8 +175,7 @@ class MpuPartCleaner(Filter):
                 )
                 raise RetryLater(delay=self.retry_delay)
 
-        truncated = boolean_value(headers.get("x-oio-list-truncated"))
-        if truncated:
+        if listing_truncated:
             # "max.poll.interval.ms" is defined to give consumers time to consume
             # their events and  this value should not be too high. If there is some
             # parts remaining, the event will be retried until all parts are deleted.
