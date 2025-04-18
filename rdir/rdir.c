@@ -669,8 +669,8 @@ _db_vol_push_many(const char *volid, gboolean autocreate, GString **array)
 
 struct _listing_req_s {
 	const gchar *marker;
-	gint64 max;
 	const gchar *prefix;
+	gint64 limit;
 	gboolean rebuild;
 };
 
@@ -698,7 +698,8 @@ extract_optional_listing_fields(struct req_args_s *args,
 			*jrebuild = NULL;
 
 	if (jbody) {
-		// TODO(adu): Delete when it will no longer be used
+		// TODO(FVE): deprecate listing params in the body.
+		// A GET request should not receive a body.
 		if (!json_object_is_type(jbody, json_type_object))
 			return BADREQ("null body");
 		struct oio_ext_json_mapping_s map[] = {
@@ -716,18 +717,22 @@ extract_optional_listing_fields(struct req_args_s *args,
 		listing_req->marker = OPT("marker");
 	else if (jstart)
 		listing_req->marker = json_object_get_string(jstart);
-	if (OPT("max"))
-		listing_req->max = g_ascii_strtoll(OPT("max"), NULL, 10);
+
+	const gchar *limit_param = OPT("max")?: OPT("limit");
+	if (limit_param)
+		listing_req->limit = g_ascii_strtoll(limit_param, NULL, 10);
 	else if (jlimit)
-		listing_req->max = json_object_get_int64(jlimit);
-	if (listing_req->max <= 0)
-		listing_req->max = RDIR_LISTING_DEFAULT_LIMIT;
+		listing_req->limit = json_object_get_int64(jlimit);
+	if (listing_req->limit <= 0)
+		listing_req->limit = RDIR_LISTING_DEFAULT_LIMIT;
 	else
-		listing_req->max = MIN(RDIR_LISTING_MAX_LIMIT, listing_req->max);
+		listing_req->limit = MIN(RDIR_LISTING_MAX_LIMIT, listing_req->limit);
+
 	if (OPT("prefix"))
 		listing_req->prefix = OPT("prefix");
 	else if (jcid)
 		listing_req->prefix = json_object_get_string(jcid);
+
 	if (OPT("rebuild"))
 		listing_req->rebuild = oio_str_parse_bool(OPT("rebuild"), FALSE);
 	else if (jrebuild)
@@ -735,7 +740,7 @@ extract_optional_listing_fields(struct req_args_s *args,
 
 	args->rp->access_tail(
 			"marker:%s\tmax:%"G_GINT64_FORMAT"\tprefix:%s\trebuild:%s",
-			listing_req->marker, listing_req->max,
+			listing_req->marker, listing_req->limit,
 			listing_req->prefix, listing_req->rebuild? "true":"false");
 	return NULL;
 }
@@ -833,7 +838,7 @@ _db_vol_listing(const char *volid, struct _listing_req_s *listing_req,
 				&& rec.mtime > incident_date)
 			continue;
 
-		if (listing_req->max > 0 && nb_chunks >= listing_req->max) {
+		if (listing_req->limit > 0 && nb_chunks >= listing_req->limit) {
 			listing_resp->truncated = TRUE;
 
 			leveldb_iter_prev(it);
@@ -1491,13 +1496,14 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 }
 
 // RDIR{{
-// POST /v1/rdir/fetch?vol=<volume ip>%3A<volume port>
+// GET /v1/rdir/fetch?vol=<volume ip>%3A<volume port>&limit=<limit>&marker=<marker>&prefix=<prefix>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Fetch the target volume.
+// Fetch records of the target volume.
+// "prefix" allows to filter on a container ID.
 //
 // .. code-block:: http
 //
-//    POST /v1/rdir/fetch?vol=127.0.0.1%3A6020 HTTP/1.1
+//    GET /v1/rdir/fetch?vol=127.0.0.1%3A6020 HTTP/1.1
 //    Host: 127.0.0.1:15
 //    User-Agent: curl/7.47.0
 //    Accept: */*
@@ -1990,17 +1996,6 @@ struct rdir_meta2_record_s
 };
 
 /*
- * A structure that packs the parameters for a fetch request.
- */
-struct rdir_meta2_record_subset_s
-{
-	const char *prefix;
-	const char *marker;
-	gint64 limit;
-};
-
-
-/*
  * Extracts data from a JSON string to initialize an rdir_meta2_record_s
  */
 static GError *
@@ -2083,7 +2078,7 @@ _meta2_record_free(struct rdir_meta2_record_s *rec)
  * the JSON object.
  */
 static GError *
-_meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
+_meta2_record_subset_extract(struct _listing_req_s *subset,
 		struct json_object *jrecord)
 {
 	struct json_object *jprefix, *jmarker, *jlimit;
@@ -2159,7 +2154,7 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
 }
 
 /*
- * Given an rdir_meta2_record_subset_s, this functions iterates through
+ * Given a _listing_req_s, this functions iterates through
  * the LevelDB database to count records.
  *
  * If prefix is NULL, then no particular seeking is done before the iteration,
@@ -2169,7 +2164,7 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
  * starting with the prefix.
  */
 static GError *
-_meta2_db_count(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
+_meta2_db_count(const gchar *meta2_address, struct _listing_req_s *subset,
 				gint64 *count)
 {
 	GError *err = NULL;
@@ -2222,7 +2217,7 @@ _meta2_db_count(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 }
 
 /*
- * Given an rdir_meta2_record_subset_s, this functions iterates through
+ * Given a _listing_req_s, this functions iterates through
  * the LevelDB database to return the wanted subset.
  *
  * If prefix is NULL, then no particular seeking is done before the iteration,
@@ -2235,7 +2230,7 @@ _meta2_db_count(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
  * the prefix in the container URL.
  */
 static GError *
-_meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
+_meta2_db_fetch(const gchar *meta2_address, struct _listing_req_s *subset,
 				GString *json_response, gboolean *truncated)
 {
 	GError *err = NULL;
@@ -2367,7 +2362,7 @@ _meta2_db_delete_many(const char *volid, GString **array)
 }
 
 // RDIR{{
-// POST /v1/rdir/meta2/fetch?vol=<volume ip>%3A<volume port>
+// GET /v1/rdir/meta2/fetch?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Fetch specific meta2 records, or a range of records.
@@ -2397,18 +2392,10 @@ _meta2_db_delete_many(const char *volid, GString **array)
 //
 // .. code-block:: http
 //
-//    POST /v1/rdir/meta2/fetch?vol=127.0.0.1%3A6020 HTTP/1.1
+//    GET /v1/rdir/meta2/fetch?vol=127.0.0.1%3A6020&prefix=&marker=&limit= HTTP/1.1
 //    Host: 127.0.0.1:15
 //    User-Agent: curl/7.47.0
 //    Accept: */*
-//
-// .. code-block:: json
-//
-//    {
-//      "prefix":"<container url prefix>",
-//      "marker":"<last entry of the previous response>",
-//      "limit":"<number of entries to return>"
-//    }
 //
 //
 // Standard response:
@@ -2431,14 +2418,19 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 
 	GError *err = NULL;
 
-	struct rdir_meta2_record_subset_s subset = {
-		NULL, NULL, RDIR_LISTING_DEFAULT_LIMIT
+	struct _listing_req_s subset = {
+		NULL, NULL, RDIR_LISTING_DEFAULT_LIMIT, FALSE
 	};
 	if (jbody) {
+		// TODO(FVE): deprecate this once all Python clients are up-to-date
 		err = _meta2_record_subset_extract(&subset, jbody);
-		if (err)
-			return _reply_format_error(args->rp, err);
+	} else {
+		// Purposely pass a NULL body: we want to extract query parameters
+		err = extract_optional_listing_fields(args, NULL, &subset);
 	}
+	if (err)
+		return _reply_format_error(args->rp, err);
+
 	args->rp->access_tail(
 			"marker:%s\tmax:%"G_GINT64_FORMAT"\tprefix:%s",
 			subset.marker, subset.limit, subset.prefix);
@@ -2461,7 +2453,7 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 }
 
 // RDIR{{
-// POST /v1/rdir/meta2/count?vol=<volume ip>%3A<volume port>
+// GET /v1/rdir/meta2/count?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Count the number of records for a specific meta2.
@@ -2475,16 +2467,10 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 //
 // .. code-block:: http
 //
-//    POST /v1/rdir/meta2/count?vol=127.0.0.1%3A6020 HTTP/1.1
+//    GET /v1/rdir/meta2/count?vol=127.0.0.1%3A6020 HTTP/1.1
 //    Host: 127.0.0.1:15
 //    User-Agent: curl/7.47.0
 //    Accept: */*
-//
-// .. code-block:: json
-//
-//    {
-//      "prefix":"<container url prefix>",
-//    }
 //
 //
 // Standard response:
@@ -2515,14 +2501,19 @@ _route_meta2_count(struct req_args_s *args, struct json_object *jbody,
 
 	GError *err = NULL;
 
-	struct rdir_meta2_record_subset_s subset = {
-		NULL, NULL, RDIR_LISTING_DEFAULT_LIMIT
+	struct _listing_req_s subset = {
+		NULL, NULL, RDIR_LISTING_DEFAULT_LIMIT, FALSE
 	};
 	if (jbody) {
+		// TODO(FVE): deprecate this once all Python clients are up-to-date
 		err = _meta2_record_subset_extract(&subset, jbody);
-		if (err)
-			return _reply_format_error(args->rp, err);
+	} else {
+		// Purposely pass a NULL body: we want to extract query parameters
+		err = extract_optional_listing_fields(args, NULL, &subset);
 	}
+	if (err)
+		return _reply_format_error(args->rp, err);
+
 	args->rp->access_tail(
 			"marker:%s\tmax:%"G_GINT64_FORMAT"\tprefix:%s",
 			subset.marker, subset.limit, subset.prefix);
@@ -2940,7 +2931,7 @@ _route_srv_status(struct req_args_s *args)
 
 			/* Compute the number of databases per meta2 service. This is
 			 * costly, therefore we do it only if "details" is true. */
-			struct rdir_meta2_record_subset_s subset = {0};
+			struct _listing_req_s subset = {0};
 			for (gchar **cur = m2_volumes; details && cur && *cur; cur++) {
 				gint64 db_count = 0;  // Number of meta2 databases
 				err = _meta2_db_count(*cur, &subset, &db_count);

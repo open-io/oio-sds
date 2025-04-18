@@ -924,19 +924,19 @@ class RdirClient(HttpApi):
         :keyword old_format: yield (container, content, chunk and value)
             instead of just (container, chunk and value).
         """
-        req_body = {"limit": limit}
+        params = {"max": limit}
         if rebuild:
-            req_body["rebuild"] = True
+            params["rebuild"] = True
         if container_id:
-            req_body["container_id"] = container_id
+            params["prefix"] = container_id
         if start_after:
-            req_body["start_after"] = start_after
+            params["marker"] = start_after
 
         while True:
             for i in range(max_attempts):
                 try:
                     resp, resp_body = self._rdir_request(
-                        volume, "GET", "fetch", json=req_body, **kwargs
+                        volume, "GET", "fetch", params=params, **kwargs
                     )
                     break
                 except OioNetworkException:
@@ -953,11 +953,11 @@ class RdirClient(HttpApi):
                 if not resp_body:
                     break
                 truncated = True
-                req_body["start_after"] = resp_body[-1][0]
+                params["marker"] = resp_body[-1][0]
             else:
                 truncated = true_value(truncated)
                 if truncated:
-                    req_body["start_after"] = resp.headers[
+                    params["marker"] = resp.headers[
                         HEADER_PREFIX + "list-marker"
                     ]
 
@@ -1291,7 +1291,6 @@ class RdirClient(HttpApi):
         if prefix:
             params["prefix"] = prefix
         if marker:
-            # FIXME(ABO): Validate this one.
             params["marker"] = marker
         if limit:
             params["limit"] = limit
@@ -1299,7 +1298,7 @@ class RdirClient(HttpApi):
             volume=volume_id,
             method="GET",
             action="fetch",
-            json=params,
+            params=params,
             service_type="meta2",
             **kwargs,
         )
