@@ -26,22 +26,30 @@ jobs:
           set -x
           set -e
           . .cds/versions
-          # dev or prod release
-          export VERSION=1.0-focal
-          PACKAGE=oio-sds
+          if [[ "{{ .git.branch }}" =~ ^dev/[a-z0-9]+/feature_ || "{{ .git.branch }}" =~ ^feature/ ]]; then
+            export VERSION=1.${CDS_VERSION}-focal
+            PACKAGE="{{ .git.branch }}"
+            PACKAGE="${PACKAGE#dev/*/}" # remove dev/login*/ prefix
+            PACKAGE="${PACKAGE//[^a-zA-Z0-9]/-}" # sanitize package name
+            export PACKAGE="oio-sds-${PACKAGE}"
+          else
+            # dev or prod release
+            export VERSION=1.0-focal
+            PACKAGE=oio-sds
+            if [[ "{{ .git.tag }}" =~  ^[0-9]+\. ]]; then
+              PACKAGE=${PACKAGE}-{{ .git.tag }}
+            else
+              PACKAGE=${PACKAGE}-$(date +%Y%m%d%H%M).git{{ .git.hash.short }}
+            fi
+            if [ "{{ .git.branch }}" = "master" ]; then
+              export OBSTO_BUILD="ovh${CDS_VERSION}"
+            else
+              export OBSTO_BUILD="ovhdev${CDS_VERSION}"
+            fi
+            export PACKAGE=${PACKAGE}-${OBSTO_BUILD}
+          fi
           export REPO_SUBREPO=main
           export REPO_LIMIT=0
-          if [[ "{{ .git.tag }}" =~  ^[0-9]+\. ]]; then
-            PACKAGE=${PACKAGE}-{{ .git.tag }}
-          else
-            PACKAGE=${PACKAGE}-$(date +%Y%m%d%H%M).git{{ .git.hash.short }}
-          fi
-          if [ "{{ .git.branch }}" = "master" ]; then
-            export OBSTO_BUILD="ovh${CDS_VERSION}"
-          else
-            export OBSTO_BUILD="ovhdev${CDS_VERSION}"
-          fi
-          export PACKAGE=${PACKAGE}-${OBSTO_BUILD}
           export REPO_URL="https://{{ .cds.proj.drive_mirrors_objectstorage_openio_user }}:{{ .cds.proj.drive_mirrors_objectstorage_openio_password }}@{{ .cds.proj.drive_mirrors_hostname }}"
           make -f /external-packages/ubuntu/focal/Makefile.common install-apt-repo
           make -f /external-packages/ubuntu/focal/Makefile.common deb_changelog
