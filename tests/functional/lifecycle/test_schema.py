@@ -236,3 +236,82 @@ class TestLifecycleSchema(BaseTestCase):
                 "_non_current_transition_rules": [],
             },
         )
+
+    def test_transition_minimum_object_size(self):
+        self.container_lc.load(
+            {
+                "Rules": {
+                    "0": {
+                        "ID": "Rule-1",
+                        "Status": "Enabled",
+                        "Filter": {
+                            "Prefix": "foo",
+                        },
+                        "AbortIncompleteMultipartUpload": {
+                            "0": {"DaysAfterInitiation": 1},
+                        },
+                    }
+                },
+                "_schema_version": 1,
+                "_expiration_rules": {"days": [], "date": []},
+                "_transition_rules": {"days": [], "date": []},
+                "_delete_marker_rules": [],
+                "_abort_mpu_rules": [],
+                "_non_current_expiration_rules": [],
+                "_non_current_transition_rules": [],
+                "_transition_default_minimum_object_size": "all_storage_classes_128K",
+            }
+        )
+
+        self.container_lc.load(
+            {
+                "Rules": {
+                    "0": {
+                        "ID": "Rule-1",
+                        "Status": "Enabled",
+                        "Filter": {
+                            "Prefix": "foo",
+                        },
+                        "AbortIncompleteMultipartUpload": {
+                            "0": {"DaysAfterInitiation": 1},
+                        },
+                    }
+                },
+                "_schema_version": 1,
+                "_expiration_rules": {"days": [], "date": []},
+                "_transition_rules": {"days": [], "date": []},
+                "_delete_marker_rules": [],
+                "_abort_mpu_rules": [],
+                "_non_current_expiration_rules": [],
+                "_non_current_transition_rules": [],
+                "_transition_default_minimum_object_size": "varies_by_storage_class",
+            }
+        )
+
+    def test_transition_minimum_object_size_invalid(self):
+        self.assertRaises(
+            LifecycleConfigurationInvalid,
+            self.container_lc.load,
+            {
+                "Rules": {
+                    "0": {
+                        "ID": "Rule-1",
+                        "Status": "Enabled",
+                        "Filter": {
+                            "Prefix": "foo",
+                        },
+                        "AbortIncompleteMultipartUpload": {
+                            "0": {"DaysAfterInitiation": 1},
+                        },
+                    }
+                },
+                "_schema_version": 1,
+                "_expiration_rules": {"days": [], "date": []},
+                "_transition_rules": {"days": [], "date": []},
+                "_delete_marker_rules": [],
+                "_abort_mpu_rules": [],
+                "_non_current_expiration_rules": [],
+                "_non_current_transition_rules": [],
+                "_transition_default_minimum_object_size": "foo",
+            },
+        )

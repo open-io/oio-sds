@@ -14,6 +14,9 @@
         "_schema_version": {
             "type": "integer"
         },
+        "_transition_default_minimum_object_size": {
+            "$ref": "#/$defs/transition-minimum-object-size"
+        },
         "_expiration_rules": {
             "type": "object",
             "properties": {
@@ -144,6 +147,13 @@
                 "GLACIER_IR",
                 "GLACIER",
                 "DEEP_ARCHIVE"
+            ]
+        },
+        "transition-minimum-object-size": {
+            "type": "string",
+            "enum": [
+                "all_storage_classes_128K",
+                "varies_by_storage_class"
             ]
         },
         "rule": {
