@@ -8,7 +8,7 @@ export DEB_BUILD_OPTIONS += nocheck
 DESTDIR=$(CURDIR)/debian/${PACKAGE}
 PREFIX=/opt/${PACKAGE}
 # Only one Python path is expected
-PYTHON_PATH=$(shell readlink -f /opt/python-*)
+PYTHON_PATH=$(shell readlink -f /opt/python-* | sort -V | tail -n 1)
 # Only one Zookeeper path is expected
 ZOOKEEPER_PATH=$(shell readlink -f /opt/obsto-zookeeper-*)
 # Only one Golang path is expected
