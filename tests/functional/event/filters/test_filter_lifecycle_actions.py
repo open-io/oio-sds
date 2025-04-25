@@ -15,8 +15,9 @@
 
 import json
 import time
+from datetime import datetime, timedelta, timezone
 
-from oio.common.constants import MULTIUPLOAD_SUFFIX
+from oio.common.constants import M2_PROP_BUCKET_NAME, MULTIUPLOAD_SUFFIX
 from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
@@ -33,36 +34,18 @@ class _App:
         self.cb = cb
 
 
-class TestFilterLifecycleActions(BaseTestCase):
+class TestFilterLifecycleActionsCommon(BaseTestCase):
     def setUp(self):
         super().setUp()
-        # Create container
-        self.container = "lifecycle-actions-"
-        self.storage.container.container_create(self.account, self.container)
-        self.clean_later(self.container)
-        self.app = _App(
-            {
-                "api": self.storage,
-                "statsd_client": get_statsd(),
-            }
-        )
-        self.container_client = self.storage.container
-        syst = self.container_client.container_get_properties(
-            self.account, self.container
-        )["system"]
-        self.container_id = syst["sys.name"].split(".", 1)[0]
-        self.conf["redis_host"] = "127.0.0.1:6379"
-        self.conf["storage_class.STANDARD"] = "EC21,TWOCOPIES:0,EC21:100000"
-        self.conf["storage_class.STANDARD_IA"] = "SINGLE"
-        self.conf["skip_data_move_storage_classes"] = "ONEZONE_IA"
 
-    def _create_object(self):
+    def _create_object(self, properties=None):
         _, _, _, self.obj_meta = self.storage.object_create_ext(
             account=self.account,
             container=self.container,
             obj_name=self.object,
             data="test",
             policy="TWOCOPIES",
+            properties=properties,
         )
 
     def _create_event(
@@ -70,6 +53,7 @@ class TestFilterLifecycleActions(BaseTestCase):
         obj_name,
         reqid=None,
         container=None,
+        action="Transition",
     ):
         if not container:
             container = self.container
@@ -98,12 +82,37 @@ class TestFilterLifecycleActions(BaseTestCase):
             "version": self.obj_meta["version"],
             "mtime": self.obj_meta["mtime"],
             "has_bucket_logging": False,
-            "action": "Transition",
-            "storage_class": "STANDARD_IA",
             "rule_id": "rule-1",
         }
+        event["data"]["action"] = action
+        if action in ("Transition",):
+            event["data"]["storage_class"] = "STANDARD_IA"
 
         return event
+
+
+class TestFilterLifecycleActions(TestFilterLifecycleActionsCommon):
+    def setUp(self):
+        super().setUp()
+        # Create container
+        self.container = "lifecycle-actions-"
+        self.storage.container.container_create(self.account, self.container)
+        self.clean_later(self.container)
+        self.app = _App(
+            {
+                "api": self.storage,
+                "statsd_client": get_statsd(),
+            }
+        )
+        self.container_client = self.storage.container
+        syst = self.container_client.container_get_properties(
+            self.account, self.container
+        )["system"]
+        self.container_id = syst["sys.name"].split(".", 1)[0]
+        self.conf["redis_host"] = "127.0.0.1:6379"
+        self.conf["storage_class.STANDARD"] = "EC21,TWOCOPIES:0,EC21:100000"
+        self.conf["storage_class.STANDARD_IA"] = "SINGLE"
+        self.conf["skip_data_move_storage_classes"] = "ONEZONE_IA"
 
     def _create_mpu(self, nb_parts=1, size=1):
         upload_id = random_str(48)
@@ -159,7 +168,7 @@ class TestFilterLifecycleActions(BaseTestCase):
         evt = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.CONTENT_TRANSITIONED),
-            data_fields={"target_policy":"SINGLE"}
+            data_fields={"target_policy": "SINGLE"},
         )
         self.assertIsNotNone(evt)
 
@@ -186,7 +195,7 @@ class TestFilterLifecycleActions(BaseTestCase):
             reqid=reqid,
             types=(EventTypes.CONTENT_TRANSITIONED),
             fields={"path": self.object},
-            data_fields={"target_policy":"SINGLE"}
+            data_fields={"target_policy": "SINGLE"},
         )
         self.assertIsNotNone(evt)
 
@@ -202,7 +211,7 @@ class TestFilterLifecycleActions(BaseTestCase):
                 reqid=reqid,
                 types=(EventTypes.CONTENT_TRANSITIONED),
                 fields={"path": el["name"]},
-                data_fields={"target_policy":"SINGLE"}
+                data_fields={"target_policy": "SINGLE"},
             )
             self.assertIsNotNone(evt)
             props = self.storage.object_get_properties(
@@ -221,10 +230,13 @@ class TestFilterLifecycleActions(BaseTestCase):
             reqid=reqid,
         )
 
-        self.lifeycle_actions = LifecycleActions(app=self.app, conf={
-            **self.conf,
-            "skip_data_move_storage_class.STANDARD": "GLACIER,STANDARD_IA"
-        })
+        self.lifeycle_actions = LifecycleActions(
+            app=self.app,
+            conf={
+                **self.conf,
+                "skip_data_move_storage_class.STANDARD": "GLACIER,STANDARD_IA",
+            },
+        )
         self.lifeycle_actions.process(event, None)
 
         props = self.storage.object_get_properties(
@@ -236,11 +248,77 @@ class TestFilterLifecycleActions(BaseTestCase):
         self.assertEqual("SINGLE", props["target_policy"])
 
         evt = self.wait_for_kafka_event(
-                reqid=reqid,
-                types=(EventTypes.CONTENT_TRANSITIONED),
-                fields={"path": self.object},
-                data_fields={"target_policy":"SINGLE"},
-                timeout=5
-
-            )
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED),
+            fields={"path": self.object},
+            data_fields={"target_policy": "SINGLE"},
+            timeout=5,
+        )
         self.assertIsNone(evt)
+
+
+class TestFilterLifecycleActionsLocked(TestFilterLifecycleActionsCommon):
+    def setUp(self):
+        super().setUp()
+        # Create container
+        self.container = "lifecycle-action-expiration-locked"
+        self.system = {
+            M2_PROP_BUCKET_NAME: self.container,
+            "sys.m2.bucket.objectlock.enabled": "1",
+        }
+
+        self.container = "lifecycle-actions-"
+        self.storage.container.container_create(
+            self.account, self.container, system=self.system
+        )
+        self.clean_later(self.container)
+        self.app = _App(
+            {
+                "api": self.storage,
+                "statsd_client": get_statsd(),
+            }
+        )
+        self.container_client = self.storage.container
+        syst = self.container_client.container_get_properties(
+            self.account, self.container
+        )["system"]
+        self.container_id = syst["sys.name"].split(".", 1)[0]
+        self.conf["redis_host"] = "127.0.0.1:6379"
+
+
+    def _create_object(self, properties=None):
+        _, _, _, self.obj_meta = self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=self.object,
+            data="test",
+            policy="TWOCOPIES",
+            properties=properties,
+        )
+
+    def test_expiration_locked(self):
+        self.object = "exp-locked/obj-" + random_str(6)
+        reqid = request_id("lifecycle-actions-")
+        now = datetime.now(timezone.utc) + timedelta(days=20)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        objects_properties = {
+            "x-object-sysmeta-s3api-retention-retainuntildate": now_str,
+            "x-object-sysmeta-s3api-retention-mode": "GOVERNANCE",
+        }
+        self._create_object(properties=objects_properties)
+        event = self._create_event(
+            self.object,
+            reqid=reqid,
+            action="Expiration",
+        )
+
+        self.lifecycle_actions = LifecycleActions(app=self.app, conf=self.conf)
+        self.lifecycle_actions.process(event, None)
+
+        props = self.storage.object_get_properties(
+            self.account, self.container, self.object, version=self.obj_meta["version"]
+        )
+        self.assertIn(
+            "x-object-sysmeta-s3api-retention-retainuntildate",
+            props.get("properties", {}),
+        )

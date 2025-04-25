@@ -28,6 +28,7 @@ from oio.common.constants import (
 )
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import (
+    Forbidden,
     NotFound,
     OioNetworkException,
     OioTimeout,
@@ -502,7 +503,12 @@ class LifecycleActions(Filter):
                 context.version,
                 context.container,
             )
-        except (DeleteMarkerExists, RecentVersionExists, TransitionSamePolicy):
+        except (
+            DeleteMarkerExists,
+            Forbidden,
+            RecentVersionExists,
+            TransitionSamePolicy,
+        ):
             self.metrics.increment_counter(
                 context.run_id,
                 context.account,
@@ -511,6 +517,7 @@ class LifecycleActions(Filter):
                 LifecycleStep.SKIPPED,
                 action_type,
             )
+            return self.app(env, cb)
         except (ServiceBusy, OioNetworkException, OioTimeout) as exc:
             resp = RetryableEventError(
                 event=event,
