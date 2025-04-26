@@ -482,7 +482,6 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 {
 	/* Url will can be altered (if <chunks> is not NULL), so let's use a copy */
 	struct oio_url_s *object_url = oio_url_dup(url);
-	gchar *policy = NULL;
 	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
 
 	g_string_append_static (gstr, "\"objects\":[");
@@ -521,13 +520,19 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 		OIO_JSON_append_gba(gstr, "content", ALIASES_get_content(a));
 
 		if (h) {
+			gchar* policy = NULL;
+			gchar* target_policy = NULL;
+			m2v2_policy_decode(
+				CONTENTS_HEADERS_get_policy(h), &policy, &target_policy);
 			g_string_append_c(gstr, ',');
-			OIO_JSON_append_gstr(gstr, "policy",
-					CONTENTS_HEADERS_get_policy(h));
+			OIO_JSON_append_str(gstr, "policy", policy);
 			g_string_append_c(gstr, ',');
-			OIO_JSON_append_gstr(gstr, "target-policy",
-					CONTENTS_HEADERS_get_policy(h));
-			g_string_append_c(gstr, ',');
+			if (g_strcmp0(policy, target_policy) != 0) {
+				OIO_JSON_append_str(gstr, "target-policy", target_policy);
+				g_string_append_c(gstr, ',');
+			}
+			g_free(policy);
+			g_free(target_policy);
 			OIO_JSON_append_gstr(gstr, "chunk-method",
 					CONTENTS_HEADERS_get_chunk_method(h));
 			g_string_append_c(gstr, ',');
@@ -571,6 +576,7 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 		}
 
 		if (chunk_list) {
+			gchar* policy = NULL;
 			/* PATH and VERSION need to be set to use to be able to
 			 * call <m2v2_extend_chunk_url> */
 			oio_url_set(object_url, OIOURL_PATH, ALIASES_get_alias(a)->str);
@@ -579,6 +585,7 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 					ALIASES_get_version(a));
 			oio_url_set(object_url, OIOURL_VERSION, strver);
 			if (h) {
+
 				m2v2_policy_decode(CONTENTS_HEADERS_get_policy(h), &policy, NULL);
 			} else {
 				/* No header, no possibility to compute chunks */
@@ -602,12 +609,11 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 				_serialize_chunk(bchunk, gstr, _loca);
 			}
 			g_string_append_c(gstr, ']');
+			g_free(policy);
 		}
 		g_string_append_c(gstr, '}');
 	}
 	g_string_append_c (gstr, ']');
-
-	g_free(policy);
 
 	oio_url_clean(object_url);
 }
@@ -3216,7 +3222,7 @@ action_m2_container_sharding_lock(struct req_args_s *args,
 		struct json_object *j UNUSED)
 {
 	GError *err = NULL;
-	
+
 	PACKER_VOID(_pack) {
 		return m2v2_remote_pack_LOCK_SHARDING(args->url, DL());
 	};

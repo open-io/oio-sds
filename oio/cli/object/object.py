@@ -854,6 +854,7 @@ class ListObject(ContainerCommandMixin, Lister):
                             obj["mime_type"],
                             mtime,
                             obj["policy"],
+                            obj.get("target-policy", "n/a"),
                             obj["chunk_method"],
                             _format_props(obj.get("properties", {})),
                         )
@@ -873,6 +874,7 @@ class ListObject(ContainerCommandMixin, Lister):
                 "Content-Type",
                 "Last-Modified",
                 "Policy",
+                "Target-Policy",
                 "Chunk-Method",
                 "Properties",
             )
