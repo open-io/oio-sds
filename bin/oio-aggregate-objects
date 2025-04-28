@@ -1,0 +1,212 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2025 OVH SAS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import argparse
+import os
+import uuid
+
+from oio.api.object_storage import ObjectStorageApi
+from oio.cli import get_logger_from_args, make_logger_args_parser
+from oio.common.exceptions import NoSuchAccount, NoSuchContainer, NotFound
+from oio.common.utils import depaginate, request_id
+
+NB_JSON_PARTS = 100
+TMP_FILE = "/tmp/aggregate-objects.json"
+
+
+class ObjectAggregate:
+    """
+    Aggregate json objects, json.part objects are small objects generated
+    by lifecycle backup.
+    This tool aims to aggregate a given number of these objects into bigger one
+    """
+
+    def __init__(self, args, logger):
+        self.api = ObjectStorageApi(args.namespace, logger=logger)
+        self.logger = logger
+        self._object_marker = None
+        self.account = args.account
+        self.container = args.container
+        self.input_prefix = args.input_prefix
+        self.output_prefix = args.output_prefix
+
+    @property
+    def _request_id(self):
+        return request_id("object-aggretate")
+
+    @property
+    def progress(self):
+        """Format the current progression marker"""
+        return f"{self._object_marker or ''}"
+
+    def _extract_info(self, obj_name):
+        """get some info from object name"""
+        name = obj_name.lstrip(self.input_prefix)
+        bucket, days, suffixed_uuid = name.rsplit("_", 2)
+        return (bucket, days, suffixed_uuid)
+
+    def _aggregate_parts(self, candidates, bucket, day):
+        """
+        Fetch data, store it into local file, push new object and remove old parts
+        """
+        # Remove temporary son file if exists
+        try:
+            os.remove(TMP_FILE)
+        except OSError:
+            pass
+
+        # load json parts
+        for el in candidates:
+            _, stream = self.api.object_fetch(
+                self.account,
+                self.container,
+                el,
+                reqid=self._request_id,
+            )
+
+            for chunk in stream:
+                with open(TMP_FILE, "a") as file:
+                    file.write(chunk.decode("UTF-8"))
+        # push new object
+        obj_id = uuid.uuid4().hex
+        aggregated_object = f"{self.output_prefix}{bucket}_{day}_{obj_id}.json"
+        try:
+            self.api.object_create(
+                self.account,
+                self.container,
+                obj_name=aggregated_object,
+                file_or_path=TMP_FILE,
+            )
+        except Exception as exc:
+            self.logger.error(
+                "Failed to create json object '%s', reason: %s", aggregated_object, exc
+            )
+            raise
+
+        # remove old parts
+        for el in candidates:
+            self.api.object_delete(
+                self.account,
+                self.container,
+                el,
+            )
+
+    def process(self):
+        """Process json parts"""
+        reqid = self._request_id
+
+        current_bucket = None
+        current_day = None
+        process_candidates = False
+        candidates = []
+
+        try:
+            obj_gen = depaginate(
+                self.api.object_list,
+                listing_key=lambda x: x["objects"],
+                prefix=self.input_prefix,
+                marker_key=lambda x: x.get("next_marker"),
+                truncated_key=lambda x: x["truncated"],
+                account=self.account,
+                container=self.container,
+                properties=False,
+                reqid=reqid,
+            )
+            for obj in obj_gen:
+                (bucket, day, _suffix) = self._extract_info(obj["name"])
+                if not _suffix.endswith("json.part"):
+                    continue
+
+                if current_bucket is None:
+                    current_bucket = bucket
+                    current_day = day
+                elif (current_bucket != bucket) or (current_day != day):
+                    process_candidates = True
+                    current_bucket = bucket
+                    current_day = day
+                else:
+                    if len(candidates) > NB_JSON_PARTS:
+                        process_candidates = True
+                if process_candidates:
+                    self._aggregate_parts(candidates, current_bucket, current_day)
+                    candidates.clear()
+                candidates.append(obj["name"])
+                self._object_marker = obj
+
+            if candidates:
+                self._aggregate_parts(candidates, current_bucket, current_day)
+
+        except (NoSuchAccount, NoSuchContainer, NotFound) as exc:
+            self.logger.error(
+                "Unable to process container account=%s, container=%s, reason: %s",
+                self.account,
+                self.container,
+                exc,
+            )
+
+
+def make_arg_parser():
+    log_parser = make_logger_args_parser()
+    descr = ""
+
+    parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
+    parser.add_argument("namespace", help="Namespace")
+    parser.add_argument(
+        "--account",
+        "-a",
+        help="Account to process with json objects to aggregate",
+        default="internal",
+    )
+    parser.add_argument(
+        "--container",
+        "-c",
+        help="Container to process with json objects to aggregate",
+        default="internal_lifecycle",
+    )
+
+    parser.add_argument(
+        "--input_prefix",
+        "-i",
+        help="prefix of objects to aggregate",
+        default="/backup/",
+    )
+    parser.add_argument(
+        "--output_prefix",
+        "-o",
+        help="prefix of objects to aggregate",
+        default="/backup-aggregated/",
+    )
+    return parser
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    logger = get_logger_from_args(args)
+    aggregate = ObjectAggregate(args, logger)
+    try:
+        aggregate.process()
+    except KeyboardInterrupt:
+        logger.info("Exiting...")
+        print(f"Next marker: {aggregate.progress}")
+    except Exception as exc:
+        logger.critical("Failure during process %s", exc)
+        print(f"Next marker: {aggregate.progress}")
+
+
+if __name__ == "__main__":
+    main()
