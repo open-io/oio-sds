@@ -17,16 +17,27 @@
 
 
 import argparse
-import os
 import uuid
+from enum import Enum
+from tempfile import NamedTemporaryFile
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.cli import get_logger_from_args, make_logger_args_parser
 from oio.common.exceptions import NoSuchAccount, NoSuchContainer, NotFound
 from oio.common.utils import depaginate, request_id
 
-NB_JSON_PARTS = 100
-TMP_FILE = "/tmp/aggregate-objects.json"
+# Default number of objects to aggregate
+NB_JSON_PARTS = 1000
+# Default target object size when aggregating small objects(100MB)
+MAX_SIZE = 100000000
+
+
+class Strategy(Enum):
+    AGGREGATE_BY_NUMBER = 1
+    AGGREGATE_BY_SIZE = 2
+
+    def __str__(self):
+        return self.name
 
 
 class ObjectAggregate:
@@ -36,18 +47,22 @@ class ObjectAggregate:
     This tool aims to aggregate a given number of these objects into bigger one
     """
 
-    def __init__(self, args, logger):
+    def __init__(self, args, logger, tmpfile):
         self.api = ObjectStorageApi(args.namespace, logger=logger)
         self.logger = logger
+        self.tmpfile = tmpfile
         self._object_marker = None
         self.account = args.account
         self.container = args.container
         self.input_prefix = args.input_prefix
         self.output_prefix = args.output_prefix
+        self.strategy = args.strategy
+        self.nb_json_parts = args.nb_json_parts
+        self.max_aggregated_size = args.max_aggregated_size
 
     @property
     def _request_id(self):
-        return request_id("object-aggretate")
+        return request_id("object-aggregate-")
 
     @property
     def progress(self):
@@ -56,41 +71,51 @@ class ObjectAggregate:
 
     def _extract_info(self, obj_name):
         """get some info from object name"""
-        name = obj_name.lstrip(self.input_prefix)
+        name = (
+            obj_name[len(self.input_prefix) :]
+            if obj_name.startswith(self.input_prefix)
+            else obj_name
+        )
         bucket, days, suffixed_uuid = name.rsplit("_", 2)
         return (bucket, days, suffixed_uuid)
 
-    def _aggregate_parts(self, candidates, bucket, day):
-        """
-        Fetch data, store it into local file, push new object and remove old parts
-        """
-        # Remove temporary son file if exists
+    def _clear_tmp_file(self):
+        # truncate temprary file
         try:
-            os.remove(TMP_FILE)
+            self.tmpfile.seek(0)
+            self.tmpfile.truncate(0)
         except OSError:
             pass
 
+    def _aggregate_parts(self, candidates):
+        """
+        Fetch data, store it into local file, push new object and remove old parts
+        """
+        total_size = 0
         # load json parts
         for el in candidates:
-            _, stream = self.api.object_fetch(
+            properties, stream = self.api.object_fetch(
                 self.account,
                 self.container,
                 el,
                 reqid=self._request_id,
             )
-
+            total_size += int(properties.get("size", 0))
             for chunk in stream:
-                with open(TMP_FILE, "a") as file:
-                    file.write(chunk.decode("UTF-8"))
+                self.tmpfile.write(chunk)
+            return total_size
+
+    def _create_object(self, bucket, day):
         # push new object
         obj_id = uuid.uuid4().hex
         aggregated_object = f"{self.output_prefix}{bucket}_{day}_{obj_id}.json"
         try:
+            self.tmpfile.seek(0)
             self.api.object_create(
                 self.account,
                 self.container,
                 obj_name=aggregated_object,
-                file_or_path=TMP_FILE,
+                file_or_path=self.tmpfile,
             )
         except Exception as exc:
             self.logger.error(
@@ -98,6 +123,7 @@ class ObjectAggregate:
             )
             raise
 
+    def _remove_parts(self, candidates):
         # remove old parts
         for el in candidates:
             self.api.object_delete(
@@ -106,13 +132,21 @@ class ObjectAggregate:
                 el,
             )
 
+    def _complete_aggregate_conditon(self, candidates, aggregated_size):
+        if self.strategy == Strategy.AGGREGATE_BY_NUMBER:
+            if len(candidates) >= self.nb_json_parts:
+                return True
+        else:
+            if aggregated_size > self.max_aggregated_size:
+                return True
+        return False
+
     def process(self):
         """Process json parts"""
         reqid = self._request_id
 
         current_bucket = None
         current_day = None
-        process_candidates = False
         candidates = []
 
         try:
@@ -122,34 +156,53 @@ class ObjectAggregate:
                 prefix=self.input_prefix,
                 marker_key=lambda x: x.get("next_marker"),
                 truncated_key=lambda x: x["truncated"],
+                marker=self._object_marker,
                 account=self.account,
                 container=self.container,
                 properties=False,
                 reqid=reqid,
             )
+            aggregated_size = 0
             for obj in obj_gen:
-                (bucket, day, _suffix) = self._extract_info(obj["name"])
+                object_name = obj["name"]
+                (bucket, day, _suffix) = self._extract_info(object_name)
                 if not _suffix.endswith("json.part"):
                     continue
 
                 if current_bucket is None:
                     current_bucket = bucket
                     current_day = day
+                    self._clear_tmp_file()
+                    aggregated_size = self._aggregate_parts((object_name,))
                 elif (current_bucket != bucket) or (current_day != day):
-                    process_candidates = True
+                    self._create_object(current_bucket, current_day)
+                    self._remove_parts(candidates)
+                    candidates.clear()
                     current_bucket = bucket
                     current_day = day
+                    aggregated_size = 0
+                    self._clear_tmp_file()
+                    aggregated_size = self._aggregate_parts((object_name,))
                 else:
-                    if len(candidates) > NB_JSON_PARTS:
-                        process_candidates = True
-                if process_candidates:
-                    self._aggregate_parts(candidates, current_bucket, current_day)
-                    candidates.clear()
-                candidates.append(obj["name"])
-                self._object_marker = obj
+                    reach_condition = self._complete_aggregate_conditon(
+                        candidates, aggregated_size
+                    )
+                    if reach_condition:
+                        self._create_object(current_bucket, current_day)
+                        self._remove_parts(candidates)
+                        candidates.clear()
+                        self._clear_tmp_file()
+                        aggregated_size = self._aggregate_parts((object_name,))
+                    else:
+                        aggregated_size += self._aggregate_parts((object_name,))
+                candidates.append(object_name)
+                self._object_marker = object_name
 
             if candidates:
-                self._aggregate_parts(candidates, current_bucket, current_day)
+                self._create_object(current_bucket, current_day)
+                self._remove_parts(candidates)
+                candidates.clear()
+                self._clear_tmp_file()
 
         except (NoSuchAccount, NoSuchContainer, NotFound) as exc:
             self.logger.error(
@@ -162,7 +215,7 @@ class ObjectAggregate:
 
 def make_arg_parser():
     log_parser = make_logger_args_parser()
-    descr = ""
+    descr = ObjectAggregate.__doc__
 
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument("namespace", help="Namespace")
@@ -180,32 +233,55 @@ def make_arg_parser():
     )
 
     parser.add_argument(
-        "--input_prefix",
+        "--input-prefix",
         "-i",
         help="prefix of objects to aggregate",
         default="/backup/",
     )
     parser.add_argument(
-        "--output_prefix",
+        "--output-prefix",
         "-o",
-        help="prefix of objects to aggregate",
+        help="prefix ofaggregated objects",
         default="/backup-aggregated/",
     )
+    parser.add_argument(
+        "--strategy",
+        "-s",
+        type=lambda st: Strategy[st],
+        choices=list(Strategy),
+        help="Strategy to use for object aggregation",
+    )
+    parser.add_argument(
+        "--nb-json_parts",
+        "-n",
+        help="number of parts to aggregate per one objects",
+        type=int,
+        default=NB_JSON_PARTS,
+    )
+    parser.add_argument(
+        "--max-aggregated-size",
+        "-m",
+        type=int,
+        help="Max size of aggregated object",
+        default=MAX_SIZE,
+    )
+
     return parser
 
 
 def main():
     args = make_arg_parser().parse_args()
     logger = get_logger_from_args(args)
-    aggregate = ObjectAggregate(args, logger)
-    try:
-        aggregate.process()
-    except KeyboardInterrupt:
-        logger.info("Exiting...")
-        print(f"Next marker: {aggregate.progress}")
-    except Exception as exc:
-        logger.critical("Failure during process %s", exc)
-        print(f"Next marker: {aggregate.progress}")
+    with NamedTemporaryFile() as tmpfile:
+        aggregate = ObjectAggregate(args, logger, tmpfile)
+        try:
+            aggregate.process()
+        except KeyboardInterrupt:
+            logger.info("Exiting...")
+            print(f"Next marker: {aggregate.progress}")
+        except Exception as exc:
+            logger.critical("Failure during process %s", exc)
+            print(f"Next marker: {aggregate.progress}")
 
 
 if __name__ == "__main__":
