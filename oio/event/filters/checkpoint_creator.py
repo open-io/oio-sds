@@ -243,6 +243,10 @@ class CheckpointCreatorFilter(Filter):
                 cid_to_process, has_shards, err = self._check_container_up_to_date(
                     root_cid, cid, bounds, env
                 )
+                if cid_to_process is None:
+                    # Emit sub events for shards but return as main container is sharded
+                    self._update_metrics(LifecycleStep.SKIPPED)
+                    return self.app(env, cb)
             except NotFound:
                 self.logger.debug("Bucket deleted")
                 self._update_metrics(LifecycleStep.SKIPPED)
@@ -266,7 +270,7 @@ class CheckpointCreatorFilter(Filter):
                     pass
                 else:
                     # The container could have been deleted after (shard or shrink
-                    # process). Emit events for the shards hanling the range.
+                    # process). Emit events for the shards handling the range.
                     try:
                         cid_to_process, _, err = self._check_container_up_to_date(
                             root_cid, cid_to_process, bounds, env

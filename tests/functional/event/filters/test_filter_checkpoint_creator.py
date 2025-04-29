@@ -263,3 +263,31 @@ class TestFilterCheckpointCreator(BaseTestCase):
         mock_cb.assert_not_called()
         self.filter._generate_sub_events.assert_not_called()
         self.filter._update_metrics.assert_called_once_with(LifecycleStep.PROCESSED)
+
+    def test_sharding_container_sharded(self):
+        env = {
+            "data": {
+                "account": "acct-1",
+                "bucket": "bucket-1",
+                "run_id": "run-1",
+                "root_cid": "AAAA",
+                "cid": "AAAA",
+                "bounds": {"lower": "", "upper": ""},
+            }
+        }
+        mock_cb = Mock()
+        self.filter._create_checkpoint = Mock()
+        with patch(
+            "oio.container.sharding.ContainerSharding.get_shards_in_range",
+            Mock(
+                return_value=[
+                    [{"cid": "BBBB", "lower": "", "upper": "foo"}],
+                    [{"cid": "CCCC", "lower": "foo", "upper": ""}],
+                ]
+            ),
+        ):
+            self.filter.process(env, mock_cb)
+        mock_cb.assert_not_called()
+        self.filter._generate_sub_events.assert_called_once()
+        self.filter._create_checkpoint.assert_not_called()
+        self.filter._update_metrics.assert_called_once_with(LifecycleStep.SKIPPED)
