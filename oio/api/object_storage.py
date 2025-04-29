@@ -575,7 +575,7 @@ class ObjectStorageApi(object):
         **kwargs,
     ):
         """
-        Flush a container
+        Flush a container: delete all objects.
 
         :param account: account from which to delete the container
         :type account: `str`
@@ -907,6 +907,14 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_purge(self, account, container, maxvers=None, **kwargs):
+        """
+        Purge exceeding object versions.
+
+        For all objects of the container, delete exceeding object versions.
+
+        :param maxvers: the number of versions to keep. <0 means unlimited
+            number of versions, 0 means one version, >0 means n versions.
+        """
         if maxvers is None:
             props = self.container_get_properties(account, container, **kwargs)
             maxvers = props["system"].get("sys.m2.policy.version", None)
