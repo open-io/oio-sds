@@ -2187,9 +2187,11 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open_for_object(m2b, url, flags, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			for (GSList *l0=old_chunks, *l1=new_chunks;
-					!err && l0 && l1 ; l0=l0->next,l1=l1->next)
+			for (GSList *l0 = old_chunks, *l1 = new_chunks;
+					!err && l0 && l1;
+					l0 = l0->next, l1 = l1->next) {
 				err = _db_substitute_bean(sq3, l0->data, l1->data);
+			}
 			if (!err)
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);

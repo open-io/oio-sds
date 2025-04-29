@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -385,7 +385,7 @@ sock_build_for_url(const char *url, GError **err,
 	*sas_len = sizeof(*sas);
 
 	if (!grid_string_to_sockaddr (url, (struct sockaddr*) sas, sas_len)) {
-		g_error_transmit(err, NEWERROR(EINVAL, "invalid URL"));
+		g_error_transmit(err, NEWERROR(EINVAL, "invalid URL: %s", url));
 		return -1;
 	}
 
