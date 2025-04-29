@@ -331,7 +331,7 @@ oio_events_stats_to_prometheus(const gchar *service_id, const gchar *namespace,
 		.out = out
 	};
 	g_mutex_lock(&_registered_events_queues_lock);
-	// We may have an issue here, if we create it an then empty it completely.
+	// We may have an issue here, if we create it and then empty it completely.
 	if (_registered_events_queues) {
 		g_hash_table_foreach(_registered_events_queues,
 				(GHFunc)_stat_append_to_str, &in_out);

@@ -166,7 +166,8 @@ _q_send(struct oio_events_queue_s *self, gchar *key, gchar *msg)
 	oio_str_clean(&msg);
 
 	if (err) {
-		GRID_ERROR("%s", err->message);
+		GRID_ERROR("kafka_publish_message(%s): %s",
+				q->queue_name, err->message);
 		return FALSE;
 	}
 	return TRUE;
@@ -187,7 +188,7 @@ _q_is_stalled(struct oio_events_queue_s *self UNUSED)
 	return FALSE;
 }
 
-gint64
+static gint64
 _q_get_health(struct oio_events_queue_s *self)
 {
 	struct _queue_with_endpoint_sync_s *q = (struct _queue_with_endpoint_sync_s*) self;
