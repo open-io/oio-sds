@@ -193,9 +193,11 @@ class AutomaticVacuum(Meta2Filter):
                 return self.app(env, cb)
 
             self.logger.info(
-                "Triggering the vacuum on container %s with %.2f%% unused pages",
+                "Triggering the vacuum on container %s with %.2f%% unused pages "
+                "(reqid=%s)",
                 meta2db.cid,
                 unused_pages_ratio * 100,
+                reqid,
             )
             self.admin.vacuum_base(
                 "meta2", cid=meta2db.cid, reqid=reqid, timeout=self.vacuum_timeout
@@ -228,7 +230,7 @@ class AutomaticVacuum(Meta2Filter):
                 meta2db,
                 body=(
                     f"Failed to process {self.NAME} "
-                    f"for the container {meta2db.cid}: {exc}"
+                    f"for the container {meta2db.cid}: {exc} (reqid={reqid})"
                 ),
             )
             return resp(env, cb)
