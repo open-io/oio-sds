@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021-2024 OVH SAS
+// Copyright (C) 2021-2025 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -515,6 +515,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 
 	chunkIDHeader := headers.Get(defs.HeaderNameChunkID)
 	if chunkIDHeader != "" && !strings.EqualFold(chunkIDHeader, chunkID) {
+		logger.LogWarning("%s does not match chunk ID", chunkIDHeader)
 		return chunk, errInvalidHeader
 	}
 	chunk.ChunkID = strings.ToUpper(chunkID)
@@ -526,6 +527,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	chunk.MetachunkHash = headers.Get(defs.HeaderNameMetachunkChecksum)
 	if chunk.MetachunkHash != "" {
 		if !utils.IsHexaString(chunk.MetachunkHash, 0, 64) {
+			logger.LogWarning("%s did not parse as hexadecimal string", chunk.MetachunkHash)
 			return chunk, errInvalidHeader
 		}
 		chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
@@ -533,6 +535,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	chunk.MetachunkSize = headers.Get(defs.HeaderNameMetachunkSize)
 	if chunk.MetachunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.MetachunkSize, 10, 64); err != nil {
+			logger.LogWarning("%s did not parse as integer: %s", chunk.MetachunkSize, err)
 			return chunk, errInvalidHeader
 		}
 	}
@@ -540,6 +543,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	chunk.ChunkHash = headers.Get(defs.HeaderNameChunkChecksum)
 	if chunk.ChunkHash != "" {
 		if !utils.IsHexaString(chunk.ChunkHash, 0, 64) {
+			logger.LogWarning("%s did not parse as hexadecimal string", chunk.ChunkHash)
 			return chunk, errInvalidHeader
 		}
 		chunk.ChunkHash = strings.ToUpper(chunk.ChunkHash)
@@ -547,6 +551,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 	chunk.ChunkSize = headers.Get(defs.HeaderNameChunkSize)
 	if chunk.ChunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil {
+			logger.LogWarning("%s did not parse as integer: %s", chunk.ChunkSize, err)
 			return chunk, errInvalidHeader
 		}
 	}
@@ -570,6 +575,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 		chunk.MetachunkHash = trailerMetachunkHash
 		if chunk.MetachunkHash != "" {
 			if !utils.IsHexaString(chunk.MetachunkHash, 0, 64) {
+				logger.LogWarning("%s did not parse as hexadecimal string", chunk.MetachunkHash)
 				return errInvalidHeader
 			}
 			chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
@@ -580,6 +586,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 		chunk.MetachunkSize = trailerMetachunkSize
 		if chunk.MetachunkSize != "" {
 			if _, err := strconv.ParseInt(chunk.MetachunkSize, 10, 64); err != nil {
+				logger.LogWarning("%s did not parse as integer", chunk.MetachunkSize)
 				return errInvalidHeader
 			}
 		}
@@ -599,6 +606,8 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 	}
 	if chunk.ChunkHash != "" {
 		if !strings.EqualFold(chunk.ChunkHash, ul.hash) {
+			logger.LogWarning("Received checksum (%s) does not match computed checksum (%s)",
+				chunk.ChunkHash, ul.hash)
 			return errInvalidHeader
 		}
 	} else {
