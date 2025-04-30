@@ -2773,7 +2773,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Status": "Enabled",
                     "Filter": {"Prefix": "foo/"},
                     "Transition": {
-                        "1": {"Days": 6, "StorageClass": "STANDARD_IA"},
+                        "1": {"Days": 20, "StorageClass": "STANDARD_IA"},
                         "__time_type": "Days",
                     },
                 },
