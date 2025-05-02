@@ -56,7 +56,7 @@ class ProxyClient(HttpApi):
             and `request_prefix`
         :type no_ns_in_url: `bool`
         :param request_attempts: number of attempts for the request in case of
-            error 503 (defaults to 1)
+            network errors (defaults to 1)
 
         :raise oio.common.exceptions.ServiceBusy: if all attempts fail
         """

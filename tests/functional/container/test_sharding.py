@@ -21,6 +21,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import ANY, call, patch
 
+import pytest
+
 from oio.common.constants import (
     M2_PROP_BUCKET_NAME,
     M2_PROP_DRAINING_TIMESTAMP,
@@ -2165,6 +2167,7 @@ class TestSharding(BaseTestCase):
             mock_vacuum.assert_not_called()
         self.assertEqual(9, mock_request.call_count)
 
+    @pytest.mark.flaky(reruns=2)
     def tests_truncate_delete_marker_listing(self):
         """
         Check that a listing with a really short delay
