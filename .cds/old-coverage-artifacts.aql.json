@@ -3,6 +3,42 @@
         {
             "aql": {
                 "items.find": {
+                    "repo": "pu-objectstorage-default-static",
+                    "$and": [
+                        {
+                            "path": {"$match": "*coverage/oio-sds/dev"}
+                        },
+                        {
+                            "type": "folder"
+                        },
+                        {
+                            "created": {"$lt": "${ddate}"}
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "aql": {
+                "items.find": {
+                    "repo": "pu-objectstorage-default-static",
+                    "$and": [
+                        {
+                            "path": {"$match": "*coverage/oio-sds/master"}
+                        },
+                        {
+                            "type": "folder"
+                        },
+                        {
+                            "created": {"$lt": "${mdate}"}
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "aql": {
+                "items.find": {
                     "repo": "pu-objectstorage-oio-sds-static",
                     "$and": [
                         {
@@ -36,6 +72,5 @@
                 }
             }
         }
-
     ]
 }

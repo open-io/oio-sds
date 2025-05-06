@@ -148,20 +148,20 @@ retention_policy:
   # Keep Run for 365 days if git_branch is set and exists in VCS or only 2 days for removed branches
   # Else keep Run for 365 days if no git_branch info is set
   if(cds_triggered_by_username == 'cds.scheduler') then
-  return run_days_before < 1
+    return run_days_before < 1
   end
   if(has_git_branch == "true") then
-  if(git_branch_exist == "true") then
-  return run_days_before < 365
+    if(git_branch_exist == "true") then
+      return run_days_before < 365
+    else
+      return run_days_before < 2
+    end
   else
-  return run_days_before < 2
-  end
-  else
-  return run_days_before < 365
+    return run_days_before < 365
   end
 
 integrations:
-  artifactory-pu-objectstorage-oio-sds:
+  artifactory-pu-objectstorage-default:
     type: artifact_manager
 
 notifications:

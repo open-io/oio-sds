@@ -140,7 +140,7 @@ jobs:
       - name: Publish code coverage reports on Artifactory
         optional: true
         OVH_Serve_Static_Files:
-          destination: 'coverage/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
+          destination: 'coverage/{{.cds.workflow}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
           source: coverage
 
       - name: Publish test reports on CDS
