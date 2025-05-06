@@ -103,6 +103,7 @@ class CheckpointCollector:
             raise ValueError(
                 "Missing value for 'lifecycle_configuration_backup_bucket'"
             )
+        self._policy = self._conf.get("policy", None)
 
         # Threading
         self._pool = GreenPool(self._concurrency)
@@ -241,6 +242,7 @@ class CheckpointCollector:
                     self._lc_backup_bucket,
                     obj_name=obj_name,
                     data=lifecycle_config,
+                    policy=self._policy,
                     reqid=self._request_id,
                 )
                 version = props["version"]

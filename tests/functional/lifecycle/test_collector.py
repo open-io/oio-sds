@@ -47,8 +47,8 @@ class TestLifecycleCheckpointCollector(BaseTestCase):
                 properties={LIFECYCLE_PROPERTY_KEY: json.dumps({"Rules": []})},
             )
 
-    def openio_checkpoint_collector(self, coverage="--coverage", **kwargs):
-        conf = (
+    def openio_checkpoint_collector(self, coverage="--coverage", policy=None, **kwargs):
+        conf = [
             "[checkpoint-collector]",
             f"namespace = {self.conf['namespace']}",
             "concurrency = 1",
@@ -59,7 +59,10 @@ class TestLifecycleCheckpointCollector(BaseTestCase):
             "log_level = DEBUG",
             "lifecycle_configuration_backup_account = internal",
             "lifecycle_configuration_backup_bucket = internal_lifecycle",
-        )
+        ]
+        if policy:
+            conf.append(f"policy = {policy}")
+
         with NamedTemporaryFile("w") as temp_conf:
             temp_conf.write("\n".join(conf))
             temp_conf.flush()
@@ -103,3 +106,33 @@ class TestLifecycleCheckpointCollector(BaseTestCase):
             timeout=5.0,
         )
         self.assertIsNone(evt)
+
+    def test_force_policy(self):
+        nb_conf_lifecycle = 5
+        policies = ("TWOCOPIES", "THREECOPIES", "EC21")
+        for policy in policies:
+            prefix = f"container_{policy}"
+            for i in range(0, 10):
+                self._create_container(f"{prefix}_{i}", i < nb_conf_lifecycle)
+            self.openio_checkpoint_collector(policy=policy)
+            for i in range(0, 5):
+                evt = self.wait_for_kafka_event(
+                    kafka_consumer=self._cls_checkpoint_consumer,
+                    types=[EventTypes.LIFECYCLE_CHECKPOINT],
+                    data_fields={
+                        "run_id": self.run_id,
+                        "account": self.account,
+                        "bucket": f"{prefix}_{i}",
+                    },
+                )
+                self.assertIsNotNone(evt)
+            objects = self.storage.object_list(
+                "internal",
+                "internal_lifecycle",
+                prefix=f"test_account/{prefix}",
+            )
+
+            object_list = objects.get("objects", {})
+            self.assertEqual(len(object_list), nb_conf_lifecycle)
+            for el in object_list:
+                self.assertEqual(el["policy"], policy)

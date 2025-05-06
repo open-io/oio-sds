@@ -62,6 +62,7 @@ class LifecycleDeleteBackupFilter(Filter):
 
         self._prefix = self.conf.get("prefix", self.DEFAULT_PREFIX)
         self._retry_delay = get_retry_delay(self.conf)
+        self._policy = self.conf.get("policy", None)
 
     def _send_to_bucket(self, event):
         # Close all file descriptors
@@ -80,6 +81,7 @@ class LifecycleDeleteBackupFilter(Filter):
                     self._backup_bucket,
                     file_path,
                     obj_name=f"{self._prefix}/{entry}",
+                    policy=self._policy,
                     reqid=event.reqid,
                 )
                 os.remove(file_path)

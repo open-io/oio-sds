@@ -675,6 +675,7 @@ log_level = INFO
 
 lifecycle_configuration_backup_account = internal
 lifecycle_configuration_backup_bucket = internal_lifecycle
+policy = TWOCOPIES
 
 """
 
@@ -1755,6 +1756,7 @@ prefix = /backup
 backup_account = internal
 backup_bucket = internal_lifecycle
 cache_directory = ${DATADIR}/lifecycle_delete/
+policy = THREECOPIES
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic.
