@@ -20,8 +20,6 @@ from logging import getLogger
 from time import sleep
 from time import time as now
 
-from six import iteritems
-
 from oio.cli import Command, Lister, ShowOne
 from oio.common.constants import (
     BUCKET_PROP_RATELIMIT,
@@ -907,7 +905,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
 
         lifecycle_time_bypass = sys.get(M2_PROP_LIFECYCLE_TIME_BYPASS)
         if lifecycle_time_bypass:
-            info["lifecyle.time_bypass"] = (
+            info["lifecycle.time_bypass"] = (
                 "Enabled" if lifecycle_time_bypass == "1" else "Disabled"
             )
 
@@ -915,7 +913,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             sys.get(M2_PROP_LIFECYCLE_CUSTOM_BUDGET), -1
         )
         if lifecycle_custom_budget != -1:
-            info["lifecyle.custom_budget"] = lifecycle_custom_budget
+            info["lifecycle.custom_budget"] = lifecycle_custom_budget
 
         for k in ("stats.page_count", "stats.freelist_count", "stats.page_size"):
             info[k] = int_value(sys.get(k), 0)
@@ -936,7 +934,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         delete_exceeding = sys.get(M2_PROP_DEL_EXC_VERSIONS, None)
         if delete_exceeding is not None:
             info["delete_exceeding_versions"] = delete_exceeding != "0"
-        for k, v in iteritems(data["properties"]):
+        for k, v in data["properties"].items():
             info["meta." + k] = v
         return list(zip(*sorted(info.items())))
 

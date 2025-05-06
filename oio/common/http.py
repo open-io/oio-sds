@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,9 +15,7 @@
 # License along with this library.
 
 import re
-
-from six import text_type
-from six.moves.urllib_parse import quote
+from urllib.parse import quote
 
 from oio.common.constants import CHUNK_HEADERS
 from oio.content.quality import location_constraint_margin
@@ -64,11 +62,11 @@ def http_header_from_ranges(ranges):
                 raise ValueError("Invalid range (%s, %s)" % (start, end))
 
         if start is not None:
-            header += text_type(start)
+            header += str(start)
         header += "-"
 
         if end is not None:
-            header += text_type(end)
+            header += str(end)
         if i < len(ranges) - 1:
             header += ","
     return header
@@ -106,7 +104,7 @@ def headers_from_object_metadata(metadata, chunk_url):
     headers["transfer-encoding"] = "chunked"
     # FIXME: remove key incoherencies
     headers[CHUNK_HEADERS["content_id"]] = metadata["id"]
-    headers[CHUNK_HEADERS["content_version"]] = text_type(metadata["version"])
+    headers[CHUNK_HEADERS["content_version"]] = str(metadata["version"])
     headers[CHUNK_HEADERS["content_path"]] = quote(metadata["content_path"])
     headers[CHUNK_HEADERS["content_chunkmethod"]] = metadata["chunk_method"]
     headers[CHUNK_HEADERS["content_policy"]] = metadata["policy"]
@@ -115,7 +113,7 @@ def headers_from_object_metadata(metadata, chunk_url):
     for key in ("metachunk_hash", "metachunk_size", "chunk_hash"):
         val = metadata.get(key)
         if val is not None:
-            headers[CHUNK_HEADERS[key]] = text_type(metadata[key])
+            headers[CHUNK_HEADERS[key]] = str(metadata[key])
 
     headers[CHUNK_HEADERS["full_path"]] = metadata["full_path"]
 

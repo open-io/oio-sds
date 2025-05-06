@@ -2,7 +2,7 @@
 
 # OpenIO SDS functional tests
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,15 +17,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import http.server
 import sys
 import threading
 from ctypes import cdll
 
-from six import string_types
-from six.moves import BaseHTTPServer
 
-
-class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
+class DumbHttpMock(http.server.BaseHTTPRequestHandler):
     def reply(self):
         inbody = None
         length = self.headers.get("content-length")
@@ -70,7 +68,7 @@ class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
 
         # Reply
         pcode, phdr, pbody = rep
-        if isinstance(pbody, string_types):
+        if isinstance(pbody, str):
             pbody = pbody.encode("utf-8")
         self.send_response(pcode)
         for k, v in phdr.items():
@@ -106,11 +104,11 @@ class Service(threading.Thread):
 
 
 def test_ok(lib):
-    http, services, urls = [], [], []
+    servers, services, urls = [], [], []
     for i in range(3):
-        http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 7000 + i), DumbHttpMock))
-    for h in http:
-        urls.append(("http://127.0.0.1:%d/" % h.server_port).encode("utf-8"))
+        servers.append(http.server.HTTPServer(("127.0.0.1", 7000 + i), DumbHttpMock))
+    for h in servers:
+        urls.append((f"http://127.0.0.1:{h.server_port}/").encode("utf-8"))
         services.append(Service(h))
     expectations = [
         (("/", {"Content-Length": "0"}, ""), (200, {}, "")),
@@ -127,7 +125,7 @@ def test_ok(lib):
         (("/", {"Content-Length": "128"}, "0" * 128), (200, {}, "")),
         (("/", {"Transfer-Encoding": "chunked"}, "0" * 128), (200, {}, "")),
     ]
-    for h in http:
+    for h in servers:
         h.expectations = expectations
     for s in services:
         s.start()
@@ -145,7 +143,7 @@ def test_ok(lib):
 
         lib.test_upload_ok(0, -1, urls[0], None)
     finally:
-        for h in http:
+        for h in servers:
             assert 0 == len(h.expectations)
             h.shutdown()
         for s in services:

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,10 +17,10 @@
 
 import os
 import sys
+from io import BytesIO
+from urllib.parse import urlparse
 
 import yaml
-from six import BytesIO, iteritems
-from six.moves.urllib_parse import urlparse
 
 from oio.common import exceptions
 from oio.common.green import Empty, LifoQueue, socket, threading, time
@@ -256,8 +256,9 @@ class Connection(object):
 
                 if self.socket_keepalive:
                     sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-                    for k, v in iteritems(self.socket_keepalive_options):
-                        sock.setsockopt(socket.SOL_TCP, k, v)
+                    if self.socket_keepalive_options:
+                        for k, v in self.socket_keepalive_options.items():
+                            sock.setsockopt(socket.SOL_TCP, k, v)
 
                 sock.settimeout(self.socket_connect_timeout)
 

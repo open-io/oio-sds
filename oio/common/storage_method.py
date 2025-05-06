@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2023 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,10 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-import sys
-
-from six import reraise
 
 from oio.common import exceptions
 
@@ -80,7 +76,7 @@ class StorageMethods(object):
             storage_method, params = parse_chunk_method(chunk_method)
             cls = self.index[storage_method]
         except Exception as exc:
-            reraise(exceptions.InvalidStorageMethod, str(exc), sys.exc_info()[2])
+            raise exceptions.InvalidStorageMethod(str(exc)) from exc
         params.update(kwargs)
         self.cache[chunk_method] = cls.build(params)
         self.cache[chunk_method].type = storage_method
@@ -203,11 +199,7 @@ class ECStorageMethod(StorageMethod):
                 exc.__class__.__name__,
                 exc,
             )
-            reraise(
-                exceptions.InvalidStorageMethod,
-                exceptions.InvalidStorageMethod(msg),
-                sys.exc_info()[2],
-            )
+            raise exceptions.InvalidStorageMethod(msg) from exc
         self._ec_quorum_size = (
             self.ec_nb_data + self.driver.min_parity_fragments_needed()
         )

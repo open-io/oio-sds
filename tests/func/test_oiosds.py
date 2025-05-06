@@ -2,6 +2,7 @@
 
 # OpenIO SDS functional tests
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,16 +17,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import http.server
 import json
 import sys
 import threading
 from ctypes import cdll
 
-from six import string_types
-from six.moves import BaseHTTPServer
 
-
-class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
+class DumbHttpMock(http.server.BaseHTTPRequestHandler):
     def reply(self):
         if len(self.server.expectations) <= 0:
             return
@@ -50,7 +49,7 @@ class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
 
         # Reply
         pcode, phdr, pbody = rep
-        if isinstance(pbody, string_types):
+        if isinstance(pbody, str):
             pbody = pbody.encode("utf-8")
         self.send_response(pcode)
         for k, v in phdr.items():
@@ -90,12 +89,12 @@ class Service(threading.Thread):
 
 
 def test_get(lib):
-    http, services, urls = [], [], []
+    servers, services, urls = [], [], []
 
-    http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock))
+    servers.append(http.server.HTTPServer(("127.0.0.1", 0), DumbHttpMock))
     for _ in range(3):
-        http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock))
-    for h in http:
+        servers.append(http.server.HTTPServer(("127.0.0.1", 0), DumbHttpMock))
+    for h in servers:
         urls.append(http2url(h))
         services.append(Service(h))
 
@@ -149,11 +148,11 @@ def test_get(lib):
             (200, {"Content-Range": "bytes=0-15/16"}, "0" * 16),
         ),
     ]
-    for h in http[1:]:
+    for h in servers[1:]:
         h.expectations = rawx_expectations
     czero = "000000000000000000000000000000000000000000000000000000000000000"
     hash_zero = "00000000000000000000000000000000"
-    http[0].expectations = [
+    servers[0].expectations = [
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (503, {}, "")),
         (
             ("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""),
@@ -253,7 +252,7 @@ def test_get(lib):
         lib.test_get_success(cfg, b"NS", b"NS/ACCT/JFS//plop", 64)
         lib.test_get_success(cfg, b"NS", b"NS/ACCT/JFS//plop", 64)
     finally:
-        for h in http:
+        for h in servers:
             assert 0 == len(h.expectations)
             h.shutdown()
         for s in services:
@@ -261,7 +260,7 @@ def test_get(lib):
 
 
 def test_has(lib):
-    proxy = BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
+    proxy = http.server.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
     proxy.expectations = [
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (204, {}, "")),
         (("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (404, {}, "")),
@@ -284,7 +283,7 @@ def test_has(lib):
 
 
 def test_list_fail(lib):
-    proxy = BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
+    proxy = http.server.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
     proxy.expectations = [
         (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (501, {}, "")),
         (("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "")),
@@ -326,7 +325,7 @@ def test_list_fail(lib):
 
 def test_list_ok(lib):
     names = ("plap", "plep", "plip", "plop", "plup", "plyp")
-    proxy = BaseHTTPServer.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
+    proxy = http.server.HTTPServer(("127.0.0.1", 0), DumbHttpMock)
     proxy.expectations = [
         (
             ("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),

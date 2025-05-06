@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,6 @@ from eventlet.green.httplib import (  # noqa
 )
 from eventlet.queue import Empty, LifoQueue, LightQueue  # noqa
 from eventlet.semaphore import Semaphore  # noqa
-from six import string_types
 
 from oio.common.utils import ratelimit
 
@@ -229,7 +228,7 @@ def ratelimit_function_build(policy):
     :return: A callable function similar in signature to ratelimit but that
              ignores all parameters other than the first one.
     """
-    if isinstance(policy, string_types):
+    if isinstance(policy, str):
         policy = ratelimit_policy_from_string(policy)
     ratelimit_validate_policy(policy)
 

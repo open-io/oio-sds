@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,16 +17,9 @@
 import re
 from ctypes import c_char_p, c_uint, create_string_buffer
 from itertools import takewhile
-
-from six import PY3, string_types
+from typing import Pattern
 
 from oio.common.utils import CDLL
-
-if PY3:
-    from typing import Pattern
-else:
-    # pylint: disable=invalid-name
-    Pattern = re._pattern_type
 
 
 # Python's int() raises an exception if the string has non-digit
@@ -52,7 +45,7 @@ class ContainerBuilder(object):
 
     def verify(self, name):
         """Verify that `name` is an autocontainer"""
-        return isinstance(name, string_types)
+        return isinstance(name, str)
 
 
 class HashedContainerBuilder(ContainerBuilder):
@@ -166,7 +159,7 @@ class RegexContainerBuilder(object):
     """
 
     def __init__(self, patterns, builder=ContainerBuilder, **kwargs):
-        if isinstance(patterns, string_types):
+        if isinstance(patterns, str):
             patterns = (patterns,)
         if not patterns:
             raise ValueError("You must provide at least one pattern")

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,10 +15,9 @@
 # License along with this library.
 
 from itertools import chain
+from urllib.parse import quote, urlparse
 
 from cliff import lister
-from six import iteritems
-from six.moves.urllib_parse import quote, urlparse
 
 from oio.cli.admin.common import (
     AccountCommandMixin,
@@ -179,7 +178,7 @@ class ItemLocateCommand(lister.Lister):
         details = " ".join(
             [
                 f"{k[6:]}={v}"
-                for k, v in iteritems(srv.get("scores", {}))
+                for k, v in srv.get("scores", {}).items()
                 if k.startswith("score.")
             ]
         )

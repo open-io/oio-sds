@@ -14,11 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from sys import exc_info
-
-from six import binary_type
-from six import reraise as six_reraise
-
 
 class OioException(Exception):
     pass
@@ -316,7 +311,7 @@ class UnfinishedUploadException(OioException):
         Re-raise the wrapped exception. This is intended to be called
         after some sort of cleanup has been done.
         """
-        six_reraise(type(self.exception), self.exception, exc_info()[2])
+        raise self.exception
 
 
 class ClientException(StatusMessageException):
@@ -436,7 +431,7 @@ def from_response(resp, body=None):
             message = body.get("message")
             status = body.get("status")
         except Exception:
-            if isinstance(body, binary_type):
+            if isinstance(body, bytes):
                 message = body.decode("utf-8")
             else:
                 message = body
@@ -473,4 +468,4 @@ def reraise(exc_type, exc_value, extra_message=None):
         args = (exc_value.message,) + args
     if extra_message:
         args = (extra_message,) + args
-    six_reraise(exc_type, exc_type(*args), exc_info()[2])
+    raise exc_type(*args) from exc_value

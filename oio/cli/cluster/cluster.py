@@ -16,8 +16,6 @@
 
 from logging import getLogger
 
-from six import iteritems
-
 from oio.cli import Lister, ShowOne
 from oio.cli.common.utils import format_detailed_scores
 from oio.common.easy_value import boolean_value
@@ -74,15 +72,13 @@ class ClusterShow(ShowOne):
         self.log.debug("take_action(%s)", parsed_args)
 
         data = self.app.client_manager.conscience.info()
-        output = list()
-        output.append(("namespace", data["ns"]))
-        output.append(("chunksize", data["chunksize"]))
-        for k, v in iteritems(data["storage_policy"]):
-            output.append(("storage_policy.%s" % k, v))
-        for k, v in iteritems(data["data_security"]):
-            output.append(("data_security.%s" % k, v))
-        for k, v in iteritems(data["service_pools"]):
-            output.append(("service_pool.%s" % k, v))
+        output = [("namespace", data["ns"]), ("chunksize", data["chunksize"])]
+        for k, v in data["storage_policy"].items():
+            output.append((f"storage_policy.{k}", v))
+        for k, v in data["data_security"].items():
+            output.append((f"data_security.{k}", v))
+        for k, v in data["service_pools"].items():
+            output.append((f"service_pool.{k}", v))
         for k, v in sorted(data["options"].items()):
             output.append((k, v))
         return list(zip(*output))
@@ -162,14 +158,14 @@ class ClusterList(Lister):
                 if parsed_args.stats:
                     stats = [
                         "%s=%s" % (k, v)
-                        for k, v in iteritems(tags)
+                        for k, v in tags.items()
                         if k.startswith("stat.")
                     ]
                     values.append(" ".join(stats))
                 if parsed_args.tags:
                     vals = [
                         "%s=%s" % (k, v)
-                        for k, v in iteritems(tags)
+                        for k, v in tags.items()
                         if k.startswith("tag.")
                     ]
                     values.append(" ".join(vals))

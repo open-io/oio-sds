@@ -21,14 +21,14 @@ add_library(oiosds_test SHARED testlib_sds.c)
 set_target_properties(oiosds_test PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosds_test oiosds)
 add_test(NAME core/sds
-		COMMAND /usr/bin/env ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py ${CMAKE_CURRENT_BINARY_DIR})
+		COMMAND /usr/bin/env ${PYTHON} -m coverage run --context func-c -p ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(core/sds PROPERTIES ENVIRONMENT CTEST_OUTPUT_ON_FAILURE=1)
 
 add_library(oiohttp_test SHARED testlib_http.c)
 set_target_properties(oiohttp_test PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiohttp_test oiosds)
 add_test(NAME core/http
-		COMMAND /usr/bin/env ${PYTHON} ${CMAKE_CURRENT_SOURCE_DIR}/test_oiohttp.py ${CMAKE_CURRENT_BINARY_DIR})
+		COMMAND /usr/bin/env ${PYTHON} -m coverage run --context func-c -p ${CMAKE_CURRENT_SOURCE_DIR}/test_oiohttp.py ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(core/http PROPERTIES ENVIRONMENT CTEST_OUTPUT_ON_FAILURE=1)
 
 add_executable(test_oio_cs test_cs.c)

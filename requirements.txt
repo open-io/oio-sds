@@ -19,7 +19,6 @@ redis~=5.0.8
 reflink>=0.2.1
 requests~=2.31.0
 simplejson~=3.19.0
-six>=1.17.0
 statsd
 urllib3~=1.26.20
 werkzeug~=2.2.3

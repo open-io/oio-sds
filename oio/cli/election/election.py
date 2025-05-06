@@ -18,7 +18,6 @@ from logging import getLogger
 
 from kazoo.client import KazooClient
 from kazoo.exceptions import KazooException
-from six import iteritems
 
 from oio.cli import Lister
 
@@ -97,7 +96,7 @@ class ElectionPing(ElectionCmd):
         )
 
         columns = ("Id", "Status", "Message")
-        data = sorted(iteritems(data))
+        data = sorted(data.items())
         results = ((k, v["status"]["status"], v["status"]["message"]) for k, v in data)
         return columns, results
 
@@ -121,7 +120,7 @@ class ElectionStatus(ElectionCmd):
         )
 
         columns = ("Id", "Status", "Message")
-        data = sorted(iteritems(data["peers"]))
+        data = sorted(data["peers"].items())
         results = ((k, v["status"]["status"], v["status"]["message"]) for k, v in data)
         return columns, results
 
@@ -238,7 +237,7 @@ class ElectionDebug(ElectionCmd):
         )
 
         columns = ("Id", "Status", "Message", "Body")
-        data = sorted(iteritems(data))
+        data = sorted(data.items())
         import time
 
         def format_item(x, v):
@@ -304,7 +303,7 @@ class ElectionSync(ElectionCmd):
         )
 
         columns = ("Id", "Status", "Message", "Body")
-        data = sorted(iteritems(data))
+        data = sorted(data.items())
         results = (
             (
                 k,
@@ -336,7 +335,7 @@ class ElectionLeave(ElectionCmd):
         )
 
         columns = ("Id", "Status", "Message")
-        data = sorted(iteritems(data))
+        data = sorted(data.items())
         results = ((k, v["status"]["status"], v["status"]["message"]) for k, v in data)
         return columns, results
 

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2022 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,8 +13,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
-from six import iteritems
 
 from oio.cli import Lister
 from oio.cli.admin.common import MultipleServicesCommandMixin
@@ -250,7 +248,7 @@ class DirectoryCheck(BaseCheckCommand):
 
         # Check all the meta1 are concerned
         reverse_dump = set()
-        for _, v in iteritems(json.loads(dump0)):
+        for _, v in json.loads(dump0).items():
             for url in v:
                 reverse_dump.add(url)
         m1 = {

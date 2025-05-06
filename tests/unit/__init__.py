@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,6 @@
 from contextlib import contextmanager
 
 import mock
-from six import PY2
 
 import oio
 from oio.common.green import Timeout, sleep
@@ -70,10 +69,7 @@ def set_http_connect(*args, **kwargs):
     try:
         oio.api.io.http_connect = new
         yield new
-        # This does not work with Python 3
-        unused_status = list(new.status_iter)
-        if PY2 and unused_status:
-            raise AssertionError("unused status %r" % unused_status)
+        _unused_status = list(new.status_iter)
 
     finally:
         oio.api.io.http_connect = old

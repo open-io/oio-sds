@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,8 +19,6 @@ import math
 import uuid
 from functools import wraps
 from time import sleep, time
-
-from six import string_types
 
 from oio.common.easy_value import true_value
 from oio.common.exceptions import ServiceBusy
@@ -108,7 +106,7 @@ class RedisConnection(object):
         if not sentinel_name:
             raise ValueError("missing parameter 'sentinel_name'")
 
-        if isinstance(sentinel_hosts, string_types):
+        if isinstance(sentinel_hosts, str):
             sentinel_hosts = sentinel_hosts.split(",")
         self._sentinel_hosts = [
             (h, int(p)) for h, p, in (hp.rsplit(":", 1) for hp in sentinel_hosts)
