@@ -2,7 +2,7 @@
 
 # oio-travis-failfast.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -34,6 +34,6 @@ fold Release    ./tools/oio-build-release.sh ${PWD}
 fold Warnings   ./tools/oio-build-with-warnings.sh ${PWD}
 fold Copyright  ./tools/oio-check-copyright.sh
 fold Versions   ./tools/oio-check-version.sh ${PWD}
-fold Virtualenv pip install -e .
+fold Virtualenv pip install -e ".[test]"
 fold Patches    ./tools/patch-python-modules.sh
 fold Variables  tox -e variables

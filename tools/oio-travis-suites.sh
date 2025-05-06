@@ -2,6 +2,7 @@
 
 # oio-travis-suites.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -36,7 +37,7 @@ fold() {
 fold configure  cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
 fold build      make -j 8 all
 fold install    make install
-fold virtualenv pip install -e .
+fold virtualenv pip install -e ".[test]"
 fold Patches    ./tools/patch-python-modules.sh
 
 export PYTHON_COVERAGE=1

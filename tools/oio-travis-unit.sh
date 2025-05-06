@@ -2,7 +2,7 @@
 
 # oio-travis-unitfunc.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -36,6 +36,6 @@ fold() {
 fold configure  cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug"
 fold build      make -j 8 all
 fold install    make install
-fold virtualenv pip install -e .
+fold virtualenv pip install -e ".[test]"
 fold Patches    ./tools/patch-python-modules.sh
 fold Unit       ./tools/oio-test-unit.sh ${PWD} ${PWD}

@@ -1,7 +1,6 @@
 import setuptools
 
 setuptools.setup(
-    setup_requires=["pbr"],
     classifiers=[
         (
             "License :: OSI Approved :: "
@@ -9,6 +8,7 @@ setuptools.setup(
         ),
         "Operating System :: POSIX :: Linux",
         "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.10",
     ],
     pbr=True,
 )

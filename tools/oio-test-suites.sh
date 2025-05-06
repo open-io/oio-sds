@@ -313,7 +313,7 @@ test_cli () {
 
 	export OIO_PROXY_URL="http://127.0.0.1:8888"
 	export TEST_SUITE="${TEST_SUITE}-proxy"
-	tox -e cli tests/functional/cli/object
+	tox -e cli -- tests/functional/cli/object
 	unset OIO_PROXY_URL
 
 	$SYSTEMCTL stop oio-cluster.target

@@ -3,16 +3,73 @@ name = "oio"
 dynamic = [
   "authors",
   "classifiers",
-  "dependencies",
+  "description",
   "entry-points",
   "readme",
   "scripts",
   "version",
 ]
+dependencies = [
+  "cliff~=3.10.1",
+  "cryptography>=2.0.2",
+  "eventlet~=0.38.2",
+  "gevent>=22.10.2",
+  "importlib_resources",
+  "jsonschema>=4.17.3",
+  "lxml>=4.0.0",
+  "pika~=1.3.2",
+  "PyECLib~=1.6.4",
+  "PyYAML~=6.0.0",
+  "redis~=5.0.8",
+  "reflink>=0.2.1",
+  "requests~=2.31.0",
+  "simplejson~=3.19.0",
+  "statsd",
+  "urllib3~=1.26.20",
+  "xmltodict",
+]
 
 [build-system]
-requires = ["ruff", "setuptools >= 47.1.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["pbr>=6.0.0", "wheel"]
+build-backend = "pbr.build"
+
+[project.optional-dependencies]
+all = ["oio[event,lint,object,service,zk]"]
+
+# Use the event system
+event = [
+  "confluent_kafka~=2.3.0",
+]
+# Check the code
+lint = [
+  "pylint",
+  "ruff",
+]
+# Read or write objects
+object = [
+  "blake3~=0.3.4",
+]
+# Run services (account, xcute, etc.)
+service = [
+  "foundationdb~=6.3.15",
+  "gunicorn~=23.0.0",
+  "werkzeug~=2.2.3",
+]
+# Run tests
+test = [
+  "coverage",
+  "fixtures>=1.4.0",
+  "gcovr",
+  "mock>=1.0",
+  "pytest",
+  "pytest-rerunfailures",
+  "pytest-timer",
+  "oio[all]",
+]
+# Talk to Zookeeper (with openio CLI)
+zk = [
+  "kazoo~=2.10.0",
+]
 
 [tool.pytest.ini_options]
 addopts = [

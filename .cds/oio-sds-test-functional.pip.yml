@@ -53,9 +53,10 @@ jobs:
           progress-bar = off
           EOF
           . $HOME/oiovenv/bin/activate
-          env
-          # FIXME(adu): Fix tox configuration file to support the new versions
-          pip install --upgrade pip setuptools virtualenv "tox<4.0.0" -r test-requirements.txt
+          pip install --upgrade pip setuptools tox virtualenv
+          # Need pip > 21.1 for this to work
+          pip install -e ".[test]"
+
           go install github.com/axw/gocov/gocov@latest
 
           fdbtag="fdb-${FDB_VERSION}"

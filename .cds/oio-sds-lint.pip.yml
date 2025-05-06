@@ -7,16 +7,20 @@ jobs:
         checkout: "{{ .cds.workspace }}"
 
       - name: Install dependencies
-        script:
-          - set -x
-          - export DEBIAN_FRONTEND=noninteractive
-          - eval $(worker key install --env-git proj-ssh-openio)
-          - apt update
+        script: |+
+          #!/bin/bash
+          set -x
+          export DEBIAN_FRONTEND=noninteractive
+          eval $(worker key install --env-git proj-ssh-openio)
+          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/snapmirror-focal.list
+          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal-updates main" >> /etc/apt/sources.list.d/snapmirror-focal.list
+          apt update
           # We don't need docker compose
-          - apt install -y $(sed -e '/docker-compose-plugin/d' .cds/deps-ubuntu-focal.txt | tr '\n' ' ')
-          - virtualenv -p /usr/bin/python3 $HOME/venv
-          - . $HOME/venv/bin/activate
-          - pip install -i "https://${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN_NAME}:${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN}@artifactory.ovhcloud.tools/artifactory/api/pypi/pypi-remote/simple" --progress-bar off -r requirements.txt -r test-requirements.txt
+          apt install -y $(sed -e '/docker-compose-plugin/d' .cds/deps-ubuntu-focal.txt | tr '\n' ' ')
+          virtualenv -p /usr/bin/python3 $HOME/venv
+          . $HOME/venv/bin/activate
+          pip install -i "https://${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN_NAME}:${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN}@artifactory.ovhcloud.tools/artifactory/api/pypi/pypi-remote/simple" --progress-bar off pip
+          pip install -i "https://${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN_NAME}:${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN}@artifactory.ovhcloud.tools/artifactory/api/pypi/pypi-remote/simple" --progress-bar off -e ".[lint]"
 
 
       - name: Run coding style tests
