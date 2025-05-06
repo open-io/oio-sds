@@ -128,7 +128,10 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and (cds_manual == "true" or git_branch == "master" or build_only == "true")
+        return (
+          cds_triggered_by_username ~= "cds.scheduler"
+          and (cds_manual == "true" or git_branch == "master" or build_only == "true")
+        )
 
   clean-artifacts:
     pipeline: oio-sds-clean-artifacts

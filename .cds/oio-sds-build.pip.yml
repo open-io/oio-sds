@@ -58,3 +58,54 @@ jobs:
           make -f /external-packages/ubuntu/focal/Makefile.common upload_to_repo
     requirements:
       - model: openio-debbuild-20.04
+
+  - job: Publish Python package on Artifactory
+    steps:
+      - name: Checkout application
+        checkout: "{{ .cds.workspace }}"
+
+      - name: Install dependencies
+        script: |+
+          #!/bin/bash
+          eval $(worker key install --env-git proj-ssh-openio)
+          . .cds/versions
+          export DEBIAN_FRONTEND=noninteractive
+          apt update
+          apt install -y python3-virtualenv virtualenv
+          virtualenv -p /usr/bin/python3 $HOME/oiovenv
+          cat << EOF > $HOME/oiovenv/pip.conf
+          [global]
+          index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+          extra-index-url = https://${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN_NAME}:{{.cds.integration.artifact_manager.token}}@artifactory.ovhcloud.tools/artifactory/api/pypi/pypi-remote/simple
+          [install]
+          progress-bar = off
+          EOF
+          . $HOME/oiovenv/bin/activate
+          pip install --progress-bar off --upgrade pip build twine
+          pip install --progress-bar off -e ".[all]"
+          # Need to fetch tags and enough commits for pbr to build a correct version number
+          git fetch origin master --depth 500 --tags
+
+      - name: Build Python package
+        script: |+
+          #!/bin/bash
+          . $HOME/oiovenv/bin/activate
+          python -m build --no-isolation
+
+      - name: Publish Python package
+        script: |+
+          #!/bin/bash
+          . $HOME/oiovenv/bin/activate
+          if [ "{{ .git.branch }}" == "master" ]
+          then
+            MATURITY="release"
+          else
+            MATURITY="snapshot"
+          fi
+          export TWINE_USERNAME="${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN_NAME}"
+          export TWINE_PASSWORD="${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN}"
+          export TWINE_REPOSITORY_URL="https://artifactory.ovhcloud.tools/artifactory/api/pypi/pu-objectstorage-default-pypi-${MATURITY}"
+          twine upload --non-interactive dist/*
+
+    requirements:
+      - model: Python-official-3.12-bookworm
