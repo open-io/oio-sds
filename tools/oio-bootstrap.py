@@ -1511,20 +1511,20 @@ ${TCP_CORK_COMMENT}use_tcp_cork = ${TCP_CORK}
 
 template_event_agent_handlers = """
 [handler:storage.content.new]
-pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
+pipeline = ${REPLICATION} ${PRESERVE}
 
 [handler:storage.content.update]
-pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
+pipeline = ${REPLICATION} ${PRESERVE}
 
 [handler:storage.content.append]
-pipeline = ${WEBHOOK} ${PRESERVE}
+pipeline = ${PRESERVE}
 
 [handler:storage.content.broken]
 pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = ${WEBHOOK} notify_deleted notify_lifecycle_deleted
+pipeline = notify_deleted notify_lifecycle_deleted
 
 [handler:storage.content.drained]
 pipeline = notify_deleted
@@ -1572,10 +1572,6 @@ features_whitelist=lifecycle,website,replication,cors
 use = egg:oio#volume_index
 retry_delay = 5
 write_quorum = 0
-
-[filter:webhook]
-use = egg:oio#webhook
-endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:async_replication]
 use = egg:oio#notify
@@ -2048,28 +2044,6 @@ syslog_prefix = OIO,${NS},admin,${SRVNUM}
 redis_host = ${IP}
 """
 
-template_systemd_service_webhook_server = """
-[Unit]
-Description=[OpenIO] Service webhook server ${SRVNUM}
-After=network.target
-PartOf=${PARENT}
-OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} --port 9081
-Environment=PATH=${PATH}
-Environment=PYTHONPATH=${PYTHONPATH}
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-${ENVIRONMENT}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
 template_systemd_service_tinyproxy = """
 [Unit]
 Description=[OpenIO] Forward all requests from ObjectStorageApi
@@ -2290,8 +2264,6 @@ def generate(options):
 
     DATADIR = options.get("DATADIR", SDSDIR + "/data")
     TINYPROXY_CONFIG = options.get("tinyproxy_config")
-    WEBHOOK = "webhook" if options.get("webhook_enabled", False) else ""
-    WEBHOOK_ENDPOINT = options.get("webhook_endpoint", "")
 
     compression = options.get("compression", defaults["compression"])
 
@@ -2358,8 +2330,6 @@ def generate(options):
         TLS_CERT_FILE=TLS_CERT_FILE,
         TLS_KEY_FILE=TLS_KEY_FILE,
         WANT_SERVICE_ID=want_service_id,
-        WEBHOOK=WEBHOOK,
-        WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
         REDIS_PORT=6379,
     )
     ENV["env.HOME"] = HOME
@@ -3626,18 +3596,6 @@ def generate(options):
         )
         register_service(env, template_systemd_service_tinyproxy, root_target)
 
-    # webhook test server
-    if WEBHOOK:
-        env = subenv(
-            {
-                "SRVTYPE": "webhook",
-                "SRVNUM": 1,
-                "PORT": 9081,
-                "EXE": "oio-webhook-test.py",
-            }
-        )
-        register_service(env, template_systemd_service_webhook_server, root_target)
-
     # Conscience agent configuration
     env = subenv({"SRVTYPE": "conscience-agent", "SRVNUM": 1})
     with open(CFGDIR + "/" + "conscience-agent.yml", "w+") as f:
@@ -3767,7 +3725,6 @@ def generate(options):
     final_conf["shallow_copy"] = options[SHALLOW_COPY]
     final_conf["with_service_id"] = options["with_service_id"]
     final_conf["random_service_id"] = bool(options["random_service_id"])
-    final_conf["webhook"] = WEBHOOK_ENDPOINT
     final_conf["use_tls"] = bool(options.get("use_tls"))
     final_conf["set_nice"] = bool(options.get("set_nice"))
     final_conf["set_ionice"] = bool(options.get("set_ionice"))

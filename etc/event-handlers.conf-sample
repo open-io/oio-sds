@@ -1,14 +1,12 @@
 
 [handler:storage.content.new]
 pipeline =
-# pipeline = webhook
 
 [handler:storage.content.update]
 pipeline =
 
 [handler:storage.content.append]
 pipeline =
-# pipeline = webhook
 
 [handler:storage.content.broken]
 pipeline = content_rebuild
@@ -18,7 +16,6 @@ pipeline = content_cleaner
 
 [handler:storage.content.drained]
 pipeline = content_cleaner
-# pipeline = webhook content_cleaner
 
 [handler:storage.container.new]
 pipeline = account_update
@@ -161,12 +158,6 @@ timeout_manifest_still_exists = 900
 # Does nothing. You'd better not defining any filter.
 [filter:noop]
 use = egg:oio#noop
-
-# -----------------------------------------------------------------
-# Call POST on an external URL with the event's body (unmaintained)
-[filter:webook]
-use = egg:oio#webhook
-endpoint = http://localhost:8000/invoke
 
 # -----------------------------------------------------------------
 # Display the body of each event passing through (for debugging).
