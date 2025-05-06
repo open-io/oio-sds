@@ -23,8 +23,6 @@ jobs:
           echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal-updates main" >> /etc/apt/sources.list.d/snapmirror-focal.list
           apt-get update
           apt-get install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
-          systemctl stop apache2.service redis.service
-          systemctl disable apache2.service redis.service
           # Configure environment
           echo "export PATH=/opt/${GO_PACKAGE}/bin:/usr/lib/rust-${RUST_VERSION}/bin:/opt/${ZOOKEEPER_PACKAGE}/bin:/opt/${PYTHON_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
           echo "export ZOOBINDIR=/opt/${ZOOKEEPER_PACKAGE}/bin"  >> $HOME/oio-env.sh

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -42,7 +42,6 @@ struct oio_sds_s
 {
 	gchar *ns;
 	gchar *proxy;
-	gchar *ecd;  // Erasure Coding Daemon
 	struct {
 		int proxy;
 		int rawx;
@@ -317,12 +316,6 @@ _chunk_method_is_EC(const char *chunk_method)
 	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
 }
 
-static int
-_chunk_method_needs_ecd(const char *chunk_method)
-{
-	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
-}
-
 static guint
 _get_meta_bound (GSList *lchunks)
 {
@@ -483,7 +476,6 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	*out = g_slice_new0 (struct oio_sds_s);
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
-	(*out)->ecd = oio_cfg_get_ecd(ns);
 	(*out)->sync_after_download = TRUE;
 	(*out)->no_shuffle = oio_sds_no_shuffle;
 	(*out)->admin = FALSE;
@@ -499,7 +491,6 @@ oio_sds_free (struct oio_sds_s *sds)
 	if (!sds) return;
 	oio_str_clean (&sds->ns);
 	oio_str_clean (&sds->proxy);
-	oio_str_clean(&sds->ecd);
 	if (sds->curl_handle)
 		curl_easy_cleanup (sds->curl_handle);
 	g_mutex_clear(&(sds->curl_lock));
@@ -806,62 +797,6 @@ _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 	return NULL;
 }
 
-static GError *
-_download_range_from_metachunk_ec(struct _download_ctx_s *dl,
-		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
-{
-	GRID_TRACE("%s", __FUNCTION__);
-	struct oio_sds_dl_range_s r0 = *range;
-
-	char url[128] = {0};
-	g_snprintf(url, sizeof(url), "http://%s/", dl->sds->ecd);
-
-	GPtrArray *headers = g_ptr_array_new_with_free_func(g_free);
-	for (GSList *l = meta->chunks; l; l = l->next) {
-		struct chunk_s *chunk = l->data;
-		g_ptr_array_add(headers, g_strdup_printf("%schunk-%u",
-					RAWX_HEADER_PREFIX, chunk->position.intra));
-		g_ptr_array_add(headers, g_strdup(chunk->url));
-	}
-	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_CHUNK_SIZE));
-	g_ptr_array_add(headers, g_strdup_printf("%"G_GSIZE_FORMAT, meta->size));
-	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_CONTENT_CHUNK_METHOD));
-	g_ptr_array_add(headers, g_strdup(dl->chunk_method));
-
-	// FIXME: this should not be required
-	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_CONTAINER_ID));
-	g_ptr_array_add(headers, g_strdup(oio_url_get(dl->src->url, OIOURL_HEXID)));
-
-	g_ptr_array_add(headers, NULL);
-
-	while (r0.size > 0) {
-		GRID_TRACE("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT,
-				__FUNCTION__, r0.offset, r0.size);
-
-		/* Attempt a read */
-		size_t nbread = 0;
-		GError *err = _download_range_from_chunk(dl, range, url,
-				(const char**)headers->pdata, &nbread);
-		EXTRA_ASSERT (nbread <= r0.size);
-		if (err) {
-			/* TODO manage the error kind to allow a retry */
-			g_ptr_array_free(headers, TRUE);
-			return err;
-		} else {
-			dl->dst->out_size += nbread;
-			if (r0.size == G_MAXSIZE) {
-				r0.size = 0;
-			} else {
-				r0.offset += nbread;
-				r0.size -= nbread;
-			}
-		}
-	}
-
-	g_ptr_array_free(headers, TRUE);
-	return NULL;
-}
-
 /* The range is relative to the metachunk, not the whole content */
 static GError *
 _download_range_from_metachunk (struct _download_ctx_s *dl,
@@ -878,8 +813,6 @@ _download_range_from_metachunk (struct _download_ctx_s *dl,
 	EXTRA_ASSERT (range->size <= meta->size);
 	EXTRA_ASSERT (range->offset + range->size <= meta->size);
 
-	if (_chunk_method_needs_ecd(dl->chunk_method))
-		return _download_range_from_metachunk_ec(dl, range, meta);
 	return _download_range_from_metachunk_replicated (dl, range, meta);
 }
 
@@ -1357,12 +1290,6 @@ oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 		&& g_queue_is_empty(ul->buffer_tail);
 }
 
-int
-oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul)
-{
-	return _chunk_method_needs_ecd(ul->chunk_method);
-}
-
 struct oio_error_s *
 oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 {
@@ -1457,29 +1384,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 	gint64 k = 1;
 
-	/* Verify either we are doing erasure coding or not */
-	if (!err && oio_sds_upload_needs_ecd(ul)) {
-		if (oio_str_is_set(ul->sds->ecd)) {
-			GRID_DEBUG("using ecd gateway");
-		} else {
-			err = NEWERROR(CODE_NOT_IMPLEMENTED,
-					"cannot upload this without ecd");
-		}
-
-		/* If we erasure-code, patch the metachunk-size
-		 * TODO(jfs): Find a way to get rid of this, with a fix in oio-fs */
-		if (oio_sds_client_patch_metachunk_size) {
-			k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
-			if (!ul->chunk_size_updated) {
-				_patch_chunk_size(&ul->chunk_size);
-				ul->chunk_size = ul->chunk_size * k;
-				/* avoid to increase chunk_size in _sds_upload_renew loop */
-				ul->chunk_size_updated = TRUE;
-			}
-		} else {
-			_patch_chunk_size(&ul->chunk_size);
-		}
-	} else if (!err) {
+	if (!err) {
 		_patch_chunk_size(&ul->chunk_size);
 	}
 
@@ -1684,42 +1589,22 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 	/* Initiate the PolyPut (c) with all its targets */
 	ul->put = http_put_create (-1, ul->chunk_size);
 	gboolean composed_positions = _chunk_method_is_EC(ul->chunk_method);
-	if (oio_sds_upload_needs_ecd(ul)) {
-		// TODO: allow getting ecd from proxy
-		char ecd[128] = {0};
-		g_snprintf(ecd, sizeof(ecd), "http://%s/", ul->sds->ecd);
-		struct http_put_dest_s *dest = http_put_add_dest(ul->put, ecd, ul->mc);
+
+	for (GSList *l = ul->mc->chunks; l; l = l->next) {
+		struct chunk_s *c = l->data;
+		struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
+
 		_sds_upload_add_headers(ul, dest);
-		int chunks_nb = 0;
-		for (GSList *l = ul->mc->chunks; l; l = l->next, chunks_nb++) {
-			struct chunk_s *chunk = l->data;
-			char key[64] = {0};
-			g_snprintf(key, sizeof(key), "%s%s-%u",
-					RAWX_HEADER_PREFIX, "chunk", chunk->position.intra);
-			http_put_dest_add_header(dest, key, "%s", chunk->url);
-		}
-		http_put_dest_add_header (dest, RAWX_HEADER_CHUNKS_NB,
-				"%d", chunks_nb);
+
+		http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_ID,
+				"%s", strrchr(c->url, '/')+1);
+
+		gchar strpos[32];
+		_chunk_pack_position(c, composed_positions, strpos, sizeof(strpos));
 		http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_POS,
-				"%u", ul->mc->meta);
+				"%s", strpos);
+
 		ul->http_dests = g_slist_append (ul->http_dests, dest);
-	} else {
-		for (GSList *l = ul->mc->chunks; l; l = l->next) {
-			struct chunk_s *c = l->data;
-			struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
-
-			_sds_upload_add_headers(ul, dest);
-
-			http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_ID,
-					"%s", strrchr(c->url, '/')+1);
-
-			gchar strpos[32];
-			_chunk_pack_position(c, composed_positions, strpos, sizeof(strpos));
-			http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_POS,
-					"%s", strpos);
-
-			ul->http_dests = g_slist_append (ul->http_dests, dest);
-		}
 	}
 
 	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
@@ -1783,7 +1668,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 			} else {
 				/* XXX JFS: if no upload at all has ever been started and we
 				 * received a buffer (empty or not), then we have a stream and
-				 * we need at least one empty chunk to be able to rebuid the
+				 * we need at least one empty chunk to be able to rebuild the
 				 * content. So we re-enqueue the buffer and let the PUT happen. */
 				g_queue_push_head (ul->buffer_tail, buf);
 				GError *err = _sds_upload_renew (ul);

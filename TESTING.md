@@ -136,8 +136,6 @@ Put your cluster configuration in the following file, you also have to change
       - {addr: '172.17.0.4:6121', num: '1', path: /var/lib/oio/sds/OPENIO/meta2-1}
       container:
       - {addr: '172.17.0.4:6002', num: '1', path: /var/lib/oio/sds/OPENIO/container-1}
-      ecd:
-      - {addr: '172.17.0.4:6001', num: '1', path: /var/lib/oio/sds/OPENIO/ecd-1}
       event-agent:
       - {num: '1', path: /var/lib/oio/sds/OPENIO/event-agent-1}
       redis:

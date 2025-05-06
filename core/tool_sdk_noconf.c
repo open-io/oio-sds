@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -32,15 +33,13 @@ License along with this library.
  * change soon), the client sometimes needs a side daemon that simplifies the
  * management of erasure-coded data.
  */
-static void _preconfigure(const char *ns, const char *proxy, const char *ecd) {
+static void _preconfigure(const char *ns, const char *proxy) {
 	assert(ns != NULL);
 	assert(proxy != NULL);
 
 	GString *cfg = g_string_new("");
 	g_string_printf(cfg, "[%s]\n", ns);
 	g_string_append_printf(cfg, "proxy=%s\n", proxy);
-	if (ecd)
-		g_string_append_printf(cfg, "ecd=%s\n", ecd);
 
 	GString *path = g_string_new("");
 	g_string_printf(path, "%s/plop-XXXXXX", g_get_tmp_dir());
@@ -116,8 +115,7 @@ int main(int argc, char **argv) {
 	struct oio_error_s *err;
 	struct oio_sds_s *sds = NULL;
 
-	_preconfigure(oio_url_get(url, OIOURL_NS),
-			g_getenv("OIO_PROXY"), g_getenv("OIO_ECD"));
+	_preconfigure(oio_url_get(url, OIOURL_NS), g_getenv("OIO_PROXY"));
 
 	err = oio_sds_init (&sds, oio_url_get(url, OIOURL_NS));
 	assert(err == NULL);

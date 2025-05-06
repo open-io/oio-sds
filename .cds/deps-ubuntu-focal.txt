@@ -1,4 +1,3 @@
-apache2
 asn1c
 attr
 beanstalkd
@@ -13,8 +12,6 @@ flex
 git
 gdb
 lcov
-libapache2-mod-wsgi-py3
-libapreq2-dev
 libattr1-dev
 libcurl4-gnutls-dev
 liberasurecode1

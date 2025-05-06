@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -92,13 +92,13 @@ enum oio_sds_content_key_e
 
 /** How properties are reported with oio_sds_show_content()
  * @param key the name of the property
- * @param value its value ... suprising isn't it? */
+ * @param value its value ... surprising isn't it? */
 typedef void (*oio_sds_info_reporter_f) (void *cb_data,
 		enum oio_sds_content_key_e key, const char *value);
 
 /** How properties are reported.
  * @param key the name of the property
- * @param value its value ... suprising isn't it? */
+ * @param value its value ... surprising isn't it? */
 typedef void (*oio_sds_property_reporter_f) (void *cb_data,
 		const char *key, const char *value);
 
@@ -201,7 +201,7 @@ const char * oio_error_message (const struct oio_error_s *e);
  *
  * @param out A placeholder for the
  * @param ns
- * @return NULL if an error occured, or a pointer to a valid OpenIO SDS client.
+ * @return NULL if an error occurred, or a pointer to a valid OpenIO SDS client.
  */
 struct oio_error_s * oio_sds_init (struct oio_sds_s **out, const char *ns);
 
@@ -383,10 +383,6 @@ int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
 /** Tells if the upload is ready to be (in)validated */
 int oio_sds_upload_done (struct oio_sds_ul_s *ul);
 
-/** Tells if the upload will need a data-daemon aside.
- * TODO rename to be more generic (not only EC requires side daemon) */
-int oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul);
-
 void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
 
 /** "Male" upload API
@@ -470,7 +466,7 @@ struct oio_sds_list_item_s
 
 struct oio_sds_list_listener_s
 {
-	/** An arbitraty pointer that will be passed as-is to all the hooks
+	/** An arbitrary pointer that will be passed as-is to all the hooks
 	 * producing an output for this listing. */
 	void *ctx;
 
@@ -488,7 +484,7 @@ struct oio_sds_list_listener_s
 	size_t out_count;
 
 	/** Has the list been truncated. If so, a subsequent call to list with
-	 * the appropriate marker shoudl be issued for a full list. */
+	 * the appropriate marker should be issued for a full list. */
 	int out_truncated;
 };
 
