@@ -23,7 +23,7 @@ from oio.content.quality import count_local_items
 from oio.rdir.client import RdirClient
 
 
-def looks_like_chunk_position(somestring):
+def looks_like_chunk_position(somestring: str):
     """Tell if the string represents a chunk position."""
     if len(somestring) > 10:
         return False
@@ -52,7 +52,7 @@ class ChunkOperator(object):
         self,
         container_id,
         content_id,
-        chunk_id_or_pos,
+        chunk_id_or_pos: str,
         path,
         version,
         rawx_id=None,
