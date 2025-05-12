@@ -73,6 +73,9 @@ use = egg:oio#account_update
 use = egg:oio#volume_index
 # Time in seconds before an event should be reprocessed
 retry_delay = 60
+# Factor to apply on the retry delay for serious issues
+# (e.g. no rdir assigned to the volume)
+serious_issue_factor = 5
 
 # How to deal with write errors.
 # - 0: retry on any error

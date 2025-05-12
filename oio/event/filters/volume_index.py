@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ from oio.common.exceptions import (
     OioNetworkException,
     OioTimeout,
     ServiceBusy,
+    VolumeException,
 )
 from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
@@ -35,11 +36,14 @@ SERVICE_EVENTS = [
 
 class VolumeIndexFilter(Filter):
     def __init__(self, *args, **kwargs):
-        super(VolumeIndexFilter, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.rdir = self.app_env["rdir_client"]
 
     def init(self):
         self._retry_delay = get_retry_delay(self.conf)
+        self._serious_issue_delay = self._retry_delay * int_value(
+            self.conf.get("serious_issue_factor"), 5
+        )
         self._write_quorum = int_value(self.conf.get("write_quorum"), 1)
 
     def _chunk_delete(self, reqid, volume_id, container_id, content_id, chunk_id):
@@ -193,6 +197,13 @@ class VolumeIndexFilter(Filter):
                 event=event,
                 body=f"rdir update error: {exc}",
                 delay=self._retry_delay,
+            )
+            return resp(env, cb)
+        except VolumeException as exc:
+            resp = RetryableEventError(
+                event=event,
+                body=f"rdir update error: {exc}",
+                delay=self._serious_issue_delay,
             )
             return resp(env, cb)
         except OioException as exc:
