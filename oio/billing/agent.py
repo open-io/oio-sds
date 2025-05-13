@@ -1,4 +1,4 @@
-# Copyright (C) 2022 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -15,7 +15,6 @@
 import random
 import re
 import signal
-import ssl
 import sys
 import time
 import uuid
@@ -438,11 +437,6 @@ class BillingAgent(object):
         Returns an AMQP BlockingConnection and a channel for the provided URL.
         """
         url_param = pika.URLParameters(self.amqp_url)
-        if url_param.ssl_options:
-            # Force TLSv1 to support production rabbit
-            url_param.ssl_options.context = ssl.SSLContext(
-                protocol=ssl.PROTOCOL_TLSv1_1
-            )
         self.logger.debug("Connecting to %s", url_param)
         connection = pika.BlockingConnection(url_param)
         try:
