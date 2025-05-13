@@ -2,7 +2,7 @@
 OpenIO SDS conscience central server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -634,6 +634,8 @@ conscience_update_srv(gboolean first, time_t now, gint32 si_score,
 			GRID_TRACE2("SRV %s score first [%s]", score_type_name, p_srv->description);
 			p_srv->lock_mtime = now;
 			if (score_type == PUT) {
+				GRID_INFO("First time seeing %s (service_id=%s), will be locked",
+						p_srv->description, p_srv->service_id);
 				p_srv->put_score.value = 0;
 			} else if (score_type == GET) {
 				p_srv->get_score.value = 0;
@@ -924,9 +926,10 @@ _alert_service_with_zeroed_score(struct conscience_srv_s *srv)
 {
 	time_t now = oio_ext_monotonic_seconds ();
 	if (srv->time_last_alert < now - srv->srvtype->alert_frequency_limit) {
-		GRID_WARN("[NS=%s][%s][SCORE=0] service=%.*s",
+		GRID_WARN("[NS=%s][%s][SCORE=0] service=%.*s (service_id=%s)",
 				oio_server_namespace, srv->srvtype->type_name,
-				(int)sizeof(srv->description), srv->description);
+				(int)sizeof(srv->description), srv->description,
+				srv->service_id);
 		srv->time_last_alert = now;
 	}
 }
@@ -1751,8 +1754,9 @@ static gboolean
 service_expiration_notifier(struct conscience_srv_s *srv, gpointer u UNUSED)
 {
 	if (srv) {
-		GRID_INFO("Service expired [%s] (score=%d get_score=%d)",
-				srv->description, srv->put_score.value, srv->get_score.value);
+		GRID_INFO("Service expired [%s] (score=%d get_score=%d service_id=%s)",
+				srv->description, srv->put_score.value, srv->get_score.value,
+				srv->service_id);
 		struct service_info_dated_s *sid = service_info_dated_new2(srv);
 		hub_publish_service(sid);
 		service_info_dated_free(sid);
