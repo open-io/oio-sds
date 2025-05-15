@@ -38,13 +38,23 @@ type AccessLogEvent struct {
 	TLS       bool
 	TTFB      uint64
 
+	LogPath bool
+	Account string
+	Bucket  string
+
 	Concurrency concurrency.ConcurrencyState
 }
 
 func (evt AccessLogEvent) String() string {
 	evt.Pid = Pid
 	var output bytes.Buffer
-	err := AccessLogTemplate.Execute(&output, evt)
+	var err error
+
+	if evt.LogPath {
+		err = AccessLogTemplateLong.Execute(&output, evt)
+	} else {
+		err = AccessLogTemplate.Execute(&output, evt)
+	}
 
 	if err != nil {
 		log.Printf("Error while executing AccessLogTemplate: %v", err)

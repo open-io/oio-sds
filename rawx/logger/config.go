@@ -31,17 +31,23 @@ var AccessLogPut = defs.ConfigDefaultAccessLogPut
 var AccessLogPost = defs.ConfigDefaultAccessLogPost
 var AccessLogDel = defs.ConfigDefaultAccessLogDelete
 
-const concurrencyFormat = "put:{{ .Concurrency.Put }} get:{{ .Concurrency.Get }} del:{{ .Concurrency.Del }}"
+const accessLogFormatHead = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
+const concurrencyFormatTail = " put:{{ .Concurrency.Put }} get:{{ .Concurrency.Get }} del:{{ .Concurrency.Del }}"
+const s3FormatTail = " account:{{ .Account }} bucket:{{ .Bucket }}"
 
 var LogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
 var RequestLogFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
-var AccessLogFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }} " + concurrencyFormat
 var EventLogFormat = "event INF {{ .Topic }} {{ .Event }}"
+
+var AccessLogFormat = accessLogFormatHead + concurrencyFormatTail + s3FormatTail
+var AccessLogFormatLong = ""
 
 var LogTemplate *template.Template = nil
 var RequestLogTemplate *template.Template = nil
-var AccessLogTemplate *template.Template = nil
 var EventLogTemplate *template.Template = nil
+
+var AccessLogTemplate *template.Template = nil
+var AccessLogTemplateLong *template.Template = nil
 
 func InitLogTemplates() error {
 	var err error
@@ -65,6 +71,16 @@ func InitLogTemplates() error {
 	if err != nil {
 		return err
 	}
+
+	// By default, for an easy transition, give the ~PutGet format the same value as the default value
+	if AccessLogFormatLong == "" {
+		AccessLogFormatLong = AccessLogFormat
+	}
+	AccessLogTemplateLong, err = template.New("AccessLogTemplateLong").Funcs(log_funcs).Parse(AccessLogFormatLong)
+	if err != nil {
+		return err
+	}
+
 	EventLogTemplate, err = template.New("eventLogTemplate").Funcs(log_funcs).Parse(EventLogFormat)
 	return err
 }

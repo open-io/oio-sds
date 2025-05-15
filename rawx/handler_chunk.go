@@ -661,7 +661,9 @@ func (rr *rawxRequest) serveChunk() {
 		rr.replyError("", errInvalidChunkID)
 		return
 	}
+
 	rr.chunkID = strings.ToUpper(rr.req.URL.Path[1:])
+	shouldLogPath := false
 
 	var spent uint64
 	var ttfb uint64
@@ -670,6 +672,7 @@ func (rr *rawxRequest) serveChunk() {
 	} else {
 		switch rr.req.Method {
 		case "GET":
+			shouldLogPath = true
 			concurrency.CountGET(func() {
 				if err := rr.drain(); err != nil {
 					rr.replyError("", err)
@@ -678,6 +681,7 @@ func (rr *rawxRequest) serveChunk() {
 				}
 			})
 		case "PUT":
+			shouldLogPath = true
 			concurrency.CountPUT(func() {
 				rr.uploadChunk()
 			})
@@ -718,7 +722,7 @@ func (rr *rawxRequest) serveChunk() {
 	spent, ttfb = IncrementStatReqMethod(rr)
 
 	if shouldAccessLog(rr.status, rr.req.Method) {
-		logger.LogHttp(logger.AccessLogEvent{
+		evt := logger.AccessLogEvent{
 			Status:      rr.status,
 			TimeSpent:   spent,
 			BytesIn:     rr.bytesIn,
@@ -730,8 +734,26 @@ func (rr *rawxRequest) serveChunk() {
 			ReqId:       rr.reqid,
 			TLS:         rr.req.TLS != nil,
 			TTFB:        ttfb,
+			LogPath:     shouldLogPath,
 			Concurrency: concurrency.GetConcurrency(),
-		})
+		}
+		if shouldLogPath {
+			populateLongFields(&evt, rr)
+		}
+		logger.LogHttp(evt)
+	}
+}
+
+func populateLongFields(evt *logger.AccessLogEvent, rr *rawxRequest) {
+	fullPath := rr.req.Header.Get("X-Oio-Chunk-Meta-Full-Path")
+	if fullPath != "" {
+		tokens := strings.SplitN(fullPath, "/", 3)
+		if len(tokens) >= 1 {
+			evt.Account = tokens[0]
+		}
+		if len(tokens) >= 2 {
+			evt.Bucket = tokens[1]
+		}
 	}
 }
 

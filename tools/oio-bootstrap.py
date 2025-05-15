@@ -711,8 +711,16 @@ compression ${COMPRESSION}
 log_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	message:{{ .Message }}"
 # Request-related message
 log_request_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	message:{{ .Message }}"
-# Access log
+
+# Access log: short form for requests who are rarely requested in forensics 
+#             operations.
 log_access_format "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ .Status }}	bytes_recvd_int:{{ .BytesIn }}	bytes_sent_int:{{ .BytesOut }}	request_time_float:{{ .TimeSpent | div1M | printf \\"%.6f\\" }}	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	ttfb:{{ .TTFB }}	put:{{ .Concurrency.Put }}	get:{{ .Concurrency.Get }}	del:{{ .Concurrency.Del }}"
+
+# Access log: long form for account/bucket related requests that are often requested for
+#             forensics purposes.
+#             Additional template fields become available: .Account, .Bucket
+log_access_format_long "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ .Status }}	bytes_recvd_int:{{ .BytesIn }}	bytes_sent_int:{{ .BytesOut }}	request_time_float:{{ .TimeSpent | div1M | printf \\"%.6f\\" }}	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	ttfb:{{ .TTFB }}	put:{{ .Concurrency.Put }}	get:{{ .Concurrency.Get }}	del:{{ .Concurrency.Del }}	account:{{ .Account }}	bucket:{{ .Bucket }}"
+
 # Event log
 log_event_format "level_name:INFO	X-OVH-TOKEN:my_token	topic:{{ .Topic }}	event:{{ .Event }}"
 
