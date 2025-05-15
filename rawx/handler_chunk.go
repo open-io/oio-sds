@@ -745,7 +745,7 @@ func (rr *rawxRequest) serveChunk() {
 }
 
 func populateLongFields(evt *logger.AccessLogEvent, rr *rawxRequest) {
-	fullPath := rr.req.Header.Get("X-Oio-Chunk-Meta-Full-Path")
+	fullPath := rr.req.Header.Get(defs.HeaderNameFullpath)
 	if fullPath != "" {
 		tokens := strings.SplitN(fullPath, "/", 3)
 		if len(tokens) >= 1 {
