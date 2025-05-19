@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -36,9 +36,9 @@ from tests.unit.api import FakeApiResponse, FakeStorageApi
 from tests.utils import random_str
 
 
-def chunk(suffix, position, score=100):
+def chunk(suffix, position, score=100, host="1.2.3.4:6000"):
     return {
-        "url": "http://1.2.3.4:6000/{0}".format(suffix),
+        "url": f"http://{host}/{suffix}",
         "pos": str(position),
         "size": 32,
         "hash": "0" * 32,
@@ -615,6 +615,50 @@ class ObjectStorageTest(unittest.TestCase):
             ],
         }
         self.maxDiff = 8000
+        self.assertDictEqual(sorted_chunks, chunks)
+
+    def test_sort_chunks_duplicates(self):
+        self.maxDiff = 8000
+        raw_chunks = [
+            chunk("AAAA", "0.0"),
+            chunk("BBBB", "0.1", 80),
+            chunk("AAAA", "0.0", 59, host="1.2.3.5:6001"),
+            chunk("DDDD", "1.0"),
+            chunk("EEEE", "1.1", 80),
+            chunk("EEEE", "1.1", 59, host="1.2.3.5:6001"),
+        ]
+        chunks = _sort_chunks(raw_chunks, True, keep_duplicates=True)
+        sorted_chunks = {
+            0: [
+                extend(chunk("AAAA", "0.0"), {"num": 0, "offset": 0}),
+                extend(chunk("BBBB", "0.1", 80), {"num": 1, "offset": 0}),
+                extend(
+                    chunk("AAAA", "0.0", 59, host="1.2.3.5:6001"),
+                    {"num": 0, "offset": 0},
+                ),
+            ],
+            1: [
+                extend(chunk("DDDD", "1.0"), {"num": 0, "offset": 32}),
+                extend(chunk("EEEE", "1.1", 80), {"num": 1, "offset": 32}),
+                extend(
+                    chunk("EEEE", "1.1", 59, host="1.2.3.5:6001"),
+                    {"num": 1, "offset": 32},
+                ),
+            ],
+        }
+        self.assertDictEqual(sorted_chunks, chunks)
+
+        chunks = _sort_chunks(raw_chunks, True, keep_duplicates=False)  # default
+        sorted_chunks = {
+            0: [
+                extend(chunk("AAAA", "0.0"), {"num": 0, "offset": 0}),
+                extend(chunk("BBBB", "0.1", 80), {"num": 1, "offset": 0}),
+            ],
+            1: [
+                extend(chunk("DDDD", "1.0"), {"num": 0, "offset": 32}),
+                extend(chunk("EEEE", "1.1", 80), {"num": 1, "offset": 32}),
+            ],
+        }
         self.assertDictEqual(sorted_chunks, chunks)
 
     def test_container_refresh_conflict(self):

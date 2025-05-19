@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -99,21 +99,6 @@ def get_meta_ranges(ranges, chunks):
     return range_infos
 
 
-def wrand_choice_index(scores):
-    """Choose an element from the `scores` sequence and return its index"""
-    scores = list(scores)
-    total = sum(scores)
-    target = random.uniform(0, total)
-    upto = 0
-    index = 0
-    for score in scores:
-        if upto + score >= target:
-            return index
-        upto += score
-        index += 1
-    assert False, "Shouldn't get here"
-
-
 def _get_weighted_random_score(chunk):
     score = chunk.get("score", 0)
     if not score:
@@ -125,7 +110,7 @@ def _get_weighted_random_score(chunk):
     return score
 
 
-def _sort_chunks(raw_chunks, ec_security, logger=None):
+def _sort_chunks(raw_chunks, ec_security, keep_duplicates=False, logger=None):
     """
     Sort a list a chunk objects. In addition to the sort,
     this function adds an "offset" field to each chunk object.
@@ -153,7 +138,8 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
                         chunk["pos"],
                         chunk["real_url"],
                     )
-                continue
+                if not keep_duplicates:
+                    continue
             nums.add(num)
         chunks_at_position = chunks.setdefault(position, [])
         chunks_at_position.append(chunk)

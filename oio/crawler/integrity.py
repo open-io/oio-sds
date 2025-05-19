@@ -20,6 +20,7 @@ Recursively check account, container, content and chunk integrity.
 
 import csv
 import sys
+from collections import defaultdict
 from time import time
 
 from oio.api.object_storage import ObjectStorageApi, _sort_chunks
@@ -590,6 +591,22 @@ class Checker(object):
                         f"Unusable chunk {chunk['url']} at position {chunk['pos']}"
                     )
 
+        if len(chunks) > required:
+            if stg_met.ec:
+                by_subpos = defaultdict(list)
+                for chunk in chunks:
+                    by_subpos[chunk["num"]].append(chunk)
+                for sub, dups in by_subpos.items():
+                    if len(dups) > 1:
+                        errors.append(
+                            f"{len(dups)} chunks at position {dups[0]['pos']}, "
+                            "expected 1"
+                        )
+            else:
+                errors.append(
+                    f"{len(chunks)} chunks at position {pos}, expected {required}"
+                )
+
         irreparable = required - len(errors) < stg_met.min_chunks_to_read
         if irreparable:
             errors.append(
@@ -620,7 +637,9 @@ class Checker(object):
         :returns: the list of errors encountered
         """
         stg_met = STORAGE_METHODS.load(obj_meta["chunk_method"])
-        chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
+        chunks_by_pos = _sort_chunks(
+            chunks, stg_met.ec, logger=self.logger, keep_duplicates=True
+        )
         tasks = []
         for pos, pchunks in chunks_by_pos.items():
             tasks.append(
