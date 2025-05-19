@@ -214,6 +214,35 @@ _metacd_load_url (struct req_args_s *args, struct oio_url_s *url)
 	return TRUE;
 }
 
+static gboolean
+_concat_headers(gchar *key, gchar *value, gpointer data)
+{
+	if (data != NULL && (*key == 'x' || *key == 'X')) {
+		g_string_append_printf((GString*)data, " %s:%s", key, value);
+	}
+	return FALSE;
+}
+
+static void
+_log_matching(struct http_request_s *rq,
+              struct oio_requri_s *ruri UNUSED,
+              struct path_matching_s **matchings UNUSED)
+{
+	if (!GRID_TRACE2_ENABLED())
+		return;
+
+	GString *tmp = g_string_new("");
+	if (0 == strcasecmp(rq->cmd, "PUT") || 0 == strcasecmp(rq->cmd, "POST")) {
+		g_tree_foreach(rq->tree_headers, (GTraverseFunc)_concat_headers, tmp);
+	}
+
+	GRID_TRACE2("URI path[%s] query[%s] fragment[%s] matches[%u] %s",
+		ruri->path, ruri->query, ruri->fragment,
+		g_strv_length((gchar**)matchings),
+		tmp->str);
+	g_string_free(tmp, TRUE);
+}
+
 static enum http_rc_e
 handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 {
@@ -290,15 +319,12 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	}
 
 	// Then parse the request to find a handler
-	struct oio_url_s *url = NULL;
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 	oio_requri_parse (rq->req_uri, &ruri);
 
 	struct path_matching_s **matchings = _metacd_match (rq->cmd, ruri.path);
 
-	GRID_TRACE2("URI path[%s] query[%s] fragment[%s] matches[%u]",
-			ruri.path, ruri.query, ruri.fragment,
-			g_strv_length((gchar**)matchings));
+	_log_matching(rq, &ruri, matchings);
 
 	GQuark gq_count = gq_count_unexpected;
 	GQuark gq_time = gq_time_unexpected;
@@ -311,6 +337,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		rp->finalize ();
 		rc = HTTPRC_DONE;
 	} else {
+		struct oio_url_s *url = NULL;
 		const char *err;
 		struct req_args_s args = {0};
 		args.req_uri = &ruri;
@@ -326,6 +353,8 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 			gq_count = (*matchings)->last->gq_count;
 			gq_time = (*matchings)->last->gq_time;
 
+			_request_populate_enduser(&args);
+
 			GRID_TRACE("%s %s URL %s", __FUNCTION__,
 					ruri.path, oio_url_get(args.url, OIOURL_WHOLE));
 
@@ -336,6 +365,11 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 				rc = (*handler) (&args);
 			}
 		}
+
+		oio_url_pclean (&url);
+		oio_pfree0(&args.top_account, NULL);
+		oio_pfree0(&args.top_bucket, NULL);
+		oio_pfree0(&args.top_operation, NULL);
 	}
 
 	const gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
@@ -346,7 +380,6 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
-	oio_url_pclean (&url);
 	oio_ext_set_reqid (NULL);
 	oio_ext_set_region(NULL);
 	return rc;

@@ -676,6 +676,47 @@ gboolean _request_get_flag (struct req_args_s *args, const char *flag) {
 	return _has_flag_in_headers (args, PROXYD_HEADER_MODE, flag);
 }
 
+void _request_log_enduser(struct req_args_s *args) {
+	if (oio_str_is_set(args->top_account)) {
+		args->rp->access_tail("account:%s", args->top_account);
+	}
+	if (oio_str_is_set(args->top_bucket)) {
+		args->rp->access_tail("bucket:%s", args->top_bucket);
+	}
+	if (oio_str_is_set(args->top_operation)) {
+		args->rp->access_tail("operation:%s", args->top_operation);
+	}
+}
+
+// Sometimes the value is forced by a header, for the cases where the caller knows better. It has the priority.
+// Sometimes the value is captured so that redirections and sharding do not alter it.
+// Sometimes we extract one value
+// But sometimes we just don't know.
+void _request_populate_enduser(struct req_args_s *args) {
+	const char *str;
+
+	str = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_BUCKET);
+	if (!oio_str_is_set(str)) {
+		str = oio_url_get(args->url, OIOURL_USER);
+	}
+	if (oio_str_is_set(str)) {
+		args->top_bucket = g_strdup(str);
+	}
+
+	str = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_ACCOUNT);
+	if (!oio_str_is_set(str)) {
+		str = oio_url_get(args->url, OIOURL_ACCOUNT);
+	}
+	if (oio_str_is_set(str)) {
+		args->top_account = g_strdup(str);
+	}
+
+	str = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_OPERATION);
+	if (oio_str_is_set(str)) {
+		args->top_operation = g_strdup(str);
+	}
+}
+
 void service_learn (const char *key) {
 	gchar *k = g_strdup(key);
 	SRV_WRITE(lru_tree_insert(srv_known, k, GINT_TO_POINTER(1)));

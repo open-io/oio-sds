@@ -227,8 +227,19 @@ struct req_args_s
 	struct http_reply_ctx_s *rp;
 
 	gint64 version;
-
 	struct network_server_s *server;
+
+	/// Saved before any sharding redirect, for further logging purposes.
+
+	// Parent bucket in cases of sharded containers (when URL is set to the end-container reference)
+	gchar *top_bucket;
+
+	// Parent account in cases of sharded containers (when ACCOUNT is set to the technical value for sharding purposes)
+	gchar *top_account;
+
+	// Maybe the gateway announces a top-parent operation, that helps to correlate local proxy ops with global
+	// content_create ops
+	gchar *top_operation;
 };
 
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
@@ -240,6 +251,12 @@ enum http_rc_e rest_action (struct req_args_s *args,
 		enum http_rc_e (*handler) (struct req_args_s *, json_object *));
 
 gboolean _request_get_flag(struct req_args_s *args, const char *flag);
+
+// Collect End-User information for further logging puposes
+void _request_populate_enduser(struct req_args_s *args);
+
+// Append End-User information to the access log
+void _request_log_enduser(struct req_args_s *args);
 
 /* -------------------------------------------------------------------------- */
 

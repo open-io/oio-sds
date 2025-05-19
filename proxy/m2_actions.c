@@ -31,7 +31,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define META2_LISTING_DEFAULT_LIMIT 1000
 #define META2_LISTING_MAX_LIMIT 10000
 
-
 static gchar*
 _resolve_service_id(const char *service_id)
 {
@@ -2460,6 +2459,7 @@ enum http_rc_e action_container_create_many (struct req_args_s *args) {
 //
 // }}CONTAINER
 enum http_rc_e action_container_create (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, _m2_container_create);
 }
 
@@ -2484,6 +2484,7 @@ enum http_rc_e action_container_create (struct req_args_s *args) {
 //
 // }}CONTAINER
 enum http_rc_e action_container_destroy (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return action_m2_container_destroy (args);
 }
 
@@ -2898,6 +2899,7 @@ enum http_rc_e action_container_prop_get (struct req_args_s *args) {
 //
 // }}CONTAINER
 enum http_rc_e action_container_prop_set (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action (args, action_m2_container_propset);
 }
 
@@ -2933,6 +2935,7 @@ enum http_rc_e action_container_prop_set (struct req_args_s *args) {
 //
 // }}CONTAINER
 enum http_rc_e action_container_prop_del (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action (args, action_m2_container_propdel);
 }
 
@@ -2980,6 +2983,7 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 enum http_rc_e
 action_container_checkpoint(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_checkpoint);
 }
 
@@ -3450,6 +3454,7 @@ action_container_sharding_find(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_prepare(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_prepare);
 }
 
@@ -3487,6 +3492,7 @@ action_container_sharding_prepare(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_create_shard(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_create_shard);
 }
 
@@ -3525,6 +3531,7 @@ action_container_sharding_create_shard(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_merge(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_merge);
 }
 
@@ -3559,6 +3566,7 @@ action_container_sharding_merge(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_update_shard(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_update_shard);
 }
 
@@ -3589,6 +3597,7 @@ action_container_sharding_update_shard(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_lock(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_lock);
 }
 
@@ -3630,6 +3639,7 @@ action_container_sharding_lock(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_replace(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_replace);
 }
 
@@ -3658,6 +3668,7 @@ action_container_sharding_replace(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_clean(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_clean);
 }
 
@@ -3765,6 +3776,7 @@ action_container_sharding_show(struct req_args_s *args)
 enum http_rc_e
 action_container_sharding_abort(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_sharding_abort);
 }
 
@@ -4386,6 +4398,7 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //
 // }}CONTENT
 enum http_rc_e action_content_put (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_content_create);
 }
 
@@ -4434,6 +4447,7 @@ enum http_rc_e action_content_put (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_update(struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, _m2_content_update);
 }
 
@@ -4458,6 +4472,7 @@ enum http_rc_e action_content_update(struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_truncate(struct req_args_s *args) {
+	_request_log_enduser(args);
 	GError *err = NULL;
 	const char *size_str = OPT("size");
 	char *end = NULL;
@@ -4517,6 +4532,7 @@ enum http_rc_e action_content_truncate(struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_prepare (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action (args, action_m2_content_prepare);
 }
 
@@ -4569,6 +4585,7 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_prepare_v2(struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_content_prepare_v2);
 }
 
@@ -4608,6 +4625,8 @@ enum http_rc_e action_content_prepare_v2(struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_show (struct req_args_s *args) {
+	_request_log_enduser(args);
+
 	GSList *beans = NULL;
 	guint32 flags = 0;
 
@@ -4739,6 +4758,7 @@ static enum http_rc_e action_m2_content_delete (struct req_args_s *args,
 //
 // }}CONTENT
 enum http_rc_e action_content_delete (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_content_delete);
 }
 
@@ -4848,6 +4868,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 //
 // }}CONTENT
 enum http_rc_e action_content_delete_many (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, _m2_content_delete_many);
 }
 
@@ -4990,6 +5011,7 @@ enum http_rc_e action_content_prop_get (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_prop_set (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action (args, action_m2_content_propset);
 }
 
@@ -5020,6 +5042,7 @@ enum http_rc_e action_content_prop_set (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_prop_del (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action (args, action_m2_content_propdel);
 }
 
@@ -5107,6 +5130,7 @@ action_m2_content_policy_transition(struct req_args_s *args,struct json_object *
 //
 // }}CONTENT
 enum http_rc_e action_content_policy_transition(struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_content_policy_transition);
 }
 
@@ -5130,6 +5154,7 @@ enum http_rc_e action_content_policy_transition(struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_purge (struct req_args_s *args) {
+	_request_log_enduser(args);
 	return rest_action (args, action_m2_content_purge);
 }
 
@@ -5171,6 +5196,7 @@ action_m2_container_lifecycle_create_views(struct req_args_s *args, struct json_
 enum http_rc_e
 action_container_lifecycle_create_views(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_lifecycle_create_views);
 }
 
@@ -5220,5 +5246,6 @@ action_m2_container_lifecycle_apply(struct req_args_s *args, struct json_object 
 enum http_rc_e
 action_container_lifecycle_apply(struct req_args_s *args)
 {
+	_request_log_enduser(args);
 	return rest_action(args, action_m2_container_lifecycle_apply);
 }
