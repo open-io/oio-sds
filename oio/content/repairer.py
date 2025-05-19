@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from collections import defaultdict
 from datetime import datetime
 
 from oio.api.object_storage import _sort_chunks
@@ -158,6 +159,164 @@ class ContentRepairerWorker(ToolWorker):
             )
             return exc
 
+    def _rebuild_missing_positions(
+        self,
+        item,
+        content_id,
+        stg_met,
+        metachunk_pos,
+        chunks,
+        path,
+        version,
+        reqid=None,
+    ):
+        exceptions = []
+        required = stg_met.expected_chunks
+        if len(chunks) >= required:
+            return exceptions  # Nothing to do
+
+        if stg_met.ec:
+            subs = {x["num"] for x in chunks}
+            for sub in range(required):
+                if sub not in subs:
+                    pos = f"{metachunk_pos}.{sub}"
+                    exc = self._safe_chunk_rebuild(
+                        item=item,
+                        content_id=content_id,
+                        chunk_id_or_pos=pos,
+                        path=path,
+                        version=version,
+                        reqid=reqid,
+                    )
+                    if exc:
+                        exceptions.append((pos, exc))
+        else:
+            pos = str(metachunk_pos)
+            missing_chunks = required - len(chunks)
+            for _ in range(missing_chunks):
+                exc = self._safe_chunk_rebuild(
+                    item=item,
+                    content_id=content_id,
+                    chunk_id_or_pos=pos,
+                    path=path,
+                    version=version,
+                    reqid=reqid,
+                )
+                if exc:
+                    exceptions.append((pos, exc))
+        return exceptions
+
+    def _remove_and_unref_chunk(
+        self,
+        item,
+        content_id,
+        chunk,
+        path,
+        version,
+        reqid=None,
+    ):
+        _ns, account, container, _, _ = item
+        payload = [
+            {
+                "type": "chunk",
+                "id": chunk["url"],
+                "hash": chunk["hash"],
+                "size": chunk["size"],
+                "content": content_id,
+                "pos": chunk["pos"],
+            }
+        ]
+        try:
+            self.logger.info(
+                "Unreferencing %s from %s/%s/%s (reqid=%s)",
+                chunk["url"],
+                account,
+                container,
+                path,
+                reqid,
+            )
+            self.container_client.container_raw_delete(
+                account,
+                container,
+                path=path,
+                version=version,
+                data=payload,
+                reqid=reqid,
+            )
+            self.logger.info("Deleting %s (reqid=%s)", chunk["url"], reqid)
+            self.blob_client.chunk_delete(chunk["url"], reqid=reqid)
+        except NotFound as err:
+            self.logger.debug(
+                "Got an error during removal of %s: %s", chunk["url"], err
+            )
+        except Exception as err:
+            self.logger.warning(
+                "Failed to delete or unreference %s: %s", chunk["url"], err
+            )
+            return err
+        return None
+
+    def _remove_duplicate_positions(
+        self,
+        item,
+        content_id,
+        stg_met,
+        metachunk_pos,
+        chunks,
+        path,
+        version,
+        reqid=None,
+    ):
+        """
+        Try to remove duplicate chunks at the same position.
+        """
+        exceptions = []
+        required = stg_met.expected_chunks
+        if len(chunks) <= required:
+            return exceptions  # Nothing to do
+
+        if stg_met.ec:
+            by_subpos = defaultdict(list)
+            for chunk in chunks:
+                by_subpos[chunk["num"]].append(chunk)
+            to_delete = []
+            for sub, dups in by_subpos.items():
+                if len(dups) <= 1:
+                    continue
+                self.logger.warning(
+                    "%d chunks at position %s.%s, expected 1",
+                    len(dups),
+                    metachunk_pos,
+                    sub,
+                )
+                can_be_kept = [x for x in dups if x.get("is_valid")]
+                del_first = [x for x in dups if not x.get("is_valid")]
+                if not can_be_kept:
+                    self.logger.warning(
+                        "No valid chunk at position %s.%s, %d chunks referenced",
+                        metachunk_pos,
+                        sub,
+                        len(dups),
+                    )
+                elif not del_first:
+                    # Chunks are supposed to be sorted by score (decreasing)
+                    to_delete.extend(can_be_kept[1:])
+                else:
+                    # del_first can be shorter than the number of chunks
+                    # in excess and we may need a 2nd pass.
+                    to_delete.extend(del_first)
+
+        else:  # replication
+            # Chunks are supposed to be sorted by score (decreasing)
+            to_delete = chunks[required:]
+
+        for chunk in to_delete:
+            exc = self._remove_and_unref_chunk(
+                item, content_id, chunk, path, version, reqid=reqid
+            )
+            if exc:
+                exceptions.append((chunk["url"], exc))
+
     def _repair_metachunk(
         self,
         item,
@@ -174,47 +333,26 @@ class ContentRepairerWorker(ToolWorker):
 
         :returns: the list (generator) of missing chunks
         """
-        exceptions = []
-        required = stg_met.expected_chunks
-        if len(chunks) < required:
-            if stg_met.ec:
-                subs = {x["num"] for x in chunks}
-                for sub in range(required):
-                    if sub not in subs:
-                        pos = f"{metachunk_pos}.{sub}"
-                        exc = self._safe_chunk_rebuild(
-                            item=item,
-                            content_id=content_id,
-                            chunk_id_or_pos=pos,
-                            path=path,
-                            version=version,
-                            reqid=reqid,
-                        )
-                        if exc:
-                            exceptions.append((pos, exc))
-            else:
-                pos = str(metachunk_pos)
-                missing_chunks = required - len(chunks)
-                for _ in range(missing_chunks):
-                    exc = self._safe_chunk_rebuild(
-                        item=item,
-                        content_id=content_id,
-                        chunk_id_or_pos=pos,
-                        path=path,
-                        version=version,
-                        reqid=reqid,
-                    )
-                    if exc:
-                        exceptions.append((pos, exc))
+        exceptions = self._rebuild_missing_positions(
+            item,
+            content_id,
+            stg_met,
+            metachunk_pos,
+            chunks,
+            path,
+            version,
+            reqid,
+        )
 
         for chunk in chunks:
             try:
-                self.blob_client.chunk_head(
+                _chunk_meta = self.blob_client.chunk_head(
                     chunk["url"],
                     xattr=True,
                     verify_checksum=True,
                     reqid=reqid,
                 )
+                chunk["is_valid"] = True
             except (
                 NotFound,
                 ClientPreconditionFailed,
@@ -247,6 +385,19 @@ class ContentRepairerWorker(ToolWorker):
                 )
                 exceptions.append((chunk["url"], exc))
 
+        dup_exc = self._remove_duplicate_positions(
+            item,
+            content_id,
+            stg_met,
+            metachunk_pos,
+            chunks,
+            path,
+            version,
+            reqid=reqid,
+        )
+        if dup_exc:
+            exceptions.extend(dup_exc)
+
         return exceptions
 
     def _process_item(self, item):
@@ -273,7 +424,7 @@ class ContentRepairerWorker(ToolWorker):
 
         exceptions = []
         stg_met = STORAGE_METHODS.load(obj_meta["chunk_method"])
-        chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
+        chunks_by_pos = _sort_chunks(chunks, stg_met.ec, keep_duplicates=True)
         for pos, chunks in chunks_by_pos.items():
             try:
                 exceptions += self._repair_metachunk(

@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,8 +17,10 @@
 
 import random
 from tempfile import mkstemp
+from urllib.parse import urlparse
 
 from oio import ObjectStorageApi
+from oio.common import exceptions
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.utils import cid_from_name
 from oio.event.evob import EventTypes
@@ -68,9 +70,13 @@ class ItemRebuildTest(CliTestCase):
             types=(EventTypes.CONTAINER_STATE,),
         )
 
-    def create_object(self, account, container, obj_name):
+    def create_object(self, account, container, obj_name, policy=None):
         self.api.object_create(
-            account, container, obj_name=obj_name, data="test_item_rebuild"
+            account,
+            container,
+            obj_name=obj_name,
+            data="test_item_rebuild",
+            policy=policy,
         )
         obj_meta, obj_chunks = self.api.object_locate(account, container, obj_name)
         self._wait_events(account, container, obj_name)
@@ -233,3 +239,60 @@ class ItemRebuildTest(CliTestCase):
         )
         for chunk in obj_chunks_after:
             self.assertFalse(chunk.get("error", False))
+
+    def _register_chunk(self, chunk, obj_meta):
+        payload = {
+            "type": "chunk",
+            "id": chunk["url"],
+            "hash": chunk["hash"],
+            "size": chunk["size"],
+            "content": obj_meta["id"],
+            "pos": chunk["pos"],
+        }
+        self.api.container.container_raw_insert(
+            payload,
+            self.account,
+            self.container,
+            path=obj_meta["name"],
+            version=obj_meta["version"],
+        )
+
+    def test_object_repair_too_many_chunks_EC(self):
+        try:
+            obj_meta, obj_chunks = self.create_object(
+                self.account,
+                self.container,
+                self.obj_name,
+                policy="EC",
+            )
+        except exceptions.ServiceBusy as err:
+            if "did not find enough services" in str(err):
+                self.skipTest("Needs EC")
+            raise
+
+        # Copy the 1st chunk on the same rawx as the 2nd chunk
+        src_url_p = urlparse(obj_chunks[0]["url"])
+        dst_url_p = urlparse(obj_chunks[1]["url"])
+        dst_url_str = f"http://{dst_url_p.netloc}/{src_url_p.path}"
+        self.api.blob_client.chunk_copy(obj_chunks[0]["url"], dst_url_str)
+        dst_chunk = obj_chunks[0].copy()
+        dst_chunk["url"] = dst_url_str
+        self._register_chunk(dst_chunk, obj_meta)
+
+        # Run object repair
+        opts = self.get_format_opts("json")
+        output = self.openio_admin(
+            f"object repair -a {self.account} {self.container} {self.obj_name} {opts}",
+            expected_returncode=0,
+        )
+        repaired = self.json_loads(output)
+        self.assertEqual(len(repaired), 1)
+
+        # Check chunks
+        obj_meta_after, obj_chunks_after = self.api.object_locate(
+            self.account,
+            self.container,
+            obj_meta["name"],
+        )
+        self.assertEqual(len(obj_meta), len(obj_meta_after))
+        self.assertEqual(len(obj_chunks), len(obj_chunks_after))
