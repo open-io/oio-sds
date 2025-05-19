@@ -25,6 +25,7 @@ from oio.common.constants import (
     LIFECYCLE_USER_AGENT,
     MULTIUPLOAD_SUFFIX,
     OBJECT_REPLICATION_PENDING,
+    S3StorageClasses,
 )
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import (
@@ -36,7 +37,11 @@ from oio.common.exceptions import (
 )
 from oio.common.kafka import get_retry_delay
 from oio.common.logger import S3AccessLogger
-from oio.common.utils import oio_versionid_to_str_versionid, request_id
+from oio.common.utils import (
+    oio_versionid_to_str_versionid,
+    read_storage_mappings,
+    request_id,
+)
 from oio.container.client import ContainerClient
 from oio.event.evob import (
     Event,
@@ -93,8 +98,8 @@ def event_to_s3_operation(event):
     """
     action = event.data.get("action")
     if action in ("Transition", "NoncurrentVersionTransition"):
-        storage_class = event.data.get("storage_class")
-        if storage_class == "STANDARD_IA":
+        storage_class = event.data.get("storage_class", "").upper()
+        if storage_class == S3StorageClasses.STANDARD_IA:
             return LifecycleOperationLog.TRANSITION_SIA
         return LifecycleOperationLog.TRANSITION_ZIA
     if action in ("Expiration", "NoncurrentVersionExpiration"):
@@ -187,30 +192,7 @@ class LifecycleActions(Filter):
         self.s3_access_requester = self.conf.get(
             "s3_access_requester", DEFAULT_REQUESTER
         )
-        self.stg_classes = {}
-        self.mapping_policy_2_storage_classes = {}
-        for stg_class_conf, pol_conf in self.conf.items():
-            if not stg_class_conf.startswith("storage_class."):
-                continue
-            storage_class = stg_class_conf[14:].upper()
-            auto_storage_policies = []
-            policies = [x.strip() for x in pol_conf.split(",")]
-            for storage_policy in policies:
-                if ":" in storage_policy:
-                    name, offset = storage_policy.split(":")
-                    name = name.strip()
-                    if not name:
-                        raise ValueError("Offset without storage policy")
-                    auto_storage_policies.append((name, int(offset)))
-                    self.mapping_policy_2_storage_classes[name] = storage_class
-                else:
-                    auto_storage_policies.append((storage_policy, -1))
-                    self.mapping_policy_2_storage_classes[storage_policy] = (
-                        storage_class
-                    )
-            auto_storage_policies.sort(key=lambda x: x[1])
-            self.stg_classes[storage_class] = auto_storage_policies
-
+        self.policy_to_class, self.class_to_policy = read_storage_mappings(self.conf)
         # storage_classes config for which data move is skipped
         self.storage_classes_skip_move = {}
         for stg_class_conf, skipped_stg_class_conf in self.conf.items():
@@ -255,7 +237,7 @@ class LifecycleActions(Filter):
         if context.size is None:
             raise ValueError("Missing object size for transition object")
         target_storage_class = context.storage_class
-        policies = self.stg_classes.get(target_storage_class, None)
+        policies = self.class_to_policy.get(target_storage_class)
         if policies is None:
             raise ValueError(
                 "No policies for storage_class transition %s", target_storage_class
@@ -271,7 +253,7 @@ class LifecycleActions(Filter):
             )
         if target_policy == policy:
             raise TransitionSamePolicy()
-        current_storage_class = self.mapping_policy_2_storage_classes[policy]
+        current_storage_class = self.policy_to_class.get(policy)
         if current_storage_class is None:
             raise ValueError("No storage class found for current policy %s ", policy)
 

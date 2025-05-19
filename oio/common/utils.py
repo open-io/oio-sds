@@ -39,7 +39,11 @@ from urllib.parse import quote as _quote
 
 from blake3 import blake3
 
-from oio.common.constants import MAX_STRLEN_CHUNKID, MIN_STRLEN_CHUNKID
+from oio.common.constants import (
+    MAX_STRLEN_CHUNKID,
+    MIN_STRLEN_CHUNKID,
+    S3StorageClasses,
+)
 from oio.common.easy_value import is_hexa
 from oio.common.exceptions import DeadlineReached, OioException, ServiceBusy
 
@@ -778,3 +782,59 @@ def initialize_coverage(logger, context):
             "code coverage not started, missing environment? COVERAGE_PROCESS_START=%s",
             os.getenv("COVERAGE_PROCESS_START"),
         )
+
+
+def read_storage_mappings(conf):
+    """Read storage mapping from configuration
+
+    Args:
+        conf (dict): configuration to read
+
+    Raises:
+        ValueError: Raised if configuration is not valid (policy duplicates,
+        invalid storage class, invalid policy)
+
+    Returns:
+        tuple: First value is the mapping from a policy to storage class.
+        The second is the mapping from a storage class to its associated policies
+        and theirs thresholds (object size)
+    """
+    storage_re = re.compile("[A-Z0-9_]+")
+    policy_to_class = {}
+    class_to_policy = {}
+    for key, value in conf.items():
+        if not key.startswith("storage_class."):
+            continue
+        storage_class = key[14:].upper()
+        if not storage_re.match(storage_class):
+            raise ValueError(f"Invalid storage class '{storage_class}'")
+        try:
+            S3StorageClasses(storage_class)
+        except ValueError:
+            raise ValueError(f"Storage class '{storage_class}' is not supported")
+
+        policies = []
+        for policy in value.split(","):
+            policy = policy.strip()
+            policy_name, *policy_threshold = policy.split(":", 1)
+            policy_name = policy_name.strip()
+            policy_threshold = (
+                int(policy_threshold[0].strip()) if policy_threshold else -1
+            )
+            if not policy_name or not storage_re.match(policy_name):
+                raise ValueError(
+                    f"Invalid storage policy '{policy_name}' for storage class "
+                    f"'{storage_class}'"
+                )
+            mapped_storage_class = policy_to_class.get(policy_name)
+            if mapped_storage_class and storage_class != mapped_storage_class:
+                raise ValueError(
+                    f"Policy '{policy_name}' already associated to "
+                    f"storage class {policy_to_class[policy_name]}"
+                )
+            policy_to_class[policy_name] = storage_class
+            policies.append((policy_name, policy_threshold))
+        policies.sort(key=lambda x: x[1], reverse=True)
+        class_to_policy[storage_class] = policies
+
+    return policy_to_class, class_to_policy

@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from enum import Enum
+
 HEADER_PREFIX = "x-oio-"
 ADMIN_HEADER = HEADER_PREFIX + "admin"
 CHECKHASH_HEADER = HEADER_PREFIX + "check-hash"
@@ -262,3 +264,27 @@ OBJECT_REPLICATION_COMPLETED = "COMPLETED"
 
 # User agents
 LIFECYCLE_USER_AGENT = "lifecycle-action"
+
+
+# S3 storage classes
+class S3StorageClasses(str, Enum):
+    EXPRESS_ONEZONE = "EXPRESS_ONEZONE"
+    STANDARD = "STANDARD"
+    STANDARD_IA = "STANDARD_IA"
+    INTELLIGENT_TIERING = "INTELLIGENT_TIERING"
+    ONEZONE_IA = "ONEZONE_IA"
+    GLACIER_IR = "GLACIER_IR"
+    GLACIER = "GLACIER"
+    DEEP_ARCHIVE = "DEEP_ARCHIVE"
+
+
+S3_STORAGE_CLASSES_ORDER = [
+    S3StorageClasses.EXPRESS_ONEZONE,
+    S3StorageClasses.STANDARD,
+    S3StorageClasses.STANDARD_IA,
+    S3StorageClasses.INTELLIGENT_TIERING,
+    S3StorageClasses.ONEZONE_IA,
+    S3StorageClasses.GLACIER_IR,
+    S3StorageClasses.GLACIER,
+    S3StorageClasses.DEEP_ARCHIVE,
+]

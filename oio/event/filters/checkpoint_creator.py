@@ -80,7 +80,7 @@ class CheckpointCreatorFilter(Filter):
         self._topic = self.conf.get("topic")
         self._sharding_client = ContainerSharding(self.conf, logger=self.logger)
         self._container_client = ContainerClient(self.conf, logger=self.logger)
-        self._metrics = LifecycleMetricTracker(self.conf)
+        self._metrics = LifecycleMetricTracker(self.conf, logger=self.logger)
         self._statsd = get_statsd(self.conf)
 
     def _send_sub_events(self, events):

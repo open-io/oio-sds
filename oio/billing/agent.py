@@ -13,7 +13,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import random
-import re
 import signal
 import sys
 import time
@@ -29,7 +28,7 @@ from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import MalformedBucket
 from oio.common.json import json
 from oio.common.logger import get_logger, redirect_stdio
-from oio.common.utils import drop_privileges
+from oio.common.utils import drop_privileges, read_storage_mappings
 
 
 class BillingAgent(object):
@@ -91,40 +90,7 @@ class BillingAgent(object):
             self.conf.get("amqp_auto_delete"), self.DEFAULT_AMQP_AUTO_DELETE
         )
 
-        storage_re = re.compile("[A-Z0-9_]+")
-        self.storage_mapping = {}
-        for key, value in conf.items():
-            if not key.startswith("storage_class."):
-                continue
-            storage_class = key[14:].upper()
-            if not storage_re.match(storage_class):
-                self.logger.warning(
-                    'Storage class "%s" does not respect the format', storage_class
-                )
-                continue
-            for storage_policy in value.split(","):
-                storage_policy = storage_policy.strip()
-                if not storage_re.match(storage_class):
-                    self.logger.warning(
-                        'Storage policy "%s" of storage class "%s" does not '
-                        "respect the format",
-                        storage_policy,
-                        storage_class,
-                    )
-                    continue
-                storage_class_ = self.storage_mapping.get(storage_policy)
-                if not storage_class_:
-                    self.storage_mapping[storage_policy] = storage_class
-                    continue
-                if storage_class_ != storage_class:
-                    self.logger.warning(
-                        'Storage policy "%s" of storage class "%s" already '
-                        'associated with the storage class "%s"',
-                        storage_policy,
-                        storage_class,
-                        storage_class_,
-                    )
-                    continue
+        self.storage_mapping, _ = read_storage_mappings(conf)
         self.logger.debug("Storage classes/policies: %s", self.storage_mapping)
 
         self.running = True
