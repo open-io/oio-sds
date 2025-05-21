@@ -1477,7 +1477,7 @@ pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # New pipeline with a separate oio-event-agent doing deletions
-pipeline = notify_deleted notify_lifecycle_deleted
+pipeline = early_delete_detection notify_deleted notify_lifecycle_deleted
 
 [handler:storage.content.drained]
 pipeline = notify_deleted
@@ -1558,6 +1558,14 @@ topic = oio-lifecycle-backup
 [filter:log]
 use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
+
+[filter:early_delete_detection]
+use = egg:oio#early_delete_detection
+storage_class_minimal_duration.STANDARD_IA = 2592000
+storage_class.STANDARD = EC21,THREECOPIES
+storage_class.STANDARD_IA = TWOCOPIES
+storage_class.ONEZONE_IA = SINGLE
+redis_host = ${IP}:${REDIS_PORT}
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended

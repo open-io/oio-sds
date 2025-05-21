@@ -224,3 +224,15 @@ max_deadletter_count = 2
 #redirect_event.name = destination_topic
 redirect_storage_container_state = oio
 redirect_storage_chunk_new = oio-chunk
+
+# -----------------------------------------------------------------
+# Emit billing stats for object deleted before minimal storage duration.
+[filter:early_delete_detection]
+use = egg:oio#early_delete_detection
+redis_host = 127.0.0.1:6379
+# Minimal storage duration in seconds per storage class
+# STANDARD_IA -> 30 days (aka 2592000 seconds)
+storage_class_minimal_duration.STANDARD_IA = 2592000
+# Storage class mapping
+storage_class.GLACIER = SINGLE,TWOCOPIES
+storage_class.STANDARD = THREECOPIES,EC
