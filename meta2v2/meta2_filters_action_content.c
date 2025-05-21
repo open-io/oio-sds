@@ -507,28 +507,34 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 			ctx, NAME_MSGKEY_SLO_MANIFEST));
 	gboolean delete_marker_created = FALSE;
 
+	const gchar *user_agent = oio_ext_get_user_agent();
+	gboolean from_lifecycle = g_strcmp0(user_agent, LIFECYCLE_USER_AGENT) == 0;
+	gboolean create_delete_marker = BOOL(meta2_filter_ctx_get_param(
+		ctx, NAME_MSGKEY_DELETE_MARKER));
+
 	void
 	_property_cb(gpointer plist UNUSED, gpointer bean)
 	{
 		EXTRA_ASSERT(plist != NULL);
 		EXTRA_ASSERT(bean != NULL);
 		if (DESCR(bean) == &descr_struct_PROPERTIES) {
-			_bean_list_cb(&obc->l, bean);
-		} else {
-			_bean_clean(bean);
+			if (from_lifecycle || g_strcmp0(PROPERTIES_get_key(bean)->str, "ttime") == 0) {
+				_bean_list_cb(&obc->l, bean);
+				return;
+			}
 		}
+		_bean_clean(bean);
 	}
 
 	m2_onbean_cb props_cb = NULL;
-	const gchar *user_agent = oio_ext_get_user_agent();
-	if (g_strcmp0(user_agent, LIFECYCLE_USER_AGENT) == 0) {
+	if (!create_delete_marker) {
 		props_cb = _property_cb;
 	}
 
 	TRACE_FILTER();
 	e = meta2_backend_delete_alias(m2b, url,
 		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_BYPASS_GOVERNANCE)),
-		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
+		create_delete_marker,
 		dryrun, slo_manifest, _bean_list_cb, &obc->l, props_cb, &obc->l,
 		&delete_marker_created);
 	if (NULL != e) {

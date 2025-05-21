@@ -2708,6 +2708,9 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         obj1["id"] = obj2["id"]
         obj1["chunk_method"] = obj2["chunk_method"]
         obj1["policy"] = obj2["policy"]
+        # Remove ttime
+        self.assertIn("ttime", obj2["properties"])
+        del obj2["properties"]["ttime"]
         self.assertDictEqual(obj1, obj2)
         self._check_stats(
             name,
@@ -2925,6 +2928,7 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
         cls._cls_transition_consumer = cls._register_consumer(
             topic=DEFAULT_TRANSITION_TOPIC
         )
+        cls._cls_oio_consumer = cls._register_consumer(topic="oio")
         cls._service("oio-event-agent-policy-transition-1.service", "stop", wait=5)
 
     @classmethod
@@ -2958,6 +2962,8 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
         props = self.api.object_get_properties(self.account, self._container, name)
         self.assertEqual(props["policy"], obj["policy"])
         self.assertNotIn("target_policy", props)
+        self.assertIn("properties", props)
+        self.assertNotIn("ttime", props["properties"])
         evt = self.wait_for_kafka_event(
             fields={"user": self._container},
             reqid=reqid,
@@ -2987,6 +2993,8 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
         self.assertEqual(props["policy"], obj["policy"])
         self.assertIn("target_policy", props)
         self.assertEqual(props["target_policy"], "TWOCOPIES")
+        self.assertIn("properties", props)
+        self.assertIn("ttime", props["properties"])
         self._check_stats(
             self._container,
             expected_count=1,
@@ -3029,6 +3037,9 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
             self.assertEqual(props["policy"], obj["policy"])
             self.assertIn("target_policy", props)
             self.assertEqual(props["target_policy"], policy)
+            self.assertIn("properties", props)
+            self.assertIn("ttime", props["properties"])
+            ttime = int(props["properties"]["ttime"])
             self._check_stats(
                 self._container,
                 expected_count=1,
@@ -3063,6 +3074,10 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
         props = self.api.object_get_properties(self.account, self._container, name)
         self.assertEqual(props["policy"], obj["policy"])
         self.assertNotIn("target_policy", props)
+        self.assertIn("properties", props)
+        self.assertIn("ttime", props["properties"])
+        ttime2 = int(props["properties"]["ttime"])
+        self.assertGreater(ttime2, ttime)
         self._check_stats(
             self._container,
             expected_count=1,
@@ -3077,6 +3092,48 @@ class TestObjectRequestPolicyTransition(ObjectStorageApiTestBase):
             kafka_consumer=self._cls_transition_consumer,
         )
         self.assertIsNone(evt)
+
+    def test_delete_transitioned_object(self):
+        name, obj = self._create_object()
+        obj_size = int(obj["size"])
+        reqid = request_id(self._container)
+        self.api.object_request_transition(
+            self.account, self._container, name, "TWOCOPIES", reqid=reqid
+        )
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTAINER_STATE,),
+        )
+        self.assertIsNotNone(evt)
+        self.assertIn("TWOCOPIES", evt.data.get("bytes-details", {}))
+        self.assertEqual(evt.data["bytes-details"]["TWOCOPIES"], obj_size)
+        self.assertIn("TWOCOPIES", evt.data.get("objects-details", {}))
+        self.assertEqual(evt.data["objects-details"]["TWOCOPIES"], 1)
+        props = self.api.object_get_properties(self.account, self._container, name)
+        self.assertEqual(props["policy"], obj["policy"])
+        self.assertIn("target_policy", props)
+        self.assertEqual(props["target_policy"], "TWOCOPIES")
+        self.assertIn("properties", props)
+        self.assertIn("ttime", props["properties"])
+        ttime = int(props["properties"]["ttime"])
+
+        reqid = request_id(self._container)
+        self.api.object_delete(self.account, self._container, name, reqid=reqid)
+        evt = self.wait_for_kafka_event(
+            fields={"user": self._container},
+            reqid=reqid,
+            types=(EventTypes.CONTENT_DELETED,),
+            kafka_consumer=self._cls_oio_consumer,
+        )
+        self.assertIsNotNone(evt)
+        properties = [
+            d
+            for d in evt.data
+            if d.get("type") == "properties" and d.get("key") == "ttime"
+        ]
+        self.assertEqual(1, len(properties))
+        self.assertEqual(int(properties[0].get("value")), ttime)
 
     def test_non_valid_policy(self):
         name, obj = self._create_object()

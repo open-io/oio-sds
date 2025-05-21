@@ -2553,6 +2553,7 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 	 * <new_header> is not explicitly freed.
 	 */
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
+	struct bean_PROPERTIES_s * current_ttime = NULL;
 	struct bean_ALIASES_s *new_alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *new_header = NULL;
 	GSList *beans_to_delete = NULL;
@@ -2582,6 +2583,9 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
 		} else if (DESCR(bean) == &descr_struct_CHUNKS) {
 			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
+		} else if(DESCR(bean) == &descr_struct_PROPERTIES &&
+				g_strcmp0(PROPERTIES_get_key(bean)->str, "ttime")) {
+			current_ttime = bean;
 		}
 	}
 	if (!oio_url_has(args->url, OIOURL_VERSION)) {
@@ -2693,14 +2697,19 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 	}
 
 label_end:
-	_bean_clean(current_alias);
-	_bean_cleanl2(beans_to_delete);
 
-	if (!err && cb_deleted && deleted_beans)
+	if (!err && cb_deleted && deleted_beans){
+		deleted_beans = g_slist_prepend(deleted_beans, current_alias);
+		if (current_ttime) {
+			deleted_beans = g_slist_prepend(deleted_beans, current_ttime);
+		}
 		cb_deleted(u0_deleted, deleted_beans);
-	else
+	} else {
 		_bean_cleanl2(deleted_beans);
-
+		_bean_clean(current_alias);
+		_bean_clean(current_ttime);
+	}
+	_bean_cleanl2(beans_to_delete);
 	return err;
 }
 
@@ -3888,6 +3897,7 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	struct storage_policy_s* pol = NULL;
 	struct bean_ALIASES_s *current_alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
+	struct bean_PROPERTIES_s *prop = NULL;
 
 	void _search_alias_and_size(gpointer ignored, gpointer bean) {
 		(void) ignored;
@@ -3942,6 +3952,20 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	gint64 size = CONTENTS_HEADERS_get_size(current_header);
 	const gchar* new_policy_str = m2v2_policy_encode(actual_policy, new_policy);
 	CONTENTS_HEADERS_set2_policy(current_header, new_policy_str);
+	// Set ttime
+	const gint64 now = oio_ext_real_seconds();
+	GString *ttime = g_string_sized_new(16);
+	g_string_printf(ttime, "%ld", now);
+	prop = _bean_create(&descr_struct_PROPERTIES);
+	PROPERTIES_set2_key(prop, "ttime");
+	PROPERTIES_set2_value(prop, (guint8*)ttime->str, ttime->len);
+	PROPERTIES_set2_alias(prop, ALIASES_get_alias(current_alias)->str);
+	PROPERTIES_set_version(prop, ALIASES_get_version(current_alias));
+	g_string_free(ttime, TRUE);
+	err = _db_save_bean(sq3, prop);
+	if (err) {
+		goto cleanup;
+	}
 	err = _db_save_bean(sq3, current_header);
 	// Decrement old policy
 	m2db_update_size(sq3, -size, previous_policy);
@@ -3961,6 +3985,7 @@ cleanup:
 	g_free(target_policy);
 	_bean_clean(current_alias);
 	_bean_clean(current_header);
+	_bean_clean(prop);
 
 	return err;
 }
