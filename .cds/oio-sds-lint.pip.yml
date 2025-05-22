@@ -18,11 +18,13 @@ jobs:
           - . $HOME/venv/bin/activate
           - pip install --progress-bar off -r requirements.txt -r test-requirements.txt
 
+
       - name: Run coding style tests
         script:
           - set -x
           - . $HOME/venv/bin/activate
-          - ruff check  --exclude="oio-bootstrap.py" "oio" "tests" "tools" "bin"
+          - ruff format --diff "oio" "tests" "tools" "bin" --exclude="oio-bootstrap.py"
+          - ruff check "oio" "tests" "tools" "bin" --exclude="oio-bootstrap.py"
 
     requirements:
       - model: ubuntu-focal
