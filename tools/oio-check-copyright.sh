@@ -64,10 +64,15 @@ check_staged_copyright () {
 	YEAR=$(date +%Y)
 	COMPANY="OVH"
 	COPYRIGHT_LINE=$(head -n 8 "$1" | grep -E "Copyright \(C\) ([[:digit:]]{4}-|)${YEAR} ${COMPANY} SAS")
-	if [ -z "${COPYRIGHT_LINE}" ]
-	then
+	if [ -z "${COPYRIGHT_LINE}" ]; then
+		# Copyright not good, try to fix it!
+		sed -E -i "1,8{
+			s|Copyright \(C\) ([0-9]{4}) ${COMPANY} |Copyright (C) \1-${YEAR} ${COMPANY} |
+			s|Copyright \(C\) ([0-9]{4})-[0-9]{4} ${COMPANY} |Copyright (C) \1-${YEAR} ${COMPANY} |
+		}" "${FILE}"
 		echo "The Copyright section in $1 is not up to date (this file is staged for the current commit)"
-		[ -n "$VERBOSE" ] && git diff --staged "$1" | head -n 32
+		# The sed does not work if last copyright is not from OVH.
+		echo "If you were lucky enough, it has automatically be updated, you just have to stage the diff"
 		return 1
 	fi
 }
