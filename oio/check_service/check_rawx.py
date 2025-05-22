@@ -79,7 +79,7 @@ class CheckRawx(CheckService):
             headers=headers,
             data=data,
             expected_status=expected_status,
-            **kwargs
+            **kwargs,
         )
 
         if method == "PUT":

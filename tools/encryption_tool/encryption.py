@@ -660,7 +660,7 @@ class Decrypter:
         put_keys["id"] = {}
         if key_id.get("ssec", False) or key_id.get("sses3", False):
             # The object is encrypted with ssec or sses3
-            #object_key = decode_secret(self.bucket_secret)
+            # object_key = decode_secret(self.bucket_secret)
             object_key = fetch_bucket_secret(
                 self.api.kms, self.account, self.container, secret_id=0
             )

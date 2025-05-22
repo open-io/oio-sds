@@ -37,20 +37,17 @@ class TestDeadletterConsumer(BaseTestCase):
                     "38294862E03106003A59D557BD7E5216",
                 )
             ),
-            "container_id":
-                "9360156FE5329E8AF6D3B8F5096F0B31E4B88A876EB87439136A8D11F2330331",
+            "container_id": "9360156FE5329E8AF6D3B8F5096F0B31E4B88A876EB87439136A8D11F2330331",  # noqa: E501 (line-too-long)
             "content_path": "Makefile",
             "content_version": "1743689651595577",
             "content_id": "38294862E03106003A59D557BD7E5216",
             "content_storage_policy": "SINGLE",
             "metachunk_hash": "",
             "metachunk_size": "",
-            "chunk_id":
-                "3013E76F48F78A0E196D9EEE3E5FBDE52430E32AEC6728074B7A862DFD92A809",
+            "chunk_id": "3013E76F48F78A0E196D9EEE3E5FBDE52430E32AEC6728074B7A862DFD92A809",  # noqa: E501 (line-too-long)
             "content_chunk_method": "plain/cca=blake3,nb_copy=1,oca=md5",
             "chunk_position": "0",
-            "chunk_hash":
-                "96C95F596B96BDC23BC9CCF005D2797B2C751E9FEDE17ED9627037E40794913B",
+            "chunk_hash": "96C95F596B96BDC23BC9CCF005D2797B2C751E9FEDE17ED9627037E40794913B",  # noqa: E501 (line-too-long)
             "chunk_size": "41287",
         },
     }

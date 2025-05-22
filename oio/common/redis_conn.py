@@ -109,14 +109,14 @@ class RedisConnection(object):
         if isinstance(sentinel_hosts, str):
             sentinel_hosts = sentinel_hosts.split(",")
         self._sentinel_hosts = [
-            (h, int(p)) for h, p, in (hp.rsplit(":", 1) for hp in sentinel_hosts)
+            (h, int(p)) for h, p in (hp.rsplit(":", 1) for hp in sentinel_hosts)
         ]
         self._sentinel_name = sentinel_name
         self._sentinel_conn_kwargs = self._filter_sentinel_conn_kwargs(kwargs)
         self._sentinel = self.__redis_sentinel_mod.Sentinel(
             self._sentinel_hosts,
             sentinel_kwargs=self._sentinel_conn_kwargs,
-            **self._conn_kwargs
+            **self._conn_kwargs,
         )
 
     def _filter_conn_kwargs(self, conn_kwargs):

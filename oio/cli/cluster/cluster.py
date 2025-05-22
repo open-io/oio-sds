@@ -547,8 +547,11 @@ class ClusterWait(Lister):
 
             # No service down, and enough services, we are done.
             for srv in descr:
-                yield srv["type"], srv["addr"], srv["score"], format_detailed_scores(
-                    srv
+                yield (
+                    srv["type"],
+                    srv["addr"],
+                    srv["score"],
+                    format_detailed_scores(srv),
                 )
             return
 

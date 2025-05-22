@@ -352,12 +352,18 @@ class TestContentFactory(BaseTestCase):
     @ec
     def test_move_chunk_not_right_service_id_ec(self):
         self.assertRaises(
-            OrphanChunk, self._test_move_chunk, self.stgpol_ec, host="123",
+            OrphanChunk,
+            self._test_move_chunk,
+            self.stgpol_ec,
+            host="123",
         )
 
     def test_twocopies_move_chunk_not_right_service_id_2copies(self):
         self.assertRaises(
-            OrphanChunk, self._test_move_chunk, self.stgpol_twocopies, host="123",
+            OrphanChunk,
+            self._test_move_chunk,
+            self.stgpol_twocopies,
+            host="123",
         )
 
     def test_strange_paths(self):

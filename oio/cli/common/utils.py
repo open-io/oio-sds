@@ -52,7 +52,7 @@ class ValueCheckStoreTrueAction(Action):
 def format_detailed_scores(srv):
     return " ".join(
         [
-            f"{k[len('scores'):]}={v}"
+            f"{k[len('scores') :]}={v}"
             for k, v in srv.get("scores", {}).items()
             if k.startswith("score.")
         ]

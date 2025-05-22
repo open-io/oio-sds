@@ -23,7 +23,6 @@ from tests.utils import BaseTestCase
 
 
 class TestLifecycleMetrics(BaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.metric_tracker = LifecycleMetricTracker(

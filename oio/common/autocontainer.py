@@ -113,7 +113,7 @@ class AutocontainerBuilder(ContainerBuilder):
         mask=0xFFFFFFFFFF0000FF,
         base=16,
         con_format="%016X",
-        **_kwargs
+        **_kwargs,
     ):
         self.offset = offset
         self.size = size

@@ -534,7 +534,6 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
             )
 
             for action, marker, s3action, obj_size in tests:
-
                 # Expiration delete marker action
                 context = LifecycleActionContext(
                     Event(

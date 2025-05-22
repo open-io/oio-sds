@@ -957,9 +957,7 @@ class RdirClient(HttpApi):
             else:
                 truncated = true_value(truncated)
                 if truncated:
-                    params["marker"] = resp.headers[
-                        HEADER_PREFIX + "list-marker"
-                    ]
+                    params["marker"] = resp.headers[HEADER_PREFIX + "list-marker"]
 
             if shuffle:
                 random.shuffle(resp_body)

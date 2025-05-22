@@ -80,7 +80,7 @@ class DirectoryClient(ProxyClient):
         cid=None,
         service_type=None,
         service_id=None,
-        **kwargs
+        **kwargs,
     ):
         """
         List the services linked to the reference.
@@ -154,7 +154,7 @@ class DirectoryClient(ProxyClient):
         service_type=None,
         cid=None,
         autocreate=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Poll and associate a new service to the reference.
@@ -192,7 +192,7 @@ class DirectoryClient(ProxyClient):
         cid=None,
         autocreate=False,
         replace=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Associate the specified services to the reference.

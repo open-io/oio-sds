@@ -114,7 +114,7 @@ class ObjectStorageTest(unittest.TestCase):
             prefix=prefix,
             end_marker=end_marker,
             region=region,
-            **self.common_kwargs
+            **self.common_kwargs,
         )
         params = {
             "id": self.account,
@@ -152,7 +152,7 @@ class ObjectStorageTest(unittest.TestCase):
             prefix=prefix,
             delimiter=delimiter,
             end_marker=end_marker,
-            **self.common_kwargs
+            **self.common_kwargs,
         )
         uri = "%s/container/list" % self.uri_base
         params = {
@@ -217,7 +217,7 @@ class ObjectStorageTest(unittest.TestCase):
             data=data,
             autocreate=True,
             region=None,
-            **self.common_kwargs
+            **self.common_kwargs,
         )
 
     def test_container_create_exist(self):
@@ -494,7 +494,7 @@ class ObjectStorageTest(unittest.TestCase):
             data=json.dumps(["a"]),
             params=params,
             autocreate=True,
-            **self.common_kwargs
+            **self.common_kwargs,
         )
 
     def test_object_delete(self):
@@ -639,7 +639,7 @@ class ObjectStorageTest(unittest.TestCase):
             endpoint=self.fake_endpoint,
             account_endpoint=self.fake_account_endpoint,
             dummy_keyword="dummy_value",
-            **kwargs
+            **kwargs,
         )
         self.assertNotIn("dummy_keyword", api._global_kwargs)
         for k, v in kwargs.items():
@@ -666,7 +666,7 @@ class ObjectStorageTest(unittest.TestCase):
             pre_commit_hook=ANY,
             reqid=ANY,
             properties_callback=ANY,
-            **kwargs
+            **kwargs,
         )
 
     def test_container_flush_not_found_1(self):

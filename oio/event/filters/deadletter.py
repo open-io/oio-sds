@@ -35,7 +35,8 @@ class DeadletterFilter(Filter):
 
     def init(self):
         self.graveyard = self.conf.get(
-            "graveyard", self.DEFAULT_GRAVEYARD_TOPIC,
+            "graveyard",
+            self.DEFAULT_GRAVEYARD_TOPIC,
         )
         self.max_deadletter_count = int_value(
             self.conf.get("max_deadletter_count"),

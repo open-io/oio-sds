@@ -210,7 +210,6 @@ class Meta2RelocationTask(XcuteTask):
 
 
 class Meta2RelocationJob(XcuteJob):
-
     JOB_TYPE = "meta2-relocation"
     TASK_CLASS = Meta2RelocationTask
 
@@ -246,11 +245,14 @@ class Meta2RelocationJob(XcuteJob):
         )
         for account, container_info in containers_it:
             task_id = f"{account}/{container_info[0]}"
-            yield task_id, {
-                "account": account,
-                "container": container_info[0],
-                "mtime": container_info[4],
-            }
+            yield (
+                task_id,
+                {
+                    "account": account,
+                    "container": container_info[0],
+                    "mtime": container_info[4],
+                },
+            )
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         containers_it = self._containers_from_account_service(

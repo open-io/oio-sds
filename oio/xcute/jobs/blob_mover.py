@@ -305,9 +305,12 @@ class RawxDecommissionJob(XcuteUsageTargetJob):
         chunk_info = self.get_chunk_list(job_params, marker=marker, reqid=reqid)
         for chunk_id in chunk_info:
             task_id = chunk_id
-            yield task_id, {
-                "chunk_id": chunk_id,
-            }
+            yield (
+                task_id,
+                {
+                    "chunk_id": chunk_id,
+                },
+            )
 
             now = time.time()
             if now - last_usage_check < usage_check_interval:

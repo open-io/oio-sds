@@ -16,7 +16,6 @@
 
 """Lifecycle-related commands"""
 
-
 from collections import defaultdict
 from logging import getLogger
 
@@ -98,7 +97,6 @@ class LifecycleGet(Command):
 
 
 class LifecycleStatus(Lister):
-
     log = getLogger(__name__ + ".LifecycleStatus")
 
     CONF_KEY_PREFIX = "lifecycle."

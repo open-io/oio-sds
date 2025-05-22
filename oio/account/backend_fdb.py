@@ -2992,7 +2992,6 @@ class AccountBackendFdb(object):
 
     @catch_service_errors
     def feature_list_buckets(self, region, feature, limit=1000, marker=None, **_kwargs):
-
         region = region.upper()
         features_space = self.features_space[region][feature]
 

@@ -34,7 +34,7 @@ class MetaMapping(object):
         conscience_client=None,
         logger=None,
         rdir_client=None,
-        **kwargs
+        **kwargs,
     ):
         self.conf = conf
         self._admin = admin_client

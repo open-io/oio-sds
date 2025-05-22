@@ -21,7 +21,6 @@ from oio.conscience.checker.asn1 import Asn1PingChecker
 
 
 class TestConscienceAgent(unittest.TestCase):
-
     checker_conf = {"host": "127.0.1.1", "port": 666, "rise": 1, "fall": 1}
 
     bad_asn1_response = (

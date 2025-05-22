@@ -287,7 +287,7 @@ class ListAccounts(Lister):
                 listing_key=lambda x: x["listing"],
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
-                **kwargs
+                **kwargs,
             )
         else:
             meta = acct_client.account_list(**kwargs)
@@ -362,7 +362,7 @@ class RefreshAccount(Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        reqid=self.app.request_id("CLI-account-refresh-")
+        reqid = self.app.request_id("CLI-account-refresh-")
         if parsed_args.all_accounts:
             self.app.client_manager.storage.account_refresh(
                 recompute=parsed_args.recompute,

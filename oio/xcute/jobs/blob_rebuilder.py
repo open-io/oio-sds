@@ -153,13 +153,16 @@ class RawxRebuildJob(XcuteRdirJob):
 
         for container_id, chunk_id, descr in chunk_info:
             task_id = "|".join((container_id, chunk_id))
-            yield task_id, {
-                "container_id": container_id,
-                "content_id": descr["content_id"],
-                "path": descr["path"],
-                "version": descr["version"],
-                "chunk_id": chunk_id,
-            }
+            yield (
+                task_id,
+                {
+                    "container_id": container_id,
+                    "content_id": descr["content_id"],
+                    "path": descr["path"],
+                    "version": descr["version"],
+                    "chunk_id": chunk_id,
+                },
+            )
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         chunk_info = self.get_chunk_info(job_params, marker=marker, reqid=reqid)

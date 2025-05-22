@@ -21,7 +21,6 @@ from tests.utils import random_str
 
 
 class ServiceDecacheTest(CliTestCase):
-
     def test_proxy_decache(self):
         """
         Check that a decache order actually empties proxy's cache.

@@ -46,7 +46,7 @@ class KmsClient(ServiceClient):
             "PUT",
             "create-secret",
             params={"secret_id": secret_id, "secret_bytes": secret_bytes},
-            **kwargs
+            **kwargs,
         )
         return (resp, body)
 
@@ -58,7 +58,7 @@ class KmsClient(ServiceClient):
             "DELETE",
             "delete-secret",
             params={"secret_id": secret_id},
-            **kwargs
+            **kwargs,
         )
 
     def get_secret(self, account, bucket, secret_id="1", **kwargs):
@@ -74,7 +74,7 @@ class KmsClient(ServiceClient):
             "GET",
             "get-secret",
             params={"secret_id": secret_id},
-            **kwargs
+            **kwargs,
         )
         return body
 

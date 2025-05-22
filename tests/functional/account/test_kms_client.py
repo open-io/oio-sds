@@ -25,8 +25,8 @@ class TestKmsClient(BaseTestCase):
 
     def setUp(self):
         super().setUp()
-        self.account = f"kmsaccount{randint(0,999):04d}"
-        self.bucket = f"kmsbucket{randint(0,999):04d}"
+        self.account = f"kmsaccount{randint(0, 999):04d}"
+        self.bucket = f"kmsbucket{randint(0, 999):04d}"
 
     def tearDown(self):
         list_resp = self.kms.list_secrets(self.account, self.bucket)

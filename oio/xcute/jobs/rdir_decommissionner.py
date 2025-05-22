@@ -153,6 +153,7 @@ class RdirDecommissionJob(XcuteRdirJob):
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         # Yes, we will generate the list of tasks twice, but ¯\_(ツ)_/¯
         for type_ in job_params["service_types"]:
-            yield type_, len(
-                list(self.get_tasks_for_type(job_params, type_, reqid=reqid))
+            yield (
+                type_,
+                len(list(self.get_tasks_for_type(job_params, type_, reqid=reqid))),
             )

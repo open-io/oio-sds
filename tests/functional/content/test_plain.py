@@ -271,8 +271,14 @@ class TestPlainContent(BaseTestCase):
         )
 
     def test_2copies_content_0_byte_2broken_rebuild_pos_0_idx_0(self):
-        self.assertRaises(UnrecoverableContent,
-            self._test_rebuild, self.stgpol_twocopies, 0, [(0, 0), (0, 1)], (0, 0))
+        self.assertRaises(
+            UnrecoverableContent,
+            self._test_rebuild,
+            self.stgpol_twocopies,
+            0,
+            [(0, 0), (0, 1)],
+            (0, 0),
+        )
 
     def test_rebuild_chunk_in_frozen_container(self):
         data = random_data(self.chunk_size)

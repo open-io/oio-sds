@@ -116,7 +116,6 @@ class TestAccountBackend(BaseTestCase):
         containers_info,
         deleted_containers_info,
     ):
-
         accounts_info = self._items_info_expected_items_info(accounts_info)
         buckets_info = self._items_info_expected_items_info(buckets_info)
         containers_info = self._items_info_expected_items_info(containers_info)
@@ -1391,8 +1390,7 @@ class TestAccountBackend(BaseTestCase):
                     ],
                 },
             ],
-            SHARDING_ACCOUNT_PREFIX
-            + account_id: [
+            SHARDING_ACCOUNT_PREFIX + account_id: [
                 {
                     "name": "BUCKET_2",
                     "region": "REGION_2",
@@ -1625,8 +1623,7 @@ class TestAccountBackend(BaseTestCase):
                     ],
                 },
             ],
-            SHARDING_ACCOUNT_PREFIX
-            + account_id: [
+            SHARDING_ACCOUNT_PREFIX + account_id: [
                 {
                     "name": "BUCKET_2",
                     "region": "REGION_2",
@@ -4232,7 +4229,7 @@ class TestAccountBackend(BaseTestCase):
         expected_list = {}
         for i in range(20):
             bucket = f"{bucket_prefix}{i:02d}"
-            feature = f"{feature_prefix}{i//10}"
+            feature = f"{feature_prefix}{i // 10}"
             self.backend.create_bucket(bucket, account, region, ctime=ctime)
             self.backend.feature_activate(region, feature, bucket, mtime=1)
             expected = expected_list.setdefault(feature, [])
@@ -4241,7 +4238,6 @@ class TestAccountBackend(BaseTestCase):
         for feature, expected_buckets in expected_list.items():
             marker = None
             for i in range(4):
-
                 marker, buckets = self.backend.feature_list_buckets(
                     region, feature, limit=3, marker=marker
                 )
@@ -4292,7 +4288,7 @@ class TestAccountBackend(BaseTestCase):
         expected_buckets = []
         for i in range(32):
             region = random.choice(("LOCALHOST", "TEST", "ALL"))
-            account = f"AUTH_0000000000000000000000000000000{i%16:x}"
+            account = f"AUTH_0000000000000000000000000000000{i % 16:x}"
             bucket = f"list_all_buckets-{i:04d}"
             ctime = Timestamp().timestamp
             self.backend.create_bucket(bucket, account, region, ctime=ctime)

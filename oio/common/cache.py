@@ -127,7 +127,7 @@ def get_cached_object_metadata(
     properties=False,
     cache=None,
     force_master=False,
-    **kwargs
+    **kwargs,
 ):
     """
     Get the object metadata and location from the cache (if there is one)
@@ -171,7 +171,7 @@ def set_cached_object_metadata(
     version=None,
     properties=False,
     cache=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Set the object metadata and location in the cache (if there is one)
@@ -212,7 +212,7 @@ def del_cached_object_metadata(
     cid=None,
     version=None,
     cache=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Delete the object metadata and location from the cache (if there is one)

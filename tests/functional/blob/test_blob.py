@@ -1031,7 +1031,6 @@ class RawxTestSuite(CommonTestCase):
 
 
 class BlobClientTestSuite(BaseTestCase):
-
     @classmethod
     def setUpClass(cls):
         super(BlobClientTestSuite, cls).setUpClass()

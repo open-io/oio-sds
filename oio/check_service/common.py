@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -79,7 +80,7 @@ class CheckService(HttpApi):
         Make the cycle on each hosts
         """
         for service_host in self.all_services_host:
-            print(self.service_type.upper() + " " + service_host),
+            (print(self.service_type.upper() + " " + service_host),)
             try:
                 success = self._cycle(service_host)
                 if success:

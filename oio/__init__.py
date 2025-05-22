@@ -31,7 +31,6 @@ Basic object storage example:
      '8de4989188593b0419d387099c9e9872')
 """
 
-
 import importlib
 import sys
 import warnings
@@ -47,7 +46,7 @@ warnings.filterwarnings(
         "and support for it is deprecated in cryptography\. "
         "A future release of cryptography will remove support "
         "for Python 3\.7\."
-    )
+    ),
 )
 
 

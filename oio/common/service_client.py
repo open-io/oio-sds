@@ -79,9 +79,7 @@ class ServiceClient(MultiEndpointHttpApi):
 
         self.logger = logger or get_logger(conf)
 
-        super().__init__(
-            endpoint=endpoint, service_type=service_type, **kwargs
-        )
+        super().__init__(endpoint=endpoint, service_type=service_type, **kwargs)
 
         kwargs.pop("pool_manager", None)
         self.conscience = ConscienceClient(

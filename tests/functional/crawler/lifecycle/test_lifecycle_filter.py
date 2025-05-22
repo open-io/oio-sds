@@ -3203,7 +3203,6 @@ class TestLifecycleCrawler(BaseTestCase):
 
 
 class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
-
     def setUp(self):
         super().setUp()
         self.use_sharding = True

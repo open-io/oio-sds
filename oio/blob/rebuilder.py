@@ -104,13 +104,17 @@ class BlobRebuilder(Tool):
         version = res_event["url"]["version"]
         for chunk_rebuilt in res_event["data"]["chunks_rebuilt"]:
             yield (
-                namespace,
-                container_id,
-                content_id,
-                path,
-                version,
-                str(chunk_rebuilt["chunk_id_or_pos"]),
-            ), chunk_rebuilt["bytes_processed"], chunk_rebuilt["error"]
+                (
+                    namespace,
+                    container_id,
+                    content_id,
+                    path,
+                    version,
+                    str(chunk_rebuilt["chunk_id_or_pos"]),
+                ),
+                chunk_rebuilt["bytes_processed"],
+                chunk_rebuilt["error"],
+            )
 
     @staticmethod
     def res_event_from_task_res(task_res):
@@ -163,9 +167,14 @@ class BlobRebuilder(Tool):
                     version,
                     chunk_id_or_pos,
                 ) = stripped.split("|", 5)
-                yield self.namespace, container_id, content_id, unquote(path), int(
-                    version
-                ), chunk_id_or_pos
+                yield (
+                    self.namespace,
+                    container_id,
+                    content_id,
+                    unquote(path),
+                    int(version),
+                    chunk_id_or_pos,
+                )
 
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
@@ -177,9 +186,14 @@ class BlobRebuilder(Tool):
             timeout=self.rdir_timeout,
         )
         for container_id, chunk_id, descr in lost_chunks:
-            yield self.namespace, container_id, descr["content_id"], descr[
-                "path"
-            ], descr["version"], chunk_id
+            yield (
+                self.namespace,
+                container_id,
+                descr["content_id"],
+                descr["path"],
+                descr["version"],
+                chunk_id,
+            )
 
     def _fetch_items(self):
         if self.input_file:

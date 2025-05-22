@@ -23,7 +23,6 @@ from oio.rdir.client import RdirClient
 
 
 class RdirWorker(CrawlerWorker):
-
     CONSCIENCE_CACHE = 30
     CRAWLER_TYPE = "rdir"
 

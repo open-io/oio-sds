@@ -19,7 +19,6 @@ from tests.utils import BaseTestCase
 
 
 class AccountBaseTestCase(BaseTestCase):
-
     def setUp(self):
         super().setUp()
         self.accounts = set()

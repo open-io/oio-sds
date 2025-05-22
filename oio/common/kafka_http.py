@@ -303,5 +303,5 @@ class KafkaClusterHealth:
                 lag = self.kafka_metrics_client.get_topic_max_lag(topic)
             if lag > self._max_lag:
                 raise OioUnhealthyKafkaClusterError(
-                    f"Topic '{topic}' lag is too high({lag:.0f} > " f"{self._max_lag})"
+                    f"Topic '{topic}' lag is too high({lag:.0f} > {self._max_lag})"
                 )

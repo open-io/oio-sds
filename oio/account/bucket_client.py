@@ -26,7 +26,7 @@ class BucketClient(ServiceClient):
             conf,
             service_name="bucket-service",
             request_prefix="v1.0/bucket",
-            **kwargs
+            **kwargs,
         )
         # Some requests don't need the region,
         # let the requests fail if the region is needed
@@ -106,7 +106,7 @@ class BucketClient(ServiceClient):
             "update",
             json={"metadata": metadata, "to_delete": to_delete},
             params=params,
-            **kwargs
+            **kwargs,
         )
 
     def bucket_refresh(self, bucket, account=None, check_owner=None, **kwargs):

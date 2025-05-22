@@ -634,8 +634,7 @@ class VerifyChunkPlacement(Meta2Filter):
                 resp = Meta2DBError(
                     meta2db,
                     body=(
-                        f"Failed to process {self.NAME} "
-                        f"for the container {cid}: {exc}"
+                        f"Failed to process {self.NAME} for the container {cid}: {exc}"
                     ),
                 )
                 return resp(env, cb)
@@ -659,9 +658,7 @@ class VerifyChunkPlacement(Meta2Filter):
             self.errors += 1
             resp = Meta2DBError(
                 meta2db,
-                body=(
-                    f"Failed to process {self.NAME} " f"for the container {cid}: {exc}"
-                ),
+                body=(f"Failed to process {self.NAME} for the container {cid}: {exc}"),
             )
             return resp(env, cb)
         return self.app(env, cb)

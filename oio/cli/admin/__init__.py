@@ -16,7 +16,6 @@
 
 """Command-line interface for OpenIO SDS cluster administration."""
 
-
 import sys
 
 from oio.cli.common.clientmanager import ClientManager

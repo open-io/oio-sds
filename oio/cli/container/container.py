@@ -717,9 +717,8 @@ class DrainContainer(ContainersCommandMixin, Command):
                 cid=cid,
                 system=system,
                 propagate_to_shards=True,
-                reqid=self.app.request_id(prefix="CLI-container-drain-")
+                reqid=self.app.request_id(prefix="CLI-container-drain-"),
             )
-
 
 
 class ShowBucket(ShowOne):
@@ -1026,9 +1025,7 @@ class ListBuckets(Lister):
 
         def versioning(bucket):
             try:
-                data = storage.container_get_properties(
-                    account, bucket, reqid=reqid
-                )
+                data = storage.container_get_properties(account, bucket, reqid=reqid)
             except NoSuchContainer:
                 self.log.info("Bucket %s does not exist", bucket)
                 return "Error"

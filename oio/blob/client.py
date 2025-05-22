@@ -114,7 +114,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         logger=None,
         connection_pool=None,
         watchdog=None,
-        **kwargs
+        **kwargs,
     ):
         KafkaProducerMixin.__init__(self, logger=logger, conf=conf)
 
@@ -325,7 +325,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         content_id=None,
         headers=None,
         buffer_size=None,
-        **kwargs
+        **kwargs,
     ):
         stream = None
         # Check source headers only when new fullpath is not provided
@@ -420,7 +420,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         start_after=None,
         shuffle=False,
         full_urls=False,
-        **kwargs
+        **kwargs,
     ):
         """Fetch the list of chunks belonging to the specified volume.
 
@@ -490,7 +490,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         connection_timeout=None,
         read_timeout=None,
         headers=None,
-        **kwargs
+        **kwargs,
     ):
         if "timeout" not in kwargs:
             if connection_timeout is None:
@@ -535,8 +535,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
                 )
             except Exception as err:
                 logger.debug(
-                    "Add non optimal placement header"
-                    "to the chunk %s failed due to: %s",
+                    "Add non optimal placement headerto the chunk %s failed due to: %s",
                     url,
                     str(err),
                 )

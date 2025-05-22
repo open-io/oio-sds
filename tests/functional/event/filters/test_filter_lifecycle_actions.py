@@ -285,7 +285,6 @@ class TestFilterLifecycleActionsLocked(TestFilterLifecycleActionsCommon):
         self.container_id = syst["sys.name"].split(".", 1)[0]
         self.conf["redis_host"] = "127.0.0.1:6379"
 
-
     def _create_object(self, properties=None):
         _, _, _, self.obj_meta = self.storage.object_create_ext(
             account=self.account,

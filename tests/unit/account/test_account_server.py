@@ -36,7 +36,6 @@ class FakeReq:
 
 
 class AccountServerTest(unittest.TestCase):
-
     def _build_account_conf(self, pepper=True, add_duplicate=False):
         conf = {
             "region_backup_numbers": "REGIONONE,REGIONTWO,REGIONTHREE",

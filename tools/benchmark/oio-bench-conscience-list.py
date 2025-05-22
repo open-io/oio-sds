@@ -68,7 +68,7 @@ def main_loop(threads, delay=2.0, duration=60.0):
     POOL.waitall()
     end = time.monotonic()
     rate = RESULTS / (end - start)
-    print(f"End. {RESULTS} requests in {end - start:.3f}s, " f"{rate:.3f} req/s.")
+    print(f"End. {RESULTS} requests in {end - start:.3f}s, {rate:.3f} req/s.")
     return rate
 
 

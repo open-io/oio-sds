@@ -24,7 +24,6 @@ from oio.common.kafka_http import KafkaClusterSpaceStatus, KafkaMetricsClient
 
 
 class KafkaMetricClientTest(unittest.TestCase):
-
     DEFAULT_RESPONSE = b"""
 # HELP redpanda_kafka_consumer_group_committed_offset Consumer group committed offset
 # TYPE redpanda_kafka_consumer_group_committed_offset gauge
