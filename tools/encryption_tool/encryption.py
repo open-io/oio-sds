@@ -773,7 +773,7 @@ class Encrypter:
         account,
         container,
         obj,
-        iv,
+        iv=None,
         oca=None,
         secret=None,
         body_key=None,
@@ -782,6 +782,7 @@ class Encrypter:
         self.account = account
         self.container = container
         self.obj = obj
+        self.crypto = Crypto()
 
         def decode_binary_dict(data):
             return {
@@ -793,14 +794,20 @@ class Encrypter:
                 for name, val in data.items()
             }
 
-        self.iv = decode_binary_dict(iv)
+        if not iv:
+            # Create default minimal ivs
+            self.iv = {
+                "etag_iv": self.crypto.create_iv(),
+                "override_etag_iv": self.crypto.create_iv(),
+            }
+        else:
+            self.iv = decode_binary_dict(iv)
 
         if api:
             self.api = api
         else:
             sds_namespace = os.environ.get("OIO_NS", "OPENIO")
             self.api = ObjectStorageApi(sds_namespace)
-        self.crypto = Crypto()
         self.root_key = root_key
 
         if secret is None:
@@ -866,7 +873,7 @@ class Encrypter:
 
         return ciphertext
 
-    def encrypt_metadata(self, metadata):
+    def encrypt_metadata(self, metadata=None):
         """
         Add system metadata header to store crypto-metadata.
 
@@ -874,7 +881,12 @@ class Encrypter:
         :return metadata with crypto-body-metadata header
         """
 
-        metadata["properties"] = self._encrypt_user_metadata(metadata["properties"])
+        if not metadata:
+            metadata = {"properties": {}}
+        else:
+            # Encrypt user metadata if needed
+            metadata["properties"] = self._encrypt_user_metadata(metadata["properties"])
+        # Always encrypt system crypto metadata
         metadata["properties"] = self._encrypt_crypto_body_etag_metadata(
             metadata["properties"]
         )
@@ -901,6 +913,8 @@ class Encrypter:
             h for h in metadata.items() if is_user_meta("object", h[0]) and h[1]
         ]
         crypto_meta = None
+        if not self.iv.get(USER_METADATA_IVS):
+            raise ValueError("Missing user_metadata_iv key from ivs")
         for name, val in user_meta_headers:
             short_name = strip_user_meta_prefix("object", name)
             new_name = prefix + short_name
