@@ -13,7 +13,12 @@ ce3c452730f92685281ec2564cf25b8e51ddfc71
 #    Apply new black 24.1.0 version
 870ee2820133f606b2bfb206595c4bcde0a0c68b
 
-#Author: Thibault Person <thibault.person@ovhcloud.com>
-#Date:   Tue Jan 7 10:19:42 2025 +0100
+# Author: Thibault Person <thibault.person@ovhcloud.com>
+# Date:   Tue Jan 7 10:19:42 2025 +0100
 #    Fix formating errors raised by ruff
 3dac23b88b3145c081bad54ef8896cc46be74355
+
+# Author: Vincent Mérat <vincent.merat@ovhcloud.com>
+# Date:   Thu May 22 15:06:56 2025 +0200
+#    lint: run ruff format
+6f1496e1df9cf818375e72ef835fb18ca8c1b05e
