@@ -28,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--account",
         type=str,
-        default="AUTH_demo",
+        required=True,
         help="name of the account in which the object is stored",
     )
     parser.add_argument(
@@ -40,12 +40,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--obj", type=str, required=True, help="name of the object to fetch"
     )
+    parser.add_argument("--version", type=str, help="version of the object to fetch")
     args = parser.parse_args()
 
     sds_namespace = os.environ.get("OIO_NS", "OPENIO")
     uri = "http://127.0.0.1:6000"
     api = ObjectStorageApi(sds_namespace, endpoint=uri)
-    meta = api.object_get_properties(args.account, args.container, args.obj)
+    meta = api.object_get_properties(
+        args.account,
+        args.container,
+        args.obj,
+        version=args.version,
+    )
 
     # Write metadata as json file to standard output
     json_object = json.dumps(meta)

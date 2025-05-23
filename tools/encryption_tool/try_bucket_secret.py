@@ -34,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--account",
         type=str,
-        default="AUTH_demo",
+        required=True,
         help="name of the account in which the object is stored",
     )
     parser.add_argument(
@@ -77,8 +77,8 @@ if __name__ == "__main__":
     provided key:"
     )
     object_key = decode_secret(args.bucket_secret)
-    etag_from_metadata_hamc = hmac_etag(object_key, etag_from_metadata)
-    print(etag_from_metadata_hamc)
+    etag_from_metadata_hmac = hmac_etag(object_key, etag_from_metadata)
+    print(etag_from_metadata_hmac)
 
     print("HMAC from X-Object-Sysmeta-Crypto-Etag-Mac metadata:")
     etag_mac_from_metadata = metadata.get("properties").get(
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     )
     print(etag_mac_from_metadata)
 
-    if etag_from_metadata_hamc == etag_mac_from_metadata:
+    if etag_from_metadata_hmac == etag_mac_from_metadata:
         print("The provided key is the RIGHT key!")
         sys.exit(0)
     else:

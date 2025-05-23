@@ -5,7 +5,7 @@ Encryption tools
 - Get encrypted obj:  
 `openio object save <container> <object> --file encrypted-body`
 - Write obj metadata to metadata.json:
-`./get-metadata.py --account <account> --container <container> --obj <object> > metadata.json`
+`./get-metadata.py --account <account> --container <container> --obj <object> --version <version> > metadata.json`
 - Decrypt obj1 (decrypt object plaintext body:
 `cat encrypted-body | ./decrypter.py --account <account> --container <container> --obj <object> --metadata metadata.json --iv iv.json > decrypted-body`
 - cat decrypted object and decrypted user metadata:
