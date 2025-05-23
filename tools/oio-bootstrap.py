@@ -1468,7 +1468,7 @@ template_event_agent_handlers = """
 pipeline = ${REPLICATION} ${PRESERVE}
 
 [handler:storage.content.update]
-pipeline = ${REPLICATION} ${PRESERVE}
+pipeline = ${REPLICATION} object_restore_detection ${PRESERVE}
 
 [handler:storage.content.append]
 pipeline = ${PRESERVE}
@@ -1555,6 +1555,11 @@ topic_prefix = oio-delete-
 use = egg:oio#lifecycle_delete
 broker_endpoint = ${QUEUE_URL}
 topic = oio-lifecycle-backup
+
+[filter:object_restore_detection]
+use = egg:oio#object_restore_detection
+broker_endpoint = ${QUEUE_URL}
+topic = oio-archive-restore
 
 [filter:log]
 use = egg:oio#logger
@@ -3661,6 +3666,7 @@ def generate(options):
     # Generate topics declaration file
     topics_to_declare = [
         ("oio", None),
+        ("oio-archive-restore", None),
         ("oio-deadletter", None),
         ("oio-delayed", None),
         ("oio-delete-mpu-parts", None),

@@ -3,7 +3,7 @@
 pipeline =
 
 [handler:storage.content.update]
-pipeline =
+pipeline = object_restore_detection
 
 [handler:storage.content.append]
 pipeline =
@@ -236,3 +236,11 @@ storage_class_minimal_duration.STANDARD_IA = 2592000
 # Storage class mapping
 storage_class.GLACIER = SINGLE,TWOCOPIES
 storage_class.STANDARD = THREECOPIES,EC
+
+
+# -----------------------------------------------------------------
+# Emit restore events.
+[filter:object_restore_detection]
+use = egg:oio#object_restore_detection
+broker_endpoint = kafka://localhost:19092
+topic = oio-archive-restore

@@ -256,6 +256,7 @@ LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-S3Api-Lifecycle"
 MULTIUPLOAD_SUFFIX = "+segments"
 TAGGING_KEY = "x-object-sysmeta-s3api-tagging"
 VERSIONING_PROPERTY_KEY = "X-Container-Sysmeta-Versions-Enabled"
+RESTORE_PROPERTY_KEY = "x-object-sysmeta-s3api-restore"
 
 # Constants for replication status
 OBJECT_REPLICATION_PENDING = "PENDING"
@@ -288,3 +289,5 @@ S3_STORAGE_CLASSES_ORDER = [
     S3StorageClasses.GLACIER,
     S3StorageClasses.DEEP_ARCHIVE,
 ]
+
+ARCHIVE_RESTORE_USER_AGENT = "archive-restore"
