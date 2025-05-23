@@ -15,24 +15,123 @@
 # License along with this library.
 
 import re
-from typing import Any, Dict
 from urllib.parse import unquote
 
 from oio.common.exceptions import OioTimeout
-from oio.common.json import json
 from oio.common.kafka import (
     KafkaSender,
     KafkaSendException,
     get_retry_delay,
 )
-from oio.event.beanstalk import Beanstalk, BeanstalkError
-from oio.event.evob import Event, EventError, RetryableEventError
+from oio.event.evob import Event, RetryableEventError
 from oio.event.filters.base import Filter
 
 POLICY_REGEX_PREFIX = "policy_regex_"
 
 
-class NotifyFilter(Filter):
+class BaseNotifyFilter(Filter):
+    DEFAULT_TOPIC = "notif"
+
+    def __init__(self, *args, endpoint=None, **kwargs):
+        self.producer = None
+        self.endpoint = endpoint
+        self._retry_delay = None
+        self.destination = None
+        self.rules = {}
+        self.strip_fields = []
+        self.required_fields = []
+        super().__init__(*args, **kwargs)
+
+    def init(self):
+        self.destination = self.conf.get("topic", self.DEFAULT_TOPIC)
+        self._retry_delay = get_retry_delay(self.conf)
+        self.strip_fields = [
+            f for f in self.conf.get("strip_fields", "").split(",") if f
+        ]
+        self.required_fields = [
+            f for f in self.conf.get("required_fields", "").split(",") if f
+        ]
+
+    def _init_producer(self):
+        """
+        Initialize the message producer (if not already initialized).
+        Will also check if the configured destination topics exist.
+        """
+        if self.producer is not None:
+            return
+
+        producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+        topics = [self.destination]
+        topics.extend([r["destination"] for r in self.rules.values()])
+        producer.ensure_topics_exist(topics)
+        self.producer = producer
+
+    def _get_used_topics(self):
+        return [self.destination]
+
+    def strip_event(self, data):
+        """Remove unneeded fields from event."""
+        if not self.strip_fields:
+            return data
+        if isinstance(data, list):
+            return [item for item in data if item.get("type") not in self.strip_fields]
+        if isinstance(data, dict):
+            return {k: v for k, v in data.items() if k not in self.strip_fields}
+        return data
+
+    def send_event(self, event, payload):
+        try:
+            self._init_producer()  # no-op if already initialized
+        except OioTimeout as exc:
+            resp = RetryableEventError(event=event, body=str(exc))
+            return resp
+
+        topic = self.destination
+        if self.rules:
+            policy = self._lookup_policy(event)
+            if policy:
+                for name in sorted(self.rules.keys()):
+                    rule = self.rules[name]
+                    if rule["regex"].match(policy):
+                        topic = rule["destination"]
+                        break
+        try:
+            self.producer.send(topic, payload, flush=True)
+        except KafkaSendException as err:
+            delay = None
+            if err.retriable:
+                delay = self._retry_delay
+            msg = f"notify failure: {err!r}"
+            resp = RetryableEventError(event=event, body=msg, delay=delay)
+            return resp
+        return None
+
+    def process(self, env, cb):
+        event = Event(env)
+        if self.should_notify(event):
+            # Encode without whitespace to make sure not
+            # to exceed the maximum size of the event (default: 65535)
+            payload = env.copy()
+            payload.pop("queue_connector", None)
+            data = payload.get("data")
+            if data:
+                payload["data"] = self.strip_event(data)
+            # If there is an error, do not continue
+            err_resp = self.send_event(event, payload)
+            if err_resp:
+                return err_resp(env, cb)
+        return self.app(env, cb)
+
+    def should_notify(self, event):
+        # Verify all required fields
+        if self.required_fields:
+            for field in self.required_fields:
+                if field not in event.env:
+                    return False
+        return True
+
+
+class NotifyFilter(BaseNotifyFilter):
     """
     Forward events to another topic.
 
@@ -40,19 +139,12 @@ class NotifyFilter(Filter):
     """
 
     def __init__(self, *args, endpoint=None, **kwargs):
-        self.strip_fields = ()
-        self.destination = None
-        self.endpoint = endpoint
-        self.rules = {}
-        super().__init__(*args, **kwargs)
+        self.exclude = {}
+        super().__init__(*args, endpoint=endpoint, **kwargs)
 
     def init(self):
+        super().init()
         self.exclude = self._parse_exclude(self.conf.get("exclude", []))
-        if self.conf.get("strip_fields"):
-            self.strip_fields = tuple(self.conf.get("strip_fields").split(","))
-        self.required_fields = [
-            f for f in self.conf.get("required_fields", "").split(",") if f
-        ]
         self._load_policy_regex()
 
     @staticmethod
@@ -92,11 +184,8 @@ class NotifyFilter(Filter):
         return True
 
     def should_notify(self, event):
-        # Verify all required fields
-        if self.required_fields:
-            for field in self.required_fields:
-                if field not in event.env:
-                    return False
+        if not super().should_notify(event):
+            return False
 
         # Some events do not have a URL (e.g. chunk events),
         # we cannot filter them easily, so we let them pass.
@@ -104,15 +193,12 @@ class NotifyFilter(Filter):
             event.url.get("account"), event.url.get("user")
         )
 
-    def _prefix(self):
-        raise NotImplementedError()
-
     def _load_policy_regex(self):
         """
         Load storage policy patterns and their associated destination.
         If there is no specific destination, the default will be used.
         """
-        prefix = self._prefix()
+        prefix = "topic_"
         for key, val in self.conf.items():
             if key.startswith(prefix):
                 rule = key[len(prefix) :]
@@ -146,140 +232,10 @@ class NotifyFilter(Filter):
                 break
         return policy
 
-    def send_event(self, event, payload: Dict[str, Any]):
-        """Send data to the configured message topic.
-        Must be implemented by subclasses.
-        """
-        raise NotImplementedError
-
-    def strip_event(self, data):
-        """Remove unneeded fields from event."""
-        if not self.strip_fields:
-            return data
-        if isinstance(data, list):
-            return [item for item in data if item.get("type") not in self.strip_fields]
-        if isinstance(data, dict):
-            return {k: v for k, v in data.items() if k not in self.strip_fields}
-        return data
-
-    def process(self, env, cb):
-        event = Event(env)
-        if self.should_notify(event):
-            # Encode without whitespace to make sure not
-            # to exceed the maximum size of the event (default: 65535)
-            payload = env.copy()
-            payload.pop("queue_connector", None)
-            data = payload.get("data")
-            if data:
-                payload["data"] = self.strip_event(data)
-            # If there is an error, do not continue
-            err_resp = self.send_event(event, payload)
-            if err_resp:
-                return err_resp(env, cb)
-        return self.app(env, cb)
-
-
-class BeanstalkdNotifyFilter(NotifyFilter):
-    def __init__(self, *args, endpoint=None, **kwargs):
-        self.beanstalk = None
-        super().__init__(*args, endpoint=endpoint, **kwargs)
-
-    def init(self):
-        self.destination = self.conf.get("tube", self.conf.get("queue_name", "notif"))
-
-        super().init()
-
-        for rule in self.rules.values():
-            rule["beanstalkd"] = Beanstalk.from_url(self.endpoint)
-            rule["beanstalkd"].use(rule["destination"])
-            self.logger.debug(
-                f"Events with policy matching {rule['regex'].pattern!r} "
-                f"will go to tube {rule['destination']}"
-            )
-
-        # Keep an instance talking to the default tube
-        self.beanstalk = Beanstalk.from_url(self.endpoint)
-        self.beanstalk.use(self.destination)
-
-    def _prefix(self):
-        return "tube_"
-
-    def send_event(self, event, payload):
-        data = json.dumps(payload, separators=(",", ":"))  # compact encoding
-        out_beanstalkd = self.beanstalk
-        if self.rules:
-            policy = self._lookup_policy(event)
-            if policy:
-                for name in sorted(self.rules.keys()):
-                    if self.rules[name]["regex"].match(policy):
-                        out_beanstalkd = self.rules[name]["beanstalkd"]
-                        break
-        try:
-            out_beanstalkd.put(data)
-        except BeanstalkError as err:
-            msg = f"notify failure: {err!r}"
-            if err.retryable():
-                resp = RetryableEventError(event=event, body=msg)
-            else:
-                resp = EventError(event=event, body=msg)
-            return resp
-        return None
-
-
-class KafkaNotifyFilter(NotifyFilter):
-    def __init__(self, *args, endpoint=None, **kwargs):
-        self.producer = None
-        self._retry_delay = None
-        super().__init__(*args, endpoint=endpoint, **kwargs)
-
-    def init(self):
-        self.destination = self.conf.get("topic", "notif")
-        self._retry_delay = get_retry_delay(self.conf)
-        super().init()
-
-    def _init_producer(self):
-        """
-        Initialize the message producer (if not already initialized).
-
-        Will also check if the configured destination topics exist.
-        """
-        if self.producer is not None:
-            return
-        producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
-        topics = [self.destination]
+    def _get_used_topics(self):
+        topics = super()._get_used_topics()
         topics.extend([r["destination"] for r in self.rules.values()])
-        producer.ensure_topics_exist(topics)
-        self.producer = producer
-
-    def _prefix(self):
-        return "topic_"
-
-    def send_event(self, event, payload):
-        try:
-            self._init_producer()  # no-op if already initialized
-        except OioTimeout as exc:
-            resp = RetryableEventError(event=event, body=str(exc))
-            return resp
-
-        topic = self.destination
-        if self.rules:
-            policy = self._lookup_policy(event)
-            if policy:
-                for name in sorted(self.rules.keys()):
-                    rule = self.rules[name]
-                    if rule["regex"].match(policy):
-                        topic = rule["destination"]
-                        break
-        try:
-            self.producer.send(topic, payload, flush=True)
-        except KafkaSendException as err:
-            delay = None
-            if err.retriable:
-                delay = self._retry_delay
-            msg = f"notify failure: {err!r}"
-            resp = RetryableEventError(event=event, body=msg, delay=delay)
-            return resp
-        return None
+        return topics
 
 
 def filter_factory(global_conf, **local_conf):
@@ -291,8 +247,6 @@ def filter_factory(global_conf, **local_conf):
         raise ValueError("Endpoint is missing")
 
     def make_filter(app):
-        if endpoint.startswith("kafka://"):
-            return KafkaNotifyFilter(app, conf, endpoint=endpoint)
-        return BeanstalkdNotifyFilter(app, conf, endpoint=endpoint)
+        return NotifyFilter(app, conf, endpoint=endpoint)
 
     return make_filter

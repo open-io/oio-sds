@@ -28,7 +28,7 @@ from oio.common.statsd import get_statsd
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.content_cleaner import ContentReaperFilter
 from oio.event.filters.lifecycle_actions import LifecycleActionContext, LifecycleActions
-from oio.event.filters.notify import KafkaNotifyFilter
+from oio.event.filters.notify import NotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 
 
@@ -134,7 +134,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self.container_id = syst["sys.name"].split(".", 1)[0]
         self.conf["queue_url"] = self.ns_conf["event-agent"]
         self.conf["topic"] = BlobRebuilder.DEFAULT_WORKER_TUBE
-        self.notify_filter = KafkaNotifyFilter(
+        self.notify_filter = NotifyFilter(
             app=_App, conf=self.conf, endpoint=self.ns_conf["event-agent"]
         )
         self.wait_for_score(("rawx", "meta2"), score_threshold=10, timeout=5.0)
@@ -521,14 +521,14 @@ class TestContentRebuildFilter(BaseTestCase):
         self._check_rebuild(obj_meta, chunks, chunks_to_rebuild, chunk_created=False)
 
 
-class TestKafkaNotifyFilter(BaseTestCase):
+class TestNotifyFilter(BaseTestCase):
     def setUp(self):
-        super(TestKafkaNotifyFilter, self).setUp()
+        super().setUp()
         self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
         self.conf["queue_url"] = self.ns_conf["event-agent"]
         self.conf["topic"] = BlobRebuilder.DEFAULT_WORKER_TUBE
         self.conf["exclude"] = []
-        self.notify_filter = KafkaNotifyFilter(
+        self.notify_filter = NotifyFilter(
             app=_App, conf=self.conf, endpoint=self.conf["queue_url"]
         )
 
