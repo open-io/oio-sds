@@ -213,9 +213,7 @@ def get_logger(conf, name=None, verbose=False, fmt=None, formatter=None):
         else:
             handler = SysLogHandler(facility=facility)
 
-    syslog_prefix = conf.get("syslog_prefix", "")
-    if syslog_prefix:
-        handler.ident = "%s: " % syslog_prefix
+    handler.ident = "%s: " % conf.get("syslog_prefix", os.path.basename(sys.argv[0]))
 
     handler.setFormatter(syslog_formatter)
     logger.addHandler(handler)
