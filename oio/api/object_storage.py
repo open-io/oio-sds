@@ -139,11 +139,15 @@ class ObjectStorageApi(object):
 
         self._init_kwargs = kwargs
         self._acct_kwargs = kwargs.copy()
+        self._xcute_kwargs = kwargs.copy()
         if "pool_manager" not in self._init_kwargs:
             self._init_kwargs["pool_manager"] = self.container.pool_manager
         # In AccountClient, "endpoint" is the account service, not the proxy
         self._acct_kwargs["proxy_endpoint"] = self._acct_kwargs.pop("endpoint", None)
         self._acct_kwargs["endpoint"] = self._acct_kwargs.pop("account_endpoint", None)
+        # In XcuteClient, "endpoint" is the xcute service, not the proxy
+        self._xcute_kwargs["proxy_endpoint"] = self._xcute_kwargs.pop("endpoint", None)
+        self._xcute_kwargs["endpoint"] = self._xcute_kwargs.pop("xcute_endpoint", None)
         self._account_client = None
         self._account_metrics_client = None
         self._bucket_client = None
@@ -155,6 +159,7 @@ class ObjectStorageApi(object):
         self._proxy_client = None
         self._rdir_client = None
         self._admin_client = None
+        self._xcute_client = None
 
     @property
     def account(self):
@@ -329,6 +334,23 @@ class ObjectStorageApi(object):
                 **self._init_kwargs,
             )
         return self._admin_client
+
+    @property
+    def xcute(self):
+        """
+        Get an instance of XcuteClient.
+
+        :rtype: `oio.xcute.client.XcuteClient`
+        """
+        if self._xcute_client is None:
+            from oio.xcute.client import XcuteClient
+
+            self._xcute_client = XcuteClient(
+                {"namespace": self.namespace},
+                logger=self.logger,
+                **self._xcute_kwargs,
+            )
+        return self._xcute_client
 
     # FIXME(FVE): this method should not exist
     # This high-level API should use lower-level APIs,
