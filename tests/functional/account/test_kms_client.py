@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -81,10 +81,46 @@ class TestKmsClient(BaseTestCase):
         )
 
     def test_create_bucket_secret_twice(self):
-        _, secret_meta = self.kms.create_secret(self.account, self.bucket)
+        # First creation
+        resp, secret_meta = self.kms.create_secret(self.account, self.bucket)
+        self.assertEqual(201, resp.status)
+        # Second creation, just get existing secret
+        resp, secret_meta_2 = self.kms.create_secret(self.account, self.bucket)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(secret_meta, secret_meta_2)
+        # Check that the saved secret has not changed
+        secret_meta_2 = self.kms.get_secret(
+            self.account,
+            self.bucket,
+            secret_id=secret_meta["secret_id"],
+        )
+        self.assertEqual(secret_meta, secret_meta_2)
+
+    def test_restore_secret(self):
+        # First creation
+        resp, secret_meta = self.kms.create_secret(self.account, self.bucket)
+        self.assertEqual(201, resp.status)
+        # Deletion
         self.kms.delete_secret(self.account, self.bucket)
-        _, secret_meta_2 = self.kms.create_secret(self.account, self.bucket)
+        # Make sure the secret no longer exists
+        self.assertRaises(
+            NotFound,
+            self.kms.get_secret,
+            self.account,
+            self.bucket,
+            secret_id=secret_meta["secret_id"],
+        )
+        # Second creation, restoration
+        resp, secret_meta_2 = self.kms.create_secret(self.account, self.bucket)
+        self.assertEqual(201, resp.status)
         # Ensure both secrets are equal, thanks to the trash feature
+        self.assertEqual(secret_meta, secret_meta_2)
+        # Check that the saved secret has not changed
+        secret_meta_2 = self.kms.get_secret(
+            self.account,
+            self.bucket,
+            secret_id=secret_meta["secret_id"],
+        )
         self.assertEqual(secret_meta, secret_meta_2)
 
     def test_get_secret(self):
@@ -138,3 +174,16 @@ class TestKmsClient(BaseTestCase):
         expected = expected[1:]
         actual = self.kms.list_secrets(self.account, self.bucket)["secrets"]
         self.assertEqual(expected, actual)
+
+
+class TestKmsClientUnavailableKMSAPI(TestKmsClient):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # Prevent the sharding/shrinking by the meta2 crawlers
+        cls._service("oio-kmsapi-mock-server-1.service", "stop", wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service("oio-kmsapi-mock-server-1.service", "start", wait=1)
+        super().tearDownClass()

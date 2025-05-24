@@ -1902,10 +1902,17 @@ class Account(WerkzeugApp):
                     )
         return resp
 
-    def _get_and_decrypt_secret(self, resp, status=200):
+    def _get_resp_with_ciphered_secret(self, resp, status=200):
         account_id = resp["account"]
         bname = resp["bucket"]
         secret_id = resp["secret_id"]
+        # Make sure there are no secret already loaded
+        useless_secret = resp.pop("secret", None)
+        if useless_secret:
+            self.logger.warning(
+                "An unnecessary secret has been generated "
+                f"for {account_id}/{bname}: {useless_secret}"
+            )
         secret, checksum, kms_secrets = self.backend.get_bucket_secret(
             account_id, bname, secret_id=secret_id
         )
@@ -1913,7 +1920,8 @@ class Account(WerkzeugApp):
         # TODO: raise in _decrypt_ciphered_secret() if decrypt process fails
         if self.kms_api.enabled and kms_secrets:
             resp = self._decrypt_ciphered_secret(resp, checksum, kms_secrets)
-        # Fallback to the current plaintext secret (for now)
+        # The secret was not recovered with KMS.
+        # Fallback to the current plaintext secret (for now).
         if "secret" not in resp:
             resp["secret"] = base64.b64encode(secret)
 
@@ -1948,7 +1956,7 @@ class Account(WerkzeugApp):
 
         # Try to get an existing bucket secret
         try:
-            return self._get_and_decrypt_secret(resp)
+            return self._get_resp_with_ciphered_secret(resp)
         except NotFound:
             # already exit if not exception
             pass
@@ -1984,11 +1992,11 @@ class Account(WerkzeugApp):
                 incomplete=incomplete,
             )
         except Conflict:
-            return self._get_and_decrypt_secret(resp)
+            return self._get_resp_with_ciphered_secret(resp)
 
         # We need to override resp["secret"]
         if restored:
-            return self._get_and_decrypt_secret(resp, status=201)
+            return self._get_resp_with_ciphered_secret(resp, status=201)
 
         return Response(
             json.dumps(resp, separators=(",", ":")),
@@ -2018,7 +2026,7 @@ class Account(WerkzeugApp):
             "bucket": bname,
             "secret_id": secret_id,
         }
-        return self._get_and_decrypt_secret(resp)
+        return self._get_resp_with_ciphered_secret(resp)
 
     @send_stats
     @force_master
