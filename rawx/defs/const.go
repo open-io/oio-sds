@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2019-2020 OpenIO SAS
-// Copyright (C) 2021-2024 OVH SAS
+// Copyright (C) 2021-2025 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -21,6 +21,10 @@ const HexaCharacters = "0123456789ABCDEF"
 
 const (
 	AttrNameFullPrefix = "user.oio.content.fullpath:"
+)
+
+const (
+	BucketSegmentsSuffix = "+segments"
 )
 
 const (

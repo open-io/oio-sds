@@ -752,7 +752,7 @@ func populateLongFields(evt *logger.AccessLogEvent, rr *rawxRequest) {
 			evt.Account = tokens[0]
 		}
 		if len(tokens) >= 2 {
-			evt.Bucket = tokens[1]
+			evt.Bucket = strings.TrimSuffix(tokens[1], defs.BucketSegmentsSuffix)
 		}
 	}
 }
