@@ -3017,7 +3017,7 @@ class TestLifecycleCrawler(BaseTestCase):
                     "Filter": {"Prefix": "doc/"},
                     "NoncurrentVersionTransition": {
                         "0": {
-                            "NoncurrentDays": 2,
+                            "NoncurrentDays": 5,
                             "StorageClass": "STANDARD_IA",
                         },
                         "__time_type": "Days",
@@ -3044,7 +3044,7 @@ class TestLifecycleCrawler(BaseTestCase):
             "rule-1", prefix="doc/", count=10, versions=1
         )
         self._create_objects_for_rule(None, objects=objects, versions=1)
-        self._wait_n_days(3)
+        self._wait_n_days(5)
         self._create_objects_for_rule(None, objects=objects, versions=1)
         self._wait_n_days(1)
         self._run_scenario(configuration, callback)
