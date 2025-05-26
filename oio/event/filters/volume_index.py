@@ -16,6 +16,7 @@
 
 from oio.common.easy_value import int_value
 from oio.common.exceptions import (
+    DeadlineReached,
     OioException,
     OioNetworkException,
     OioTimeout,
@@ -192,7 +193,7 @@ class VolumeIndexFilter(Filter):
                 self._process_chunk_event(event)
             elif event.event_type in SERVICE_EVENTS:
                 self._process_service_event(event)
-        except (ServiceBusy, OioNetworkException, OioTimeout) as exc:
+        except (ServiceBusy, OioNetworkException, OioTimeout, DeadlineReached) as exc:
             resp = RetryableEventError(
                 event=event,
                 body=f"rdir update error: {exc}",
