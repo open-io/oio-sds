@@ -19,7 +19,7 @@ import argparse
 from oio.common.configuration import load_namespace_conf, read_conf
 from oio.common.easy_value import int_value
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_TOPIC
-from oio.common.logger import get_oio_logger
+from oio.common.logger import get_logger
 from oio.event.kafka_agent import KafkaEventWorker
 from oio.event.kafka_consumer import KafkaConsumerPool
 
@@ -43,7 +43,7 @@ def main():
     ns_conf = load_namespace_conf(conf["namespace"])
 
     # Configuration from dedicated file
-    logger = get_oio_logger(conf, verbose=args.verbose)
+    logger = get_logger(conf, verbose=args.verbose)
     workers = int_value(conf.get("workers"), 1)
 
     # Configuration either from dedicated file or central file (in that order)

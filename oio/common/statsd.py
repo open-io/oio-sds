@@ -77,19 +77,16 @@ class StatsdTiming:
         self._name = name
         self.code = None
 
-    def start(self):
-        self._start = time.monotonic()
-
-    def end(self, code=200):
-        duration = time.monotonic() - self._start
-        if self.code is None:
-            self.code = code
-        stat_key = self._name.format(code=self.code)
-        self._statsd.timing(stat_key, duration * 1000)
-
     def __enter__(self):
-        self.start()
+        self._start = time.monotonic()
         return self
 
     def __exit__(self, exc_type, _exc_val, _exc_tb):
-        self.end(code=500 if exc_type else 200)
+        duration = time.monotonic() - self._start
+        if self.code is None:
+            if exc_type is None:
+                self.code = 200
+            else:
+                self.code = 500
+        stat_key = self._name.format(code=self.code)
+        self._statsd.timing(stat_key, duration * 1000)

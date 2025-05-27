@@ -387,29 +387,21 @@ class OioAccessLog:
         self._start_time = None
         self.status = None
 
-    def start(self):
+    def __enter__(self):
         self._start_time = time.monotonic()
         self.context = _oio_log_context.get()
-        if self._extras:
-            self.context.push(**self._extras)
+        self.context.push(**self._extras)
+        return self
 
-    def end(self, code=200):
+    def __exit__(self, exc_type, _exc_val, _exc_tb):
         if self.status is None:
-            self.status = code
+            self.status = 500 if exc_type else 200
         duration = time.monotonic() - self._start_time
         with get_oio_log_context(
             log_type="access", duration=duration, status=self.status
         ):
-            self._logger.trace("")
-        if self._extras:
-            self.context.pop()
-
-    def __enter__(self):
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, _exc_val, _exc_tb):
-        self.end(code=500 if exc_type else 200)
+            self._logger.info("")
+        self.context.pop()
 
 
 class OioLogContext:
@@ -420,20 +412,12 @@ class OioLogContext:
     def attributes(self):
         return self.__context_stack[-1]
 
-    def amend(self, propagate=False, **kwargs):
-        for ctx in reversed(self.__context_stack):
-            if not kwargs:
-                break
-            ctx.update(kwargs)
-            if not propagate:
-                break
-            keys = [k for k in kwargs if k not in ctx]
-            for key in keys:
-                kwargs.pop(key)
+    def amend(self, **kwargs):
+        self.__context_stack[-1].update(kwargs)
 
-    def push(self, inherit=True, **kwargs):
+    def push(self, **kwargs):
         prev_ctx = self.__context_stack[-1]
-        ctx = {**prev_ctx, **kwargs} if inherit else {**kwargs}
+        ctx = {**prev_ctx, **kwargs}
         self.__context_stack.append(ctx)
 
     def pop(self):
@@ -442,27 +426,16 @@ class OioLogContext:
 
 
 @contextmanager
-def get_oio_log_context(reuse=False, inherit=True, **kwargs):
-    """
-    Provide a logging context.
-
-    If reuse is True, the existing context is returned, otherwise a new one is
-    derivated from the existing one.
-
-    If inherit is True, the new context will be derivated from the previous
-    one, else a new blank one is created
-    """
+def get_oio_log_context(**kwargs):
     ctx = _oio_log_context.get()
     if ctx is None:
         ctx = OioLogContext()
         _oio_log_context.set(ctx)
     try:
-        if not reuse:
-            ctx.push(inherit=inherit, **kwargs)
+        ctx.push(**kwargs)
         yield ctx
     finally:
-        if not reuse:
-            ctx.pop()
+        ctx.pop()
 
 
 class OioContextInjectFilter(Filter):
@@ -563,26 +536,7 @@ class OioConsoleFormatter(OioLogFormatter):
         return fmt_str
 
 
-def register_log_level(level_name, level_num):
-    level_method = level_name.lower()
-    level_name = level_name.upper()
-
-    def log_for_level(self, message, *args, **kwargs):
-        if self.isEnabledFor(level_num):
-            self._log(level_num, message, args, **kwargs)
-
-    if not hasattr(logging, level_name):
-        setattr(logging, level_name, level_num)
-    if not hasattr(logging.getLoggerClass(), level_method):
-        setattr(logging.getLoggerClass(), level_method, log_for_level)
-
-    logging.addLevelName(level_num, level_name)
-
-
 def get_oio_logger(conf, name=None, verbose=False):
-    # Install custom TRACE log level for access logs
-    register_log_level("TRACE", logging.INFO - 1)
-
     if not conf:
         conf = {}
 
@@ -598,18 +552,18 @@ def get_oio_logger(conf, name=None, verbose=False):
     else:
         raise ValueError(f"Formatter '{logger_fmt}' is not supported")
 
-    extras_items = [item.strip() for item in conf.get("logger_extras", "").split("\t")]
+    extras_lines = [line.strip() for line in conf.get("logger_extras", "").split("\n")]
     extras = {
-        item.split("=", 1)[0]: item.split("=", 1)[1] for item in extras_items if item
+        line.split("=", 1)[0]: line.split("=", 1)[1] for line in extras_lines if line
     }
 
-    fields_mapping_items = [
-        item.strip() for item in conf.get("logger_fields_mapping", "").split("\t")
+    fields_mapping_lines = [
+        line.strip() for line in conf.get("logger_fields_mapping", "").split("\n")
     ]
     fields_mapping = {
-        item.split("=", 1)[0]: item.split("=", 1)[1]
-        for item in fields_mapping_items
-        if item
+        line.split("=", 1)[0]: line.split("=", 1)[1]
+        for line in fields_mapping_lines
+        if line
     }
 
     formatter = fmt(fields_mapping=fields_mapping, **extras)
@@ -648,6 +602,7 @@ def get_oio_logger(conf, name=None, verbose=False):
     get_oio_logger.handler4logger[logger] = handler
     ctx_filter = OioContextInjectFilter()
     logger.addFilter(ctx_filter)
+
     logging_level = getattr(
         logging, conf.get("log_level", "INFO").upper(), logging.INFO
     )

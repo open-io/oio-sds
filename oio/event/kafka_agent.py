@@ -12,16 +12,20 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import time
+from dataclasses import asdict
+
 from oio.account.bucket_client import BucketClient
 from oio.account.client import AccountClient
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
-from oio.common.logger import OioAccessLog, get_oio_log_context
-from oio.common.statsd import StatsdTiming, get_statsd
+from oio.common.logger import get_logger
+from oio.common.statsd import get_statsd
 from oio.conscience.client import ConscienceClient
 from oio.event.evob import (
     EventTypes,
+    ResponseCallBack,
     is_outdated,
     is_retryable,
     is_success,
@@ -34,7 +38,7 @@ from oio.event.kafka_consumer import (
     RetryLater,
 )
 from oio.event.loader import loadhandlers
-from oio.event.utils import extract_log_ctx_from_event
+from oio.event.utils import log_context_from_msg
 from oio.rdir.client import RdirClient
 
 
@@ -93,7 +97,6 @@ class KafkaEventWorker(KafkaConsumerWorker):
         )
         self.app_env["bucket_client"] = BucketClient(
             self.conf,
-            logger=self.logger,
             refresh_delay=bucket_refresh_interval,
             pool_manager=self.app_env["account_client"].pool_manager,
         )
@@ -118,6 +121,12 @@ class KafkaEventWorker(KafkaConsumerWorker):
         self.app_env["worker_id"] = self.name
         self.app_env["topic"] = self.topic
 
+        template = self.conf.get("log_request_format")
+        if template is not None:
+            self.logger_request = get_logger(self.conf, name="request", fmt=template)
+        else:
+            self.logger_request = None
+
         self.statsd = get_statsd(conf=app_conf)
 
         if "handlers_conf" not in self.conf:
@@ -140,53 +149,95 @@ class KafkaEventWorker(KafkaConsumerWorker):
                 f"Required for handlers: {','.join(handlers_with_internal)}"
             )
 
+    def log_and_statsd(self, start, status, _extra):
+        extra = {
+            "worker_id": "-",
+            "request_id": "-",
+            "tube": "-",
+            "topic": "-",
+            "event_type": "-",
+            "cid": "-",
+            "root_cid": "-",
+            "container": "-",
+            "account": "-",
+            "bucket": "-",
+            "path": "-",
+            "content": "-",
+            "version": "-",
+            "action": "-",
+            "rule_id": "-",
+            "run_id": "-",
+        }
+        extra.update({k: v for k, v in _extra.items() if v is not None})
+
+        extra["duration"] = time.monotonic() - start
+        extra["status"] = status
+        extra["event_type"] = str(extra["event_type"]).replace(".", "-")
+        if self.logger_request is not None:
+            self.logger_request.info("", extra=extra)
+        self.statsd.timing(
+            f"openio.event.{extra['topic']}.{extra['event_type']}.{extra['status']}"
+            ".duration",
+            extra["duration"] * 1000,
+        )
+
     def process_message(self, message, _properties):
         if not isinstance(message, dict):
             raise RejectMessage("Malformed")
 
+        start = time.monotonic()
         reqid = message.get("request_id")
         event = message.get("event")
-        event_type = str(event).replace(".", "-")
-        with get_oio_log_context(
-            worker_id=self.name,
-            **extract_log_ctx_from_event(message),
-            pipeline="",
-        ):
-            with OioAccessLog(self.logger) as access_log:
-                with StatsdTiming(
-                    self.statsd,
-                    f"openio.event.{self.topic}.{event_type}.{{code}}.duration",
-                ) as stats_timing:
+        ctx = log_context_from_msg(message)
+        replacements = {
+            "tube": self.topic,
+            "topic": self.topic,
+            "handlers": None,
+            "worker_id": self.name,
+            **asdict(ctx),
+        }
 
-                    def _cb(status, msg, **kwargs):
-                        stats_timing.code = access_log.status = status
-                        if is_success(status):
-                            return
-                        if is_retryable(status):
-                            self.logger.warn(
-                                "event handling failure (release with delay): %s",
-                                msg,
-                            )
-                            raise RetryLater(delay=kwargs.get("delay"))
-                        if is_outdated(status):
-                            raise OutdatedMessage("Message requeued for too long")
-                        self.logger.debug(
-                            "event handling failure (rejecting): %s ", msg
-                        )
-                        raise RejectMessage(
-                            f"Failed to process message {msg}: ({reqid}) {status}"
-                        )
+        def _cb(status, msg, **kwargs):
+            if "handlers" in kwargs:
+                replacements["handlers"] = kwargs["handlers"]
+            self.log_and_statsd(start, status, replacements)
+            if is_success(status):
+                return
 
-                    if event in EventTypes.INTERNAL_EVENTS:
-                        handlers = self.handlers_with_internal
-                        if not handlers:
-                            return None
-                    else:
-                        handler = self.handlers.get(event, None)
-                        if not handler:
-                            stats_timing.code = access_log.status = 404
-                            raise RejectMessage(f"No handler for {event}")
-                        handlers = [handler]
-                    for handler in handlers:
-                        handler(message, _cb)
-                    return None
+            if is_retryable(status):
+                self.logger.warn(
+                    "event handling failure (release with delay): (%s) %s reqid=%s",
+                    status,
+                    msg,
+                    reqid,
+                )
+                self.statsd.timing(
+                    f"event.{self.topic}.{event}.retry",
+                    int((time.monotonic() - start) * 1000),
+                )
+                raise RetryLater(delay=kwargs.get("delay"))
+
+            if is_outdated(status):
+                raise OutdatedMessage("Message requeued for too long")
+
+            self.logger.debug(
+                "event handling failure (rejecting): %s reqid=%s", msg, reqid
+            )
+            raise RejectMessage(f"Failed to process message {msg}: ({reqid}) {status}")
+
+        if event in EventTypes.INTERNAL_EVENTS:
+            handlers = self.handlers_with_internal
+            if not handlers:
+                return None
+        else:
+            handler = self.handlers.get(event, None)
+            if not handler:
+                self.log_and_statsd(start, 404, replacements)
+                raise RejectMessage(f"No handler for {event}")
+            handlers = [handler]
+
+        for handler in handlers:
+            resp_cb = ResponseCallBack(_cb, handlers="")
+            handler(message, resp_cb)
+
+        return None

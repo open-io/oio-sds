@@ -31,7 +31,7 @@ from oio.common.kafka import (
     KafkaSender,
     get_retry_delay,
 )
-from oio.common.logger import get_oio_logger
+from oio.common.logger import get_logger
 from oio.common.statsd import StatsdTiming, get_statsd
 from oio.common.utils import monotonic_time, ratelimit, request_id
 from oio.event.evob import (
@@ -834,7 +834,7 @@ class KafkaConsumerPool:
     ):
         self.conf = conf
         self.endpoint = endpoint
-        self.logger = logger or get_oio_logger(None)
+        self.logger = logger or get_logger(None)
         self.processes = processes or os.cpu_count()
         self.topic = topic
         self.running = False

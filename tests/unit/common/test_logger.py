@@ -120,7 +120,7 @@ class TestLogger(unittest.TestCase):
 
     def test_context_logger(self):
         logger = get_oio_logger(
-            {"logger_extras": "FOO=bar\tteSt=123\tdepth=1"},
+            {"logger_extras": "FOO=bar\nteSt=123\ndepth=1"},
             name=f"logger-{random_str(4)}",
         )
         sio = StringIO()
@@ -177,8 +177,8 @@ class TestLogger(unittest.TestCase):
     def test_context_logger_with_mapping(self):
         logger = get_oio_logger(
             {
-                "logger_extras": "FOO=bar\tteSt=123\tdepth=1",
-                "logger_fields_mapping": "origin=renamed\tmessage=MSG",
+                "logger_extras": "FOO=bar\nteSt=123\ndepth=1",
+                "logger_fields_mapping": "origin=renamed\nmessage=MSG",
             },
             name=f"logger-{random_str(4)}",
         )
@@ -200,8 +200,8 @@ class TestLogger(unittest.TestCase):
     def test_context_logger_with_mapping_formatting(self):
         logger = get_oio_logger(
             {
-                "logger_extras": "FOO=bar\tteSt=123\tdepth=1",
-                "logger_fields_mapping": "origin=renamed:u\tmessage=MSG",
+                "logger_extras": "FOO=bar\nteSt=123\ndepth=1",
+                "logger_fields_mapping": "origin=renamed:u\nmessage=MSG",
             },
             name=f"logger-{random_str(4)}",
         )
@@ -220,63 +220,10 @@ class TestLogger(unittest.TestCase):
             MSG="line 1",
         )
 
-    def test_context_logger_reuse_context(self):
-        logger = get_oio_logger(
-            {
-                "logger_extras": "FOO=bar\tteSt=123\tdepth=1",
-            },
-            name=f"logger-{random_str(4)}",
-        )
-        sio = StringIO()
-        handler = logging.StreamHandler(sio)
-        handler.setFormatter(logger.handlers[0].formatter)
-        logger.addHandler(handler)
-        with get_oio_log_context(origin="test"):
-            logger.info("line 1")
-            self.assertLogEqual(
-                sio,
-                FOO="bar",
-                teSt="123",
-                origin="test",
-                depth="1",
-                message="line 1",
-            )
-            with get_oio_log_context(reuse=True) as ctx:
-                logger.info("line 2")
-                self.assertLogEqual(
-                    sio,
-                    FOO="bar",
-                    teSt="123",
-                    origin="test",
-                    depth="1",
-                    message="line 2",
-                )
-                with get_oio_log_context(depth=2):
-                    logger.info("line 3")
-                    self.assertLogEqual(
-                        sio,
-                        FOO="bar",
-                        teSt="123",
-                        origin="test",
-                        depth="2",
-                        message="line 3",
-                    )
-                ctx.amend(BAR=42)
-            logger.info("line 4")
-            self.assertLogEqual(
-                sio,
-                FOO="bar",
-                BAR="42",
-                teSt="123",
-                origin="test",
-                depth="1",
-                message="line 4",
-            )
-
     @patch("time.monotonic", side_effect=[1, 2])
     def test_access_logs_success(self, _mock):
         logger = get_oio_logger(
-            {"logger_extras": "FOO=bar\tteSt=123\tdepth=1", "log_level": "TRACE"},
+            {"logger_extras": "FOO=bar\nteSt=123\ndepth=1"},
             name=f"logger-{random_str(4)}",
         )
         sio = StringIO()
@@ -300,7 +247,7 @@ class TestLogger(unittest.TestCase):
     @patch("time.monotonic", side_effect=[1, 2])
     def test_access_logs_exception(self, _mock):
         logger = get_oio_logger(
-            {"logger_extras": "FOO=bar\tteSt=123\tdepth=1", "log_level": "TRACE"},
+            {"logger_extras": "FOO=bar\nteSt=123\ndepth=1"},
             name=f"logger-{random_str(4)}",
         )
         sio = StringIO()
@@ -327,7 +274,7 @@ class TestLogger(unittest.TestCase):
     @patch("time.monotonic", side_effect=[1, 2])
     def test_access_logs_status_override(self, _mock):
         logger = get_oio_logger(
-            {"logger_extras": "FOO=bar\tteSt=123\tdepth=1", "log_level": "TRACE"},
+            {"logger_extras": "FOO=bar\nteSt=123\ndepth=1"},
             name=f"logger-{random_str(4)}",
         )
         sio = StringIO()

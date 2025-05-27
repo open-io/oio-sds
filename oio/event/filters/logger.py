@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.logger import get_oio_log_context, get_oio_logger
 from oio.event.filters.base import Filter
 
 
@@ -23,16 +22,19 @@ class LoggerFilter(Filter):
 
     def __init__(self, *args, **kwargs):
         self._topic = None
-        self._internal_logger = None
         super().__init__(*args, **kwargs)
 
     def init(self):
         self._topic = self.conf.get("topic")
-        self._internal_logger = get_oio_logger(self.conf, "__internal_logger")
+
+    def log_context_from_env(self, env):
+        ctx = super().log_context_from_env(env)
+        ctx.topic = self._topic
+        ctx.event = str(env)
+        return ctx
 
     def process(self, env, cb):
-        with get_oio_log_context(inherit=False, topic=self._topic, event=str(env)):
-            self._internal_logger.info("")
+        self.logger.info("%s", env)
         return self.app(env, cb)
 
 
