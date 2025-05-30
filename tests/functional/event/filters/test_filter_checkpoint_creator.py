@@ -86,7 +86,9 @@ class TestFilterCheckpointCreator(BaseTestCase):
                 Mock(return_value={"system": {M2_PROP_SHARDING_STATE: 2}}),
             ):
                 self.filter.process(env, mock_cb)
-        mock_cb.assert_called_once_with(503, "Sharding in progress for BBBB", delay=60)
+        mock_cb.assert_called_once_with(
+            503, "Sharding in progress for BBBB", delay=60, topic=None
+        )
         self.filter._create_checkpoint.assert_not_called()
         self.filter._update_metrics.assert_not_called()
 

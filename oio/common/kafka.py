@@ -320,7 +320,7 @@ class KafkaSender(KafkaClient):
 
         return delayed_event
 
-    def send(self, topic, data, delay=0, key=None, flush=False):
+    def send(self, topic, data, delay=0, key=None, flush=False, delayed_topic=None):
         # Strip any _internal field
         if isinstance(data, dict) and "_internal" in data:
             data = {
@@ -331,7 +331,7 @@ class KafkaSender(KafkaClient):
         if delay > 0:
             # Encapsulate event in a delayed one
             data = self._generate_delayed_event(topic, data, delay, key=key)
-            topic = self._delayed_topic
+            topic = delayed_topic if delayed_topic is not None else self._delayed_topic
             key = None
 
         self._send(topic, data, key=key, flush=flush)

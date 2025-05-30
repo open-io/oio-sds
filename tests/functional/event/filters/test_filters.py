@@ -86,6 +86,7 @@ class TestContentReaperFilter(BaseTestCase):
                 503,
                 "Unable to delete all chunks",
                 delay=myfilter._serious_issue_delay,
+                topic=None,
             )
             self.assertIsNone(resp)
 
@@ -106,6 +107,7 @@ class TestContentReaperFilter(BaseTestCase):
                 503,
                 "Unable to delete all chunks",
                 delay=myfilter._retry_delay,
+                topic=None,
             )
             self.assertIsNone(resp)
 

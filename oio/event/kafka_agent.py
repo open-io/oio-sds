@@ -215,7 +215,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
                     f"event.{self.topic}.{event}.retry",
                     int((time.monotonic() - start) * 1000),
                 )
-                raise RetryLater(delay=kwargs.get("delay"))
+                raise RetryLater(delay=kwargs.get("delay"), topic=kwargs.get("topic"))
 
             if is_outdated(status):
                 raise OutdatedMessage("Message requeued for too long")

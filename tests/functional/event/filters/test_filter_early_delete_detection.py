@@ -96,14 +96,16 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
         mock_cb = Mock()
         event_filter = EarlyDeleteDetection(self.app, self.conf)
         event_filter.process(self._create_event(container="foo"), mock_cb)
-        mock_cb.assert_called_once_with(500, "Account is missing in event", delay=None)
+        mock_cb.assert_called_once_with(
+            500, "Account is missing in event", delay=None, topic=None
+        )
 
     def test_no_user(self):
         mock_cb = Mock()
         event_filter = EarlyDeleteDetection(self.app, self.conf)
         event_filter.process(self._create_event(account="foo"), mock_cb)
         mock_cb.assert_called_once_with(
-            500, "Container is missing in event", delay=None
+            500, "Container is missing in event", delay=None, topic=None
         )
 
     def test_no_when(self):
@@ -113,7 +115,9 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             self._create_event(account="foo", container="bar", when=None),
             mock_cb,
         )
-        mock_cb.assert_called_once_with(500, "When is missing in event", delay=None)
+        mock_cb.assert_called_once_with(
+            500, "When is missing in event", delay=None, topic=None
+        )
 
     def test_no_mtime_nor_ttime(self):
         mock_cb = Mock()
@@ -122,7 +126,9 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             self._create_event(account="foo", container="bar"),
             mock_cb,
         )
-        mock_cb.assert_called_once_with(500, "Unable to extract object age", delay=None)
+        mock_cb.assert_called_once_with(
+            500, "Unable to extract object age", delay=None, topic=None
+        )
 
     def test_delete_marker(self):
         mock_cb = Mock()
@@ -141,7 +147,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             mock_cb,
         )
         mock_cb.assert_called_once_with(
-            500, "Unable to extract object policy", delay=None
+            500, "Unable to extract object policy", delay=None, topic=None
         )
 
     def test_early_mtime(self):

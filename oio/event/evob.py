@@ -192,13 +192,16 @@ class Response(object):
         self.delay = None
         if "delay" in kwargs:
             self.delay = kwargs["delay"]
+        self.topic = None
+        if "topic" in kwargs:
+            self.topic = kwargs["topic"]
 
     def __call__(self, env, cb):
         if not self.event:
             self.event = Event(env)
         if not self.body:
             self.body = ""
-        cb(self.status, self.body, delay=self.delay)
+        cb(self.status, self.body, delay=self.delay, topic=self.topic)
 
 
 class EventException(Response, Exception):

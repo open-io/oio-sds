@@ -218,9 +218,10 @@ class RetryLater(RejectMessage):
     but maybe later.
     """
 
-    def __init__(self, *args, delay=None):
+    def __init__(self, *args, delay=None, topic=None):
         super().__init__(*args)
         self.delay = delay
+        self.topic = topic
 
 
 class OutdatedMessage(RejectMessage):
@@ -368,7 +369,7 @@ class AcknowledgeMessageMixin:
         self.logger = logger
         self._processed_events = Value("i", 0)
 
-    def acknowledge_message(self, message, as_failure=False, delay=None):
+    def acknowledge_message(self, message, as_failure=False, delay=None, topic=None):
         evt_type = message.get("data", {}).get("event")
         try:
             self._offsets_queue.put(
@@ -382,6 +383,7 @@ class AcknowledgeMessageMixin:
                     "data": message.get("data"),
                     "failure": as_failure,
                     "delay": delay,
+                    "delay_topic": topic,
                 }
             )
             self._increment_processed_events()
@@ -439,8 +441,8 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
         self._events_on_hold = {}
         self._events_to_resume = []
 
-    def _reject_message(self, message, delay=None):
-        self.acknowledge_message(message, as_failure=True, delay=delay)
+    def _reject_message(self, message, delay=None, topic=None):
+        self.acknowledge_message(message, as_failure=True, delay=delay, topic=topic)
 
     def _get_event_to_process(self):
         if self._events_to_resume:
@@ -489,20 +491,22 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
                 continue
             except RejectMessage as exc:
                 delay = None
+                topic = None
                 if isinstance(exc, RetryLater):
                     delay = exc.delay
-                if delay:
-                    self.logger.debug("Retry later message %s: %s", event, exc)
+                    if delay:
+                        self.logger.debug("Retry later message %s: %s", event, exc)
+                    topic = exc.topic
                 elif isinstance(exc, OutdatedMessage):
                     self.logger.debug("Message reached its expiration %s", exc)
                 else:
                     self.logger.error(
                         "Reject message %s: (%s) %s", event, exc.__class__.__name__, exc
                     )
-                self._reject_message(event, delay=delay)
+                self._reject_message(event, delay=delay, topic=topic)
                 # Rejects all events on hold
                 for evt_hold, _ in self._get_events_on_hold(event):
-                    self._reject_message(evt_hold, delay=delay)
+                    self._reject_message(evt_hold, delay=delay, topic=topic)
             except OioProtocolError:
                 self.logger.exception(
                     "OioProtocolError, failed to process message %s", event
@@ -750,6 +754,7 @@ class KafkaBatchFeeder(
                                 delay=offset["delay"],
                                 key=offset["key"],
                                 flush=True,
+                                delayed_topic=offset.get("delay_topic"),
                             )
                         else:  # No retry, send to deadletter
                             self._producer.send(
