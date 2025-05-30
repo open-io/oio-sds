@@ -18,7 +18,13 @@ import json
 
 
 class RestoreProperty:
-    __slots__ = ["days", "expiry_date", "ongoing", "request_date", "tier"]
+    __slots__ = [
+        "days",
+        "expiry_date",
+        "ongoing",
+        "request_date",
+        "tier",
+    ]
 
     def __init__(self):
         self.ongoing = False

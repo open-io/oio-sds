@@ -470,6 +470,8 @@ lifecycle_configuration_backup_bucket = lc-bucket
 # Order from highest to lowset
 storage_class.STANDARD = EC21,TWOCOPIES:0,EC:10000,ECX21,THREECOPIES,ANY-E93
 storage_class.STANDARD_IA = SINGLE
+storage_class.GLACIER = THREECOPIES_FR
+storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 
 [filter:logger]
 use = egg:oio#logger
@@ -927,6 +929,10 @@ template_conscience_policies = """
 SINGLE=NONE:NONE
 TWOCOPIES=rawx2:DUPONETWO
 THREECOPIES=rawx3:DUPONETHREE
+# Flexible retrieval
+THREECOPIES_FR=rawx3:DUPONETHREE
+# Deep archive
+THREECOPIES_DA=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:E63
 EC21=NONE:E21
@@ -1568,9 +1574,13 @@ log_format=topic:%(topic)s    event:%(event)s
 [filter:early_delete_detection]
 use = egg:oio#early_delete_detection
 storage_class_minimal_duration.STANDARD_IA = 2592000
+storage_class_minimal_duration.GLACIER = 2592000
+storage_class_minimal_duration.DEEP_ARCHIVE = 2592000
 storage_class.STANDARD = EC21,THREECOPIES
 storage_class.STANDARD_IA = TWOCOPIES
 storage_class.ONEZONE_IA = SINGLE
+storage_class.GLACIER = THREECOPIES_FR
+storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 redis_host = ${IP}:${REDIS_PORT}
 
 [filter:preserve]
@@ -1699,6 +1709,8 @@ redis_host = ${IP}:${REDIS_PORT}
 storage_class.STANDARD = EC21,THREECOPIES:0,EC21:100000
 storage_class.STANDARD_IA = TWOCOPIES
 storage_class.ONEZONE_IA = SINGLE
+storage_class.GLACIER = THREECOPIES_FR
+storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 skip_data_move_storage_classes.STANDARD = ONEZONE_IA, GLACIER_IR
 
 [filter:preserve]
@@ -1740,6 +1752,38 @@ use = egg:oio#lifecycle_delete_restore
 use = egg:oio#notify
 topic = oio-preserved
 broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_archive_restore_handlers = """
+[handler:storage.content.update]
+pipeline = archive_restore ${PRESERVE}
+
+[filter:archive_restore]
+use = egg:oio#archive_restore
+redis_host = ${IP}:${REDIS_PORT}
+storage_class.STANDARD = EC21,THREECOPIES
+storage_class.STANDARD_IA = TWOCOPIES
+storage_class.ONEZONE_IA = SINGLE
+storage_class.GLACIER = THREECOPIES_FR
+storage_class.DEEP_ARCHIVE = THREECOPIES_DA
+restorable_storage_classes = DEEP_ARCHIVE
+restore_delay.DEEP_ARCHIVE = 10,180,30
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
+template_event_agent_archive_delay_handlers = """
+[handler:delayed]
+pipeline = delay
+
+[filter:delay]
+use = egg:oio#delay
+topic = oio-archive-delayed
+delay_granularity = 10
 """
 
 template_event_agent_testing_handlers = """
@@ -3472,6 +3516,37 @@ def generate(options):
         # We need only one service
         break
 
+    # Configure a special oio-event-agent dedicated to archive restore events
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-archive-restore",
+            url,
+            srv_type="event-agent-archive-restore",
+            workers=4,
+            group_id="event-agent-archive-restore",
+            template_handler=template_event_agent_archive_restore_handlers,
+        )
+        # We need only one service
+        break
+
+    # Configure a special oio-event-agent dedicated to archive delayed events
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-archive-delayed",
+            url,
+            workers="1",
+            srv_type="event-agent-archive-delay",
+            group_id="event-agent-archive-delay",
+            template_handler=template_event_agent_archive_delay_handlers,
+        )
+
+        # We need only one service
+        break
+
     # Configure a special oio-testing dedicated to tests
     # -------------------------------------------------------------------------
     for num, url, event_agent_bin in get_event_agent_details():
@@ -3667,6 +3742,7 @@ def generate(options):
     topics_to_declare = [
         ("oio", None),
         ("oio-archive-restore", None),
+        ("oio-archive-delayed", None),
         ("oio-deadletter", None),
         ("oio-delayed", None),
         ("oio-delete-mpu-parts", None),
