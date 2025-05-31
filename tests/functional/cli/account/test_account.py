@@ -108,6 +108,9 @@ class AccountTest(CliTestCase):
         self.openio("container delete " + self.NAME)
         self.openio("account delete " + self.NAME)
 
+    def test_account_set_no_property(self):
+        self.openio("account set " + self.NAME, expected_returncode=1)
+
     def test_account_set_properties(self):
         self.openio("account create " + self.NAME)
         self.openio(
@@ -136,3 +139,6 @@ class AccountTest(CliTestCase):
             data["metadata"],
             {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
         )
+
+    def test_account_unset_no_property(self):
+        self.openio("account unset " + self.NAME, expected_returncode=1)

@@ -156,7 +156,7 @@ class SetAccount(Command):
         if parsed_args.max_buckets is not None:
             properties["max-buckets"] = str(parsed_args.max_buckets)
         if not properties:
-            ValueError("No property")
+            raise ValueError("No property")
 
         self.app.client_manager.storage.account_set_properties(
             account=parsed_args.account,
@@ -212,7 +212,7 @@ class UnsetAccount(Command):
         if parsed_args.max_buckets:
             properties.append("max-buckets")
         if not properties:
-            ValueError("No property")
+            raise ValueError("No property")
 
         self.app.client_manager.storage.account_del_properties(
             account=parsed_args.account,
