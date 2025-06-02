@@ -12,7 +12,7 @@ Build-Depends:
   cargo-1.80,
   go-1.23.4-ovh1645,
   obsto-zookeeper-3.7.2-ovh1635,
-  python-3.10.16-ovh212,
+  python-3.10.16-ovh213,
   flex,
   bison,
   gcc,
@@ -36,7 +36,7 @@ Architecture: any
 Depends:
   ${shlibs:Depends},
   ${misc:Depends},
-  python-3.10.16-ovh212,
+  python-3.10.16-ovh213,
   libcurl4,
   zlib1g,
   libglib2.0-0,

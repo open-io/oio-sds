@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [build-system]
-requires = ["pbr>=6.0.0", "wheel"]
+requires = ["build", "pbr>=6.0.0", "wheel"]
 build-backend = "pbr.build"
 
 [project.optional-dependencies]
@@ -92,3 +92,6 @@ exclude = ["tools/oio-bootstrap.py"]
 
 [tool.ruff.lint.per-file-ignores]
 "{tests,tools}/**" = ["D"]
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md", content-type = "text/markdown"}
