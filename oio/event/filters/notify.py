@@ -18,8 +18,13 @@ import re
 from typing import Any, Dict
 from urllib.parse import unquote
 
+from oio.common.exceptions import OioTimeout
 from oio.common.json import json
-from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
+from oio.common.kafka import (
+    KafkaSender,
+    KafkaSendException,
+    get_retry_delay,
+)
 from oio.event.beanstalk import Beanstalk, BeanstalkError
 from oio.event.evob import Event, EventError, RetryableEventError
 from oio.event.filters.base import Filter
@@ -232,15 +237,29 @@ class KafkaNotifyFilter(NotifyFilter):
         self._retry_delay = get_retry_delay(self.conf)
         super().init()
 
+    def _init_producer(self):
+        """
+        Initialize the message producer (if not already initialized).
+
+        Will also check if the configured destination topics exist.
+        """
+        if self.producer is not None:
+            return
+        producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+        topics = [self.destination]
+        topics.extend([r["destination"] for r in self.rules.values()])
+        producer.ensure_topics_exist(topics)
+        self.producer = producer
+
     def _prefix(self):
         return "topic_"
 
     def send_event(self, event, payload):
-        if not self.producer:
-            self.producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
-            topics = [self.destination]
-            topics.extend([r["destination"] for r in self.rules.values()])
-            self.producer.ensure_topics_exist(topics)
+        try:
+            self._init_producer()  # no-op if already initialized
+        except OioTimeout as exc:
+            resp = RetryableEventError(event=event, body=str(exc))
+            return resp
 
         topic = self.destination
         if self.rules:

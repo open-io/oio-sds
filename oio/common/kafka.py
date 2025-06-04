@@ -27,7 +27,7 @@ from confluent_kafka import (
 
 from oio.common.configuration import load_namespace_conf
 from oio.common.easy_value import int_value
-from oio.common.exceptions import OioException
+from oio.common.exceptions import OioException, OioTimeout
 from oio.event.evob import EventTypes
 
 DEFAULT_ENDPOINT = "kafka://127.0.0.1:19092"
@@ -167,13 +167,38 @@ class KafkaClient:
             if not err.retriable():
                 raise KafkaFatalException() from exc
 
-    def ensure_topics_exist(self, topics):
+    def ensure_topics_exist(self, topics, timeout=2.0):
+        """
+        Make sure all the topics of the list exist.
+
+        :raises KafkaTopicNotFoundException: if one of the topics does not exist
+        :raises OioTimeout: if the check was not done because of a timeout
+        """
         for topic in topics:
             try:
-                self._client.list_topics(topic=topic, timeout=1)
+                cluster_meta = self._client.list_topics(topic=topic, timeout=timeout)
             except KafkaException as exc:
-                self._logger.error("Topic '%s' not found", topic)
+                kafka_err = exc.args[0]
+                if kafka_err.code() == kafka_err._TIMED_OUT:
+                    self._logger.error(
+                        "Failed to ensure topic '%s' exists: %s",
+                        topic,
+                        kafka_err,
+                    )
+                    raise OioTimeout(timeout) from exc
+                self._logger.error(
+                    "Topic '%s' not found: %s",
+                    topic,
+                    kafka_err,
+                )
                 raise KafkaTopicNotFoundException(f"Topic {topic} not found") from exc
+            topic_meta = cluster_meta.topics.get(topic)
+            if not topic_meta:
+                raise KafkaTopicNotFoundException(f"Topic {topic} not found")
+            if topic_meta.error:  # class KafkaError is not an Exception
+                raise KafkaTopicNotFoundException(
+                    f"Topic {topic} not found: {topic_meta.error}"
+                )
 
     def close(self):
         if self._client is None:
