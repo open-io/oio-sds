@@ -147,3 +147,63 @@ class BillingAdjustmentClient(_BillingClient):
         fields = ["objects", "volume"]
         values = self._reset_value(account, bucket, storage_class, counters=fields)
         return {k: v or 0 for k, v in zip(fields, values)}
+
+
+class RestoreBillingClient(_BillingClient):
+    PREFIX = "ArchiveRestore"
+
+    def __init__(self, conf, logger=None):
+        super().__init__(conf, logger=logger)
+
+    def list_restore(self):
+        """List accounts and buckets which have restore awaiting for billing
+
+        Yields:
+            tuple(str, str, str): account, bucket, storage_class
+        """
+        for account, bucket, storage_class in self._list_keys():
+            yield account, bucket, storage_class
+
+    def add_restore(
+        self, account, bucket, storage_class, requests=0, transfer=0, storage=0
+    ):
+        """
+        Increment restoration counters for bucket.
+        Args:
+            account (str): account name
+            bucket (str): bucket name
+            requests (int): Number of restore requests
+            transfer (int): Volume of restored data (in bytes)
+            storage (float): Volume of storage (in bytes.h)
+        """
+        if requests == 0 and transfer == 0 and storage == 0:
+            return
+
+        self._increment_counters(
+            account,
+            bucket,
+            storage_class,
+            counters={
+                "resquests": requests,
+                "transfer": transfer,
+                "storage": storage,
+            },
+        )
+
+    def reset_restore(self, account, bucket, storage_class):
+        """
+        Get and reset the volume of data due for specified storage class
+        for the bucket and the number of objects
+
+        Args:
+            account (str): account
+            bucket (str): bucket
+            storage_class (str): storage_class
+
+        Returns:
+            dict: the volume of storage (bytes.hour), the number of requests and the
+            restored volume (bytes).
+        """
+        fields = ["requests", "storage", "transfer"]
+        values = self._reset_value(account, bucket, storage_class, counters=fields)
+        return {k: v or 0 for k, v in zip(fields, values)}
