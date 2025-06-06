@@ -423,6 +423,7 @@ enum http_rc_e
 action_admin_sync (struct req_args_s *args)
 {
 	oio_ext_set_admin(TRUE);
+	oio_ext_allow_long_timeout(TRUE);
 	gint64 check_type = -1;
 	const gchar *check_type_str = _req_get_option(args, "check_type");
 	if (oio_str_is_set(check_type_str))

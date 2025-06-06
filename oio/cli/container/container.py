@@ -1510,6 +1510,8 @@ class SnapshotContainer(ContainerCommandMixin, Lister):
             default=100,
             help="The number of chunks updated at the same time.",
         )
+        # FIXME(FVE): do not override --timeout
+        # find a way to set the default in self.app.parser
         parser.add_argument(
             "--timeout",
             default=60.0,
@@ -1531,6 +1533,7 @@ class SnapshotContainer(ContainerCommandMixin, Lister):
                 cid,
                 reqid=reqid,
             )
+        # FIXME(FVE): use self.app.options.timeout
         deadline = timeout_to_deadline(parsed_args.timeout)
         dst_account = parsed_args.dst_account or account
         dst_container = parsed_args.dst_container or (

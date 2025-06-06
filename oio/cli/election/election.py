@@ -52,16 +52,6 @@ class ElectionCmd(Lister):
             action="append",
             help="Query only this service ID",
         )
-
-        # TODO(FVE): add the timeout option to all openio subcommands
-        # FVE: I chose 32s because the timeout between the proxy and the
-        # services is usually 30s.
-        parser.add_argument(
-            "--timeout",
-            default=32.0,
-            type=float,
-            help="Timeout toward the proxy (defaults to 32.0 seconds)",
-        )
         return parser
 
     def get_params(self, parsed_args):
@@ -90,7 +80,7 @@ class ElectionPing(ElectionCmd):
             account=account,
             reference=reference,
             cid=cid,
-            timeout=parsed_args.timeout,
+            timeout=self.app.options.timeout,
             service_id=parsed_args.service_id,
             reqid=self.app.request_id("CLI-election-ping-"),
         )
@@ -114,7 +104,7 @@ class ElectionStatus(ElectionCmd):
             account=account,
             reference=reference,
             cid=cid,
-            timeout=parsed_args.timeout,
+            timeout=self.app.options.timeout,
             service_id=parsed_args.service_id,
             reqid=self.app.request_id("CLI-election-status-"),
         )
@@ -150,7 +140,7 @@ class ElectionCheckPeers(ElectionCmd):
             account=account,
             reference=reference,
             cid=cid,
-            timeout=parsed_args.timeout,
+            timeout=self.app.options.timeout,
             service_id=parsed_args.service_id,
             reqid=self.app.request_id("CLI-election-check-"),
         )
@@ -231,7 +221,7 @@ class ElectionDebug(ElectionCmd):
             account=account,
             reference=reference,
             cid=cid,
-            timeout=parsed_args.timeout,
+            timeout=self.app.options.timeout,
             service_id=parsed_args.service_id,
             reqid=self.app.request_id("CLI-election-debug-"),
         )
@@ -297,7 +287,7 @@ class ElectionSync(ElectionCmd):
             reference=reference,
             cid=cid,
             check_type=parsed_args.check_type,
-            timeout=parsed_args.timeout,
+            timeout=self.app.options.timeout,
             service_id=parsed_args.service_id,
             reqid=self.app.request_id("CLI-election-sync-"),
         )
@@ -329,7 +319,7 @@ class ElectionLeave(ElectionCmd):
             account=account,
             reference=reference,
             cid=cid,
-            timeout=parsed_args.timeout,
+            timeout=self.app.options.timeout,
             service_id=parsed_args.service_id,
             reqid=self.app.request_id("CLI-election-leave-"),
         )
@@ -378,12 +368,6 @@ class ElectionBalance(Lister):
             action="store_false",
             dest="rejoin",
             help="When leaving an election, do not rejoin it right after",
-        )
-        parser.add_argument(
-            "--timeout",
-            default=32.0,
-            type=float,
-            help="Timeout toward the proxy (defaults to 32.0 seconds)",
         )
         return parser
 
