@@ -14,7 +14,9 @@
 # License along with this library.
 
 import time
+from datetime import datetime, timedelta, timezone
 
+from oio.common.constants import M2_PROP_BUCKET_NAME, MULTIUPLOAD_SUFFIX
 from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
@@ -33,16 +35,21 @@ class _App(object):
         self.cb = cb
 
 
-class TestFilterMpuCleaner(BaseTestCase):
+class TestFilterMpuCleanerBase(BaseTestCase):
     def setUp(self):
-        super(TestFilterMpuCleaner, self).setUp()
+        super(TestFilterMpuCleanerBase, self).setUp()
+        self.system = self._set_container_props()
+        self.properties = {}
         if not hasattr(self, "container") or not self.container:
             self.container = f"TestFilterMpuCleaner-{time.time()}"
-        self.container_segment = f"{self.container}+segments"
+        self.container_segment = f"{self.container}{MULTIUPLOAD_SUFFIX}"
 
         self.container_client = self.storage.container
         for container in (self.container, self.container_segment):
-            self.container_client.container_create(self.account, container)
+            system = self.system if container == self.container else {}
+            self.container_client.container_create(
+                self.account, container, system=system
+            )
             self.clean_later(container)
 
         syst = self.container_client.container_get_properties(
@@ -55,6 +62,9 @@ class TestFilterMpuCleaner(BaseTestCase):
         # Used for sharding (not used if no sharding)
         self.nb_other_objects = 0
 
+    def _set_container_props(self):
+        return {}
+
     def _create_event(
         self,
         obj_name,
@@ -62,12 +72,15 @@ class TestFilterMpuCleaner(BaseTestCase):
         manifest_version=None,
         reqid=None,
         container=None,
+        user_agent=None,
     ):
         if not container:
             container = self.container
         event = {}
         event["when"] = time.time()
         event["event"] = "storage.manifest.deleted"
+        if user_agent:
+            event["origin"] = user_agent
         if reqid:
             event["request_id"] = reqid
         else:
@@ -89,6 +102,9 @@ class TestFilterMpuCleaner(BaseTestCase):
 
     def _create_manifest_and_parts(self, obj_name, create_manifest=True, nb_parts=3):
         self.upload_id = random_str(48)
+        self.properties["x-static-large-object"] = "True"
+        self.properties["x-object-sysmeta-s3api-upload-id"] = self.upload_id
+
         if create_manifest:
             _, _, _, obj_meta = self.storage.object_create_ext(
                 account=self.account,
@@ -96,10 +112,7 @@ class TestFilterMpuCleaner(BaseTestCase):
                 obj_name=obj_name,
                 data="test",
                 policy="THREECOPIES",
-                properties={
-                    "x-static-large-object": "True",
-                    "x-object-sysmeta-s3api-upload-id": self.upload_id,
-                },
+                properties=self.properties,
             )
             self.manifest_version = obj_meta["version"]
         else:
@@ -120,6 +133,8 @@ class TestFilterMpuCleaner(BaseTestCase):
         objs = self.storage.object_list(self.account, container)["objects"]
         self.assertEqual(expected_nb_objects, len(objs))
 
+
+class TestFilterMpuCleaner(TestFilterMpuCleanerBase):
     def test_without_manifest_wrong_upload_id(self):
         """
         In this event, do not create manifest (simulate its deletion).
@@ -326,3 +341,108 @@ class TestFilterMpuCleanerWithSharding(TestFilterMpuCleaner):
 
         for container in (self.container, self.container_segment):
             self.shard_container(container)
+
+
+class TestFilterMpuCleanerLocked(TestFilterMpuCleanerBase):
+    def setUp(self):
+        self.container = f"TestFilterMpuCleanerLocked-{time.time()}"
+        self.system = {}
+        super(TestFilterMpuCleanerLocked, self).setUp()
+
+    def _set_container_props(self):
+        return {
+            M2_PROP_BUCKET_NAME: self.container,
+            "sys.m2.bucket.objectlock.enabled": "1",
+        }
+
+    def test_manifest_locked(self):
+        """
+        Test request from lifecycle agent and manifest
+        has retention date in future => skip event
+        """
+        obj_name = "test_expect_no_deletion"
+        nb_parts = 3
+        now = datetime.now(timezone.utc) + timedelta(days=20)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        self.properties["x-object-sysmeta-s3api-retention-retainuntildate"] = now_str
+        self.properties["x-object-sysmeta-s3api-retention-mode"] = "GOVERNANCE"
+
+        self._create_manifest_and_parts(obj_name, nb_parts=nb_parts)
+
+        # Manifest still exists (and is consistent)
+        reqid = request_id("manifestexists-")
+        _ = self._create_event(
+            obj_name,
+            upload_id=self.upload_id,
+            manifest_version=self.manifest_version,
+            reqid=reqid,
+            user_agent="lifecycle-action",
+        )
+
+        # Make sure all parts are still here
+        evt = self.wait_for_kafka_event(
+            types=(EventTypes.CONTENT_DELETED,), timeout=5, reqid=reqid
+        )
+        self.assertIsNone(evt)
+        self._check_nb_objects(self.container_segment, nb_parts + self.nb_other_objects)
+
+    def test_manifest_locked_hold(self):
+        """
+        Test request from lifecycle agent and manifest
+        has legal hold status => skip event
+        """
+        obj_name = "test_expect_no_deletion"
+        nb_parts = 3
+        self.properties["x-object-sysmeta-s3api-legal-hold-status"] = "1"
+
+        self._create_manifest_and_parts(obj_name, nb_parts=nb_parts)
+
+        # Manifest still exists (and is consistent)
+        reqid = request_id("manifestexists-")
+        _ = self._create_event(
+            obj_name,
+            upload_id=self.upload_id,
+            manifest_version=self.manifest_version,
+            reqid=reqid,
+            user_agent="lifecycle-action",
+        )
+
+        # Make sure all parts are still here
+        evt = self.wait_for_kafka_event(
+            types=(EventTypes.CONTENT_DELETED,), timeout=5, reqid=reqid
+        )
+        self.assertIsNone(evt)
+        self._check_nb_objects(self.container_segment, nb_parts + self.nb_other_objects)
+
+    def test_manifest_locked_past(self):
+        """
+        Test request from lifecycle agent and manifest
+        has retention date in the past => retry event
+        """
+        obj_name = "test_expect_no_deletion"
+        nb_parts = 3
+        now = datetime.now(timezone.utc) - timedelta(days=2)
+        now_str = now.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+        self.properties["x-object-sysmeta-s3api-retention-retainuntildate"] = now_str
+        self.properties["x-object-sysmeta-s3api-retention-mode"] = "GOVERNANCE"
+
+        self._create_manifest_and_parts(obj_name, nb_parts=nb_parts)
+
+        # Manifest still exists (and is consistent)
+        reqid = request_id("manifestexists-")
+        event = self._create_event(
+            obj_name,
+            upload_id=self.upload_id,
+            manifest_version=self.manifest_version,
+            reqid=reqid,
+            user_agent="lifecycle-action",
+        )
+
+        self.assertRaises(RetryLater, self.mpu_cleaner.process, event, None)
+
+        # Make sure all parts are still here
+        evt = self.wait_for_kafka_event(
+            types=(EventTypes.CONTENT_DELETED,), timeout=5, reqid=reqid
+        )
+        self.assertIsNone(evt)
+        self._check_nb_objects(self.container_segment, nb_parts + self.nb_other_objects)

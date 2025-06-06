@@ -17,7 +17,11 @@ from datetime import datetime
 
 from urllib3.util.request import make_headers
 
-from oio.common.constants import MULTIUPLOAD_SUFFIX, SHARDING_ACCOUNT_PREFIX
+from oio.common.constants import (
+    LIFECYCLE_USER_AGENT,
+    MULTIUPLOAD_SUFFIX,
+    SHARDING_ACCOUNT_PREFIX,
+)
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
@@ -29,6 +33,9 @@ from oio.event.kafka_consumer import RejectMessage, RetryLater
 UPLOAD_ID = "x-object-sysmeta-s3api-upload-id"
 SLO = "x-static-large-object"
 OBJECT_DELETION_CONCURRENCY = 100
+
+OBJ_PROP_LEGAL_HOLD_STATUS = "x-object-sysmeta-s3api-legal-hold-status"
+OBJ_PROP_RETAIN_UNTILDATE = "x-object-sysmeta-s3api-retention-retainuntildate"
 
 
 class MpuPartCleaner(Filter):
@@ -46,8 +53,9 @@ class MpuPartCleaner(Filter):
         self.retry_delay_remaining_parts = int_value(
             self.conf.get("retry_delay_remaining_parts"), 0
         )
-        self.timeout_manifest_still_exists = int_value(
-            self.conf.get("timeout_manifest_still_exists"), 900
+        # Timeout converted to microseconds
+        self.timeout_manifest_still_exists = (
+            int_value(self.conf.get("timeout_manifest_still_exists"), 900) * 1000000
         )
 
     def process(self, env, cb):
@@ -111,9 +119,21 @@ class MpuPartCleaner(Filter):
             # timeout_manifest_still_exists, we can skip the event as the manifest
             # should already be deleted (maybe the transaction in the backend has not
             # been validated).
-            now = datetime.now().timestamp() * 1000000
+            present = datetime.now()
+            now = present.timestamp() * 1000000
             if event.when + self.timeout_manifest_still_exists > now:
                 return self.app(env, cb)
+
+            # Don't retry event if manifest has legal hold or retention
+            if event.origin == LIFECYCLE_USER_AGENT:
+                hold = props.get("properties", {}).get(OBJ_PROP_LEGAL_HOLD_STATUS)
+                retain_date = props.get("properties", {}).get(OBJ_PROP_RETAIN_UNTILDATE)
+                if hold or (
+                    retain_date
+                    and datetime.strptime(retain_date, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    > present
+                ):
+                    return self.app(env, cb)
 
             # No exception raised, retry later if manifest does still exist
             raise RetryLater(delay=self.retry_delay)
