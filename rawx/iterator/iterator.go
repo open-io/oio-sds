@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2024 OVH SAS
+// Copyright (C) 2024-2025 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -17,7 +17,6 @@
 package iterator
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -69,7 +68,6 @@ func (pi *PathIterator) lvl(pfx string, width, depth uint, out chan string) {
 }
 
 func (pi *PathIterator) Run() chan string {
-	fmt.Println("###", pi.markerPath, pi.width, pi.depth)
 	out := make(chan string, 64)
 	go func() {
 		pi.lvl("", pi.width, pi.depth, out)
