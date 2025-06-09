@@ -34,7 +34,8 @@ requires = ["build", "pbr>=6.0.0", "wheel"]
 build-backend = "pbr.build"
 
 [project.optional-dependencies]
-all = ["oio[event,lint,object,service,zk]"]
+# All dependencies needed to run the program (but not to test it)
+all = ["oio[event,object,service,zk]"]
 
 # Use the event system
 event = [
@@ -65,6 +66,7 @@ test = [
   "pytest-rerunfailures",
   "pytest-timer",
   "oio[all]",
+  "oio[lint]",
 ]
 # Talk to Zookeeper (with openio CLI)
 zk = [
