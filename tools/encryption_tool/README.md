@@ -4,14 +4,14 @@ Encryption tools
 ## Usage
 - Get encrypted obj:  
 `openio object save <container> <object> --file encrypted-body`
-- Write obj metadata to metadata.json:
+- Write obj metadata to metadata.json:  
 `./get-metadata.py --account <account> --container <container> --obj <object> --version <version> > metadata.json`
-- Decrypt obj1 (decrypt object plaintext body:
+- Decrypt obj1 (decrypt object plaintext body:  
 `cat encrypted-body | ./decrypter.py --account <account> --container <container> --obj <object> --metadata metadata.json --iv iv.json > decrypted-body`
-- cat decrypted object and decrypted user metadata:
+- cat decrypted object and decrypted user metadata:  
 `cat decrypted-body`
 `cat metadata.json | jq | grep "keyname"`
-- Re encrypt obj:
+- Re encrypt obj:  
 `cat decrypted-body | ./encrypter.py --account <account> --container <container> --obj <object> --metadata metadata.json --iv iv.json > test-reencrypted-body`  
 
 ## decrypter.py
@@ -62,9 +62,9 @@ Encryption tools
 
 ## try_bucket_secret.py
 ### Example
-```
-#Get bucket secret form account server
-$ curl "127.0.0.1:6001/v1.0/kms/get-secret?account=AUTH_demo&bucket=bucket&secret_id=0" | jq
+#### Get bucket secret form account server
+```bash
+curl "127.0.0.1:6001/v1.0/kms/get-secret?account=AUTH_demo&bucket=bucket&secret_id=0" | jq
   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
                                  Dload  Upload   Total   Spent    Left  Speed
 100   113  100   113    0     0  22600      0 --:--:-- --:--:-- --:--:-- 22600
@@ -74,10 +74,10 @@ $ curl "127.0.0.1:6001/v1.0/kms/get-secret?account=AUTH_demo&bucket=bucket&secre
   "secret_id": "0",
   "secret": "Xiup6SX2YpRhlIIC8+Dat3yazd3+qziiYFWgHnXcPpA="
 }
-#use try_bucket_secret.py to show HMAC calculated with ETag and provided key and show HMAC stored in metadata
-$ cat encrypted-body | ./try_bucket_secret.py --account AUTH_demo --container bucket --obj obj --metadata metadata.json --bucket_secret Xiup6SX2YpRhlIIC8+Dat3yazd3+qziiYFWgHnXcPpA=
-Calculate HMAC with ETag from X-Object-Sysmeta-Crypto-Etag metadata and provided key:
-+vwvg8IUMAa/mXLR7B+OEOSprvAoqojG9UKP4LYYLL8=
-HMAC form X-Object-Sysmeta-Crypto-Etag-Mac metadata:
-+vwvg8IUMAa/mXLR7B+OEOSprvAoqojG9UKP4LYYLL8=
 ```
+#### use try_bucket_secret.py to show HMAC calculated with ETag and provided key and show HMAC stored in metadata
+`./try_bucket_secret.py --account AUTH_demo --container bucket --obj obj --metadata metadata.json --bucket_secret Xiup6SX2YpRhlIIC8+Dat3yazd3+qziiYFWgHnXcPpA=`  
+Calculate HMAC with ETag from X-Object-Sysmeta-Crypto-Etag metadata and provided key:
+`+vwvg8IUMAa/mXLR7B+OEOSprvAoqojG9UKP4LYYLL8=`
+HMAC form X-Object-Sysmeta-Crypto-Etag-Mac metadata:
+`+vwvg8IUMAa/mXLR7B+OEOSprvAoqojG9UKP4LYYLL8=`
