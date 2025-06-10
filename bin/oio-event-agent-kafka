@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -33,12 +33,23 @@ def make_arg_parser():
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="More verbose output"
     )
+    parser.add_argument(
+        "--max-events",
+        "-m",
+        help="""
+        Max events to process, once the max reached, the event agent is stopped.
+        Set to 0 (default value) to set no limit on processed events.
+        """,
+        type=int,
+        default=0,
+    )
     parser.add_argument("configuration", help="Path to the legacy configuration file")
     return parser
 
 
 def main():
     args = make_arg_parser().parse_args()
+    max_events_to_process = int_value(args.max_events, 0)
     conf = read_conf(args.configuration, "event-agent")
     ns_conf = load_namespace_conf(conf["namespace"])
 
@@ -59,6 +70,7 @@ def main():
         group_id=group_id,
         logger=logger,
         processes=workers,
+        max_events_to_process=max_events_to_process,
     )
     pool.run()
 

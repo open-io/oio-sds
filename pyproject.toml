@@ -63,6 +63,7 @@ test = [
   "mock>=1.0",
   "pytest",
   "pytest-rerunfailures",
+  "pytest-timeout",
   "pytest-timer",
   "oio[all]",
   "oio[lint]",

@@ -13,12 +13,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import bisect
+import copy
 import json
 import os
 import signal
 import time
 import uuid
-from multiprocessing import Event, Process, Queue
+from multiprocessing import Event, Process, Queue, Value
 from multiprocessing.queues import Empty
 
 from confluent_kafka import TopicPartition
@@ -27,6 +28,7 @@ from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import OioProtocolError
 from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
+    KAFKA_CONF_CONSUMER_PREFIX,
     KafkaConsumer,
     KafkaFatalException,
     KafkaSender,
@@ -363,6 +365,7 @@ class AcknowledgeMessageMixin:
     def __init__(self, offsets_queue, logger) -> None:
         self._offsets_queue = offsets_queue
         self.logger = logger
+        self._processed_events = Value("i", 0)
 
     def acknowledge_message(self, message, as_failure=False, delay=None):
         evt_type = message.get("data", {}).get("event")
@@ -380,6 +383,7 @@ class AcknowledgeMessageMixin:
                     "delay": delay,
                 }
             )
+            self._increment_processed_events()
         except Exception:
             self.logger.exception(
                 "Failed to ack message (topic=%s, partition=%s, offset=%s, type=%s)",
@@ -389,6 +393,14 @@ class AcknowledgeMessageMixin:
                 evt_type,
             )
             return False
+
+    def _increment_processed_events(self):
+        with self._processed_events.get_lock():
+            self._processed_events.value += 1
+
+    @property
+    def processed_events(self):
+        return self._processed_events
 
 
 class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
@@ -839,6 +851,7 @@ class KafkaConsumerPool:
         worker_class: KafkaConsumerWorker,
         logger=None,
         processes=None,
+        max_events_to_process=0,
         *args,
         **kwargs,
     ):
@@ -859,6 +872,10 @@ class KafkaConsumerPool:
             logger, self.conf, self._batch_size, self.processes
         )
         self._offsets_queue = Queue(maxsize=self._batch_size)
+        self._max_events_to_process = max_events_to_process
+        # Adjust the max events to process based on lag
+        # (lower lag = fewer events).
+        self._update_max_events_with_topic_lag()
 
     def _start_feeder(self, worker_id):
         self._workers[worker_id] = KafkaBatchFeeder(
@@ -874,6 +891,42 @@ class KafkaConsumerPool:
         )
         self.logger.info("Spawning worker %s %s", KafkaBatchFeeder.__name__, worker_id)
         self._workers[worker_id].start()
+
+    def _update_max_events_with_topic_lag(self):
+        """Update the maximum events to process if the lag is lower.
+
+        :param worker_id: worker id of the batch feeder
+        :type worker_id: int
+        """
+        if self._max_events_to_process > 0:
+            conf = copy.deepcopy(self.conf)
+            conf.pop(f"{KAFKA_CONF_CONSUMER_PREFIX}group.instance.id", None)
+
+            try:
+                # Create temp consumer just for lag calculation
+                temp_consumer = KafkaConsumer(
+                    self.endpoint,
+                    [self.topic],
+                    conf["group_id"],
+                    logger=self.logger,
+                    app_conf=conf,
+                    kafka_conf={
+                        "enable.auto.commit": False,
+                        "auto.offset.reset": "earliest",
+                    },
+                )
+                # topic lag calculation
+                lags = temp_consumer.get_topic_lag(self.topic)
+                sum_lags = sum(lags.values())
+                if 0 < sum_lags < self._max_events_to_process:
+                    self.logger.info(
+                        "Adjusting the maximum events to match the lag value, "
+                        f"since it is smaller. lags={sum_lags}, "
+                        f"previous value={self._max_events_to_process}"
+                    )
+                    self._max_events_to_process = sum_lags
+            finally:
+                temp_consumer.close()
 
     def _start_worker(self, worker_id):
         self._workers[worker_id] = self.worker_class(
@@ -897,6 +950,20 @@ class KafkaConsumerPool:
         """Ask the consumer pool to stop."""
         self.running = False
 
+    def _max_processed_events_reached(self):
+        if self._max_events_to_process == 0:
+            # No limit set on events to process
+            return False
+        total_processed_events = self._get_total_processed()
+        return total_processed_events >= self._max_events_to_process
+
+    def _get_total_processed(self):
+        total_processed_events = 0
+        for worker in self._workers.values():
+            if isinstance(worker, self.worker_class):
+                total_processed_events += worker.processed_events.value
+        return total_processed_events
+
     def run(self):
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
@@ -907,6 +974,13 @@ class KafkaConsumerPool:
             self._workers["feeder"] = None
 
             while self.running:
+                if self._max_processed_events_reached():
+                    self.logger.info(
+                        f"Max processed events"
+                        f" reached {self._max_events_to_process}, "
+                        "Stopping all workers."
+                    )
+                    self.stop()
                 for worker_id, instance in self._workers.items():
                     if instance is None or not instance.is_alive():
                         if instance:
@@ -916,7 +990,7 @@ class KafkaConsumerPool:
                         factory(worker_id)
                 time.sleep(1)
         except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
-            self.running = False
+            self.stop()
         for worker_id, worker in self._workers.items():
             self.logger.info("Stopping worker %s", worker_id)
             worker.stop()

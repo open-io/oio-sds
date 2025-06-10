@@ -13,17 +13,24 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import copy
 import tempfile
 import time
 from multiprocessing import Queue
 from unittest.mock import patch
 
+import pytest
 from mock import MagicMock as Mock
 
 from oio.common import exceptions as exc
 from oio.common.configuration import load_namespace_conf
 from oio.common.easy_value import int_value
-from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_TOPIC
+from oio.common.kafka import (
+    DEFAULT_ENDPOINT,
+    DEFAULT_TOPIC,
+    KAFKA_CONF_CONSUMER_PREFIX,
+    KafkaConsumer,
+)
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
 from oio.event.kafka_agent import KafkaEventWorker
@@ -36,6 +43,8 @@ class TestEventAgentDelete(BaseTestCase):
         "topic": "oio-delete-127.0.0.1-even",
         "group_id": "event-agent-delete",
         "event_queue_type": "per_service",
+        "event_queue_ids": "openio-rawx-1;openio-rawx-2;openio-rawx-3",
+        "kafka_consumer_group.instance.id": f"event-agent-delete.{int(time.time())}",
         "rdir_connection_timeout": 0.5,
         "rdir_read_timeout": 5.0,
         "log_facility": "LOG_LOCAL0",
@@ -107,10 +116,17 @@ broker_endpoint = {endpoint}
             "group_id", ns_conf.get("events.kafka.group_id", "event-agent")
         )
         self.created_objects = []
+        self.pool = None
 
     def tearDown(self):
         self._service("oio-rawx.target", "start", wait=3)
         self._service("oio-event-agent-delete.target", "start", wait=3)
+        if self.pool is not None:  # Check an stop all workers if needed
+            for worker_id, worker in self.pool._workers.items():
+                if worker.is_alive():
+                    self.pool.logger.info("Stopping worker %s", worker_id)
+                    worker.stop()
+                    worker.join()
         super().tearDown()
 
     def create_objects(self, cname, n_obj=10, reqid=None):
@@ -209,7 +225,7 @@ broker_endpoint = {endpoint}
         """Check that producers connection errors
         from delete event agent are avoided.
         """
-        cname = f"event-agent-delete-{time.time()}"
+        cname = f"event-agent-delete-producer-usage-{time.time()}"
         create_reqid = request_id("event-agent-delete-chunk-")
         delete_reqid = request_id("event-agent-delete-chunk-")
         self.create_objects(cname, 10, reqid=create_reqid)
@@ -231,8 +247,8 @@ broker_endpoint = {endpoint}
 
     def test_event_agent_delete_producer_oio_protocol(self):
         """Check that event is delayed when OioProtocolError exceptions occur"""
-        cname = f"event-agent-delete-{time.time()}"
-        create_reqid = request_id("event-agent-delete-chunk-")
+        cname = f"event-agent-delete-producer-oio-protocol-{time.time()}"
+        create_reqid = request_id("event-agent-create-chunk-")
         delete_reqid = request_id("event-agent-delete-chunk-")
         self.create_objects(cname, 10, reqid=create_reqid)
         # Stop treating chunks delete events
@@ -269,3 +285,99 @@ broker_endpoint = {endpoint}
             self.assertTrue(rejected_without_delay.empty())
             # Ensure we actually got some retryable messages
             self.assertFalse(rejected_with_delay.empty())
+
+    def test_event_agent_check_max_events_set_to_lag(self):
+        """
+        Test that if max_events is set to a number greater
+        than the topic lag, it is redefined to match the topic lag.
+        """
+        cname = f"event-agent-delete-max-event-equal-to-lag{time.time()}"
+        create_reqid = request_id("event-agent-create-chunk-")
+        delete_reqid = request_id("event-agent-delete-chunk-")
+        self.create_objects(cname, 10, reqid=create_reqid)
+        # Stop treating chunks delete events
+        self.logger.debug("Stopping the event system responsible for delete events")
+        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        # Delete objects created
+        for obj in self.created_objects:
+            self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".conf") as temp:
+            temp.write(self.handlers_conf.format(endpoint=self.endpoint))
+            temp.flush()
+            self.agent_conf["handlers_conf"] = temp.name
+            # Compute the total lag for the topic
+            conf = copy.deepcopy(self.agent_conf)
+            conf.pop(f"{KAFKA_CONF_CONSUMER_PREFIX}group.instance.id", None)
+            temp_consumer = KafkaConsumer(
+                self.endpoint,
+                [self.topic],
+                conf["group_id"],
+                logger=self.logger,
+                app_conf=conf,
+                kafka_conf={
+                    "enable.auto.commit": False,
+                    "auto.offset.reset": "earliest",
+                },
+            )
+            # Wait for events to arrive into the topic before computing lag
+            self.wait_for_event(
+                kafka_consumer=temp_consumer,
+                timeout=5,
+                types=("storage.content.deleted",),
+            )
+            # Topic partitions lags calculation
+            lags = temp_consumer.get_topic_lag(self.topic)
+            temp_consumer.close()
+            sum_lags = sum(lags.values())
+            self.pool = KafkaConsumerPool(
+                self.agent_conf,
+                self.endpoint,
+                self.topic,
+                worker_class=KafkaEventWorker,
+                group_id=self.group_id,
+                logger=self.logger,
+                processes=self.workers,
+                max_events_to_process=sum_lags + 1000,
+            )
+            # Check that the max events is set to sum of topic partitions lags
+            # As the original max_events_to_process is greater
+            self.assertLess(self.pool._max_events_to_process, sum_lags + 1000)
+            self.assertGreaterEqual(self.pool._max_events_to_process, sum_lags)
+            self.pool.stop()
+
+    @pytest.mark.timeout(300)
+    def test_event_agent_with_max_events_to_process(self):
+        """Test that event agent stops after processing x events
+        if max_events_to_process = x
+        """
+        cname = f"event-agent-delete-max-event-reached{time.time()}"
+        create_reqid = request_id("event-agent-create-chunk-")
+        delete_reqid = request_id("event-agent-delete-chunk-")
+        self.create_objects(cname, 50, reqid=create_reqid)
+        # Stop treating chunks delete events
+        self.logger.debug("Stopping the event system responsible for delete events")
+        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        # Delete objects created
+        for obj in self.created_objects:
+            self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".conf") as temp:
+            temp.write(self.handlers_conf.format(endpoint=self.endpoint))
+            temp.flush()
+            self.agent_conf["handlers_conf"] = temp.name
+            self.pool = KafkaConsumerPool(
+                self.agent_conf,
+                self.endpoint,
+                self.topic,
+                worker_class=KafkaEventWorker,
+                group_id=self.group_id,
+                logger=self.logger,
+                processes=self.workers,
+                max_events_to_process=5,
+            )
+            # Start a kafka consumer pool on oio-delete topic
+            self.pool.run()
+            # Check the running status of the consumer pool.
+            # 'running' becomes False when the max event limit is reached.
+            self.assertFalse(self.pool.running)
+            total_processed_events = self.pool._get_total_processed()
+            self.assertGreaterEqual(total_processed_events, 5)
