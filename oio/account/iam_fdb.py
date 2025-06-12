@@ -79,6 +79,7 @@ IMPLEMENTED_S3_ACTIONS = [
     "GetObjectRetention",
     "GetObjectTagging",
     "GetReplicationConfiguration",
+    "ListAllMyBuckets",
     "ListBucket",
     "ListBucketMultipartUploads",
     "ListBucketVersions",
