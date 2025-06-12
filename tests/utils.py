@@ -363,7 +363,7 @@ class CommonTestCase(unittest.TestCase):
 
         for acct, bucket in self._buckets_to_clean:
             try:
-                self.storage.bucket.bucket_delete(bucket, acct)
+                self.storage.bucket.bucket_delete(bucket, acct, force=True)
             except Exception as exc:
                 self.logger.info("Failed to remove bucket, %s", exc)
 

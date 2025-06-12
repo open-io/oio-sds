@@ -15,9 +15,6 @@ log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${SRVTYPE}
 
-# FoundationDB
-fdb_file = ${CLUSTERFILE}
-
 # Billing message
 ## Reseller prefix, all other accounts will be ignored
 reseller_prefix = AUTH_
@@ -44,7 +41,18 @@ amqp_durable = True
 ## Use AMQP auto-delete queue
 amqp_auto_delete = False
 
+
+
+############################# Account billing agent ############################
+agent_type = account
+
+# Limit the number of retries to 5 for message publication
+publish_retries = 5
+
 # Storage classes
 ## The storage policies associed with their storage class
 #storage_class.GLACIER = SINGLE,TWOCOPIES
 #storage_class.STANDARD = THREECOPIES,EC
+
+# FoundationDB
+fdb_file = ${CLUSTERFILE}

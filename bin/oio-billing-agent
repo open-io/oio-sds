@@ -17,9 +17,9 @@
 
 import argparse
 
-from oio.billing.agent import BillingAgent
+from oio.billing.agents import agent_factory
 from oio.common.configuration import read_conf
-from oio.common.logger import get_logger
+from oio.common.logger import get_oio_logger
 
 
 def make_arg_parser():
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     config = args.config
 
     conf = read_conf(config, "billing-agent")
-    logger = get_logger(conf, "billing-agent", verbose=verbose)
+    logger = get_oio_logger(conf, "billing-agent", verbose=verbose)
 
-    agent = BillingAgent(conf)
+    agent = agent_factory(conf, logger=logger)
     agent.start()

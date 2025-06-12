@@ -22,7 +22,9 @@ from mock import MagicMock as Mock
 from mock import patch
 
 from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD
-from oio.billing.agent import BillingAgent
+from oio.billing.agents import agent_factory
+
+# from oio.billing.agents.account_billing_agent import AccountBillingAgent
 from oio.common.constants import M2_PROP_BUCKET_NAME
 from oio.common.exceptions import MalformedBucket
 from oio.common.utils import request_id
@@ -40,8 +42,15 @@ class FakeConnection:
 
 class FakeChannel:
     def __init__(self):
-        self.is_open = True
         self.messages = []
+
+    @property
+    def is_open(self):
+        return True
+
+    @property
+    def is_closed(self):
+        return False
 
     def basic_publish(self, body=None, **kwargs):
         self.messages.append(body)
@@ -70,13 +79,13 @@ class TestBillingAgent(BaseTestCase):
     }
 
     def setUp(self):
-        super(TestBillingAgent, self).setUp()
+        super().setUp()
         self.__class__.CONF["ns.region"] = self.ns_conf.get(
             "ns.region", "LOCALHOST"
         ).upper()
         conf = self.CONF.copy()
         conf["fdb_file"] = conf["fdb_file"] % self.ns
-        self.agent = BillingAgent(conf, logger=self.logger)
+        self.agent = agent_factory(conf, self.logger)
 
     @classmethod
     def _monkey_patch(cls):
@@ -291,6 +300,9 @@ class TestBillingAgent(BaseTestCase):
             "objects": 112,
         }
 
+        self.agent._amqp_channel = FakeChannel()
+        mock = self.agent.statsd = Mock()
+
         def clear_random_value_in_oslo_message(message, key):
             sub = '\\"' + key + '\\":\\"'
             offset = 0
@@ -303,25 +315,26 @@ class TestBillingAgent(BaseTestCase):
                 message = message[:start] + message[end:]
                 offset = end + 1
 
-        def send_and_check(
-            channel_, samples_, expected_counter=0, expected_message_=None
-        ):
-            self.agent.send_message(channel_, samples_)
-            self.assertEqual(expected_counter, self.agent.messages)
+        def send_and_check(samples_, expected_counter=0, expected_message_=None):
+            mock.reset_mock()
+            self.agent.send_message(samples_)
+            self.assertEqual(expected_counter, mock.timing.call_count)
+            for c in mock.timing.mock_calls:
+                self.assertEqual(c.args[0], "openio.billing.account.send.200.duration")
+            # self.assertEqual(expected_counter, self.agent.messages)
             if expected_message_:
-                self.assertEqual(1, len(channel_.messages))
-                message = channel_.messages[0]
+                self.assertEqual(1, len(self.agent._amqp_channel.messages))
+                message = self.agent._amqp_channel.messages[0]
                 message = clear_random_value_in_oslo_message(message, "_unique_id")
                 message = clear_random_value_in_oslo_message(message, "message_id")
                 message = clear_random_value_in_oslo_message(message, "timestamp")
                 self.assertEqual(expected_message_, message)
             else:
-                self.assertEqual(0, len(channel_.messages))
-            channel_.messages.clear()
+                self.assertEqual(0, len(self.agent._amqp_channel.messages))
+            self.agent._amqp_channel.messages.clear()
 
-        channel = FakeChannel()
         samples = []
-        send_and_check(channel, samples)
+        send_and_check(samples)
         samples.append(self.agent.bucket_to_sample(bucket1))
         expected_message = (
             "{"
@@ -372,9 +385,7 @@ class TestBillingAgent(BaseTestCase):
             '"oslo.version":"2.0"'
             "}"
         )
-        send_and_check(
-            channel, samples, expected_counter=1, expected_message_=expected_message
-        )
+        send_and_check(samples, expected_counter=1, expected_message_=expected_message)
         samples.append(self.agent.bucket_to_sample(bucket2))
         expected_message = (
             "{"
@@ -449,9 +460,7 @@ class TestBillingAgent(BaseTestCase):
             '"oslo.version":"2.0"'
             "}"
         )
-        send_and_check(
-            channel, samples, expected_counter=2, expected_message_=expected_message
-        )
+        send_and_check(samples, expected_counter=1, expected_message_=expected_message)
 
     def test_scan(self):
         top_objects = []
@@ -465,7 +474,9 @@ class TestBillingAgent(BaseTestCase):
                 bucket_name,
                 system={M2_PROP_BUCKET_NAME: bucket_name},
             )
+            self.clean_later(bucket_name, account=account_name)
             self.bucket_client.bucket_create(bucket_name, account_name)
+            self.bucket_clean_later(bucket_name, account=account_name)
             for _ in range(nb_objects):
                 reqid = request_id()
                 self.storage.object_create(
@@ -482,7 +493,7 @@ class TestBillingAgent(BaseTestCase):
             top_bytes.append((bucket_name, len(data) * nb_objects))
 
         # Buckets with data
-        for i in range(3):
+        for i in range(4):
             _create_container(
                 self.CONF["reseller_prefix"], data="content", nb_objects=i * 2
             )
@@ -510,35 +521,117 @@ class TestBillingAgent(BaseTestCase):
                 continue
             nb_sent_buckets += 1
 
-        self.assertEqual(6, nb_buckets)
+        self.assertEqual(7, nb_buckets)
 
         top_bytes.sort(reverse=True, key=lambda x: x[1])
         top_objects.sort(reverse=True, key=lambda x: x[1])
 
+        mock_stats = self.agent.statsd = Mock()
         channel = FakeChannel()
         with patch(
-            "oio.billing.agent.BillingAgent._amqp_connect",
-            Mock(return_value=(FakeConnection(), channel)),
+            "oio.billing.agents.account_billing_agent.AccountBillingAgent._amqp_connect"
         ) as mock_amqp_connect:
-            with patch(
-                "oio.account.backend_fdb.AccountBackendFdb.update_rankings",
-                Mock(return_value=None),
-            ) as mock_backend_update:
-                self.agent.scan()
-                mock_amqp_connect.assert_called_once()
-                self.assertEqual(1, self.agent.passes)
-                mock_backend_update.assert_called_once_with(
-                    {
-                        BYTES_FIELD: {self.CONF["ns.region"]: top_bytes[:2]},
-                        OBJECTS_FIELD: {self.CONF["ns.region"]: top_objects[:2]},
-                    }
-                )
-        self.assertEqual(0, self.agent.errors)
-        self.assertEqual(nb_sent_buckets, self.agent.buckets)
-        # Add 1 for internal bucket
-        self.assertEqual(nb_buckets - nb_sent_buckets + 1, self.agent.ignored)
-        self.assertEqual(0, self.agent.missing_info)
+            with patch.object(
+                self.agent,
+                "_amqp_channel",
+                new=channel,
+            ):
+                with patch(
+                    "oio.account.backend_fdb.AccountBackendFdb.update_rankings",
+                    Mock(return_value=None),
+                ) as mock_backend_update:
+                    self.agent.scan()
+                    mock_amqp_connect.assert_called_once()
+                    self.assertEqual(1, self.agent.passes)
+                    mock_backend_update.assert_called_once_with(
+                        {
+                            BYTES_FIELD: {self.CONF["ns.region"]: top_bytes[:2]},
+                            OBJECTS_FIELD: {self.CONF["ns.region"]: top_objects[:2]},
+                        }
+                    )
+        mock_stats.timing.assert_called()
+        mock_stats.gauge.assert_called()
+
+        # Ensure no errors
+        self.assertEqual(3, mock_stats.timing.call_count)
+        self.assertEqual(
+            [],
+            [
+                c.args
+                for c in mock_stats.timing.call_args_list
+                if c.args[0] == "openio.billing.account.scan.500.duration"
+            ],
+        )
+        self.assertEqual(
+            [],
+            [
+                c.args
+                for c in mock_stats.timing.call_args_list
+                if c.args[0] == "openio.billing.account.send.500.duration"
+            ],
+        )
+
+        self.assertEqual(4, mock_stats.gauge.call_count)
+        # Sent
+        self.assertEqual(
+            nb_sent_buckets,
+            [
+                c.args[1]
+                for c in mock_stats.gauge.call_args_list
+                if c.args[0] == "openio.billing.account.scan.buckets.200"
+            ][0],
+        )
+        # Ignored
+        self.assertEqual(
+            nb_buckets - nb_sent_buckets + 1,
+            [
+                c.args[1]
+                for c in mock_stats.gauge.call_args_list
+                if c.args[0] == "openio.billing.account.scan.buckets.204"
+            ][0],
+        )
+        # Missing info
+        self.assertEqual(
+            0,
+            [
+                c.args[1]
+                for c in mock_stats.gauge.call_args_list
+                if c.args[0] == "openio.billing.account.scan.buckets.400"
+            ][0],
+        )
+        # Error
+        self.assertEqual(
+            0,
+            [
+                c.args[1]
+                for c in mock_stats.gauge.call_args_list
+                if c.args[0] == "openio.billing.account.scan.buckets.500"
+            ][0],
+        )
+
+        # Validate batching
         batch_size = int(self.CONF["batch_size"])
         expected_messages = math.ceil(nb_sent_buckets / batch_size)
-        self.assertEqual(expected_messages, self.agent.messages)
+        self.assertEqual(2, expected_messages)
+        self.assertEqual(
+            1,
+            len(
+                [
+                    c.args
+                    for c in mock_stats.timing.call_args_list
+                    if c.args[0] == "openio.billing.account.scan.200.duration"
+                ]
+            ),
+        )
+
+        self.assertEqual(
+            expected_messages,
+            len(
+                [
+                    c.args
+                    for c in mock_stats.timing.call_args_list
+                    if c.args[0] == "openio.billing.account.send.200.duration"
+                ]
+            ),
+        )
         self.assertEqual(expected_messages, len(channel.messages))

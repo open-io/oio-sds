@@ -712,7 +712,7 @@ log_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	message:{{ .M
 # Request-related message
 log_request_format "level_name:{{ .Severity }}	pid:{{ .Pid }}	log_type:log	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	message:{{ .Message }}"
 
-# Access log: short form for requests who are rarely requested in forensics 
+# Access log: short form for requests who are rarely requested in forensics
 #             operations.
 log_access_format "level_name:INFO pid:{{ .Pid }}	log_type:access status_int:{{ .Status }}	bytes_recvd_int:{{ .BytesIn }}	bytes_sent_int:{{ .BytesOut }}	request_time_float:{{ .TimeSpent | div1M | printf \\"%.6f\\" }}	method:{{ .Method }}	local:{{ .Local }}	peer:{{ .Peer }}	path:{{ .Path }}	request_id:{{ .ReqId }}	tls:{{ .TLS }}	ttfb:{{ .TTFB }}	put:{{ .Concurrency.Put }}	get:{{ .Concurrency.Get }}	del:{{ .Concurrency.Del }}"
 
@@ -1867,6 +1867,8 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${SRVTYPE}
+
+agent_type = account
 
 # FoundationDB
 fdb_file = ${CLUSTERFILE}
