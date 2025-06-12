@@ -298,3 +298,32 @@ class TestBucketClient(AccountBaseTestCase):
         # values are validated in unit tests.
         # This functional test is just here to check the call works with a real
         # service.
+
+    def test_bucket_feature_forbidden(self):
+        feature = "foobar"
+        limit = 8
+        expected_list = []
+        for i in range(1):
+            account = f"account-{i}"
+            other_account = f"not-account-{i}"
+            self._create_account(account)
+            for j in range(3):
+                bucket = f"bucket-feature-{i}-{j}"
+                self._create_bucket(account, bucket)
+                self.assertRaises(
+                    Forbidden,
+                    self.bucket_client.bucket_feature_activate,
+                    bucket,
+                    other_account,
+                    feature,
+                )
+
+            resp = self.bucket_client.buckets_list_by_feature(
+                feature,
+                limit=limit,
+            )
+            self.assertIn("buckets", resp)
+            buckets = [(e["account"], e["bucket"]) for e in resp["buckets"]]
+            self.assertListEqual(buckets, expected_list)
+            truncated = resp["truncated"]
+            self.assertFalse(truncated)

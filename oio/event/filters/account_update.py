@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,7 @@ from oio.common.easy_value import float_value
 from oio.common.exceptions import (
     BadRequest,
     ClientException,
+    Forbidden,
     OioException,
     OioTimeout,
 )
@@ -136,7 +137,26 @@ class AccountUpdateFilter(Filter):
                                 feature,
                             )
                             func = self.bucket.bucket_feature_deactivate
-                        func(bucket, account, feature, mtime=event.when)
+                        try:
+                            func(
+                                bucket,
+                                account,
+                                feature,
+                                mtime=event.when,
+                                headers=headers,
+                            )
+                        except Forbidden as exc:
+                            # This occurs from some probe tests when bucket owner
+                            # has changed.
+                            self.logger.info(
+                                "Ignoring event with feature update account(%s),"
+                                " bucket(%s), feature(%s): %s",
+                                account,
+                                bucket,
+                                feature,
+                                exc,
+                            )
+
             elif event.event_type == EventTypes.ACCOUNT_SERVICES:
                 if isinstance(event.data, list):
                     # Legacy format: list of services
