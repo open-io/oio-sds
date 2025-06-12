@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2025 OVH SAS
+Copyright (C) 2022-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -41,8 +41,8 @@ oio_url_check(const struct oio_url_s *u, const char *namespace,
 		_ERR("'namespace'");
 		return FALSE;
 	}
-	if (u->version[0] && !oio_str_is_number(u->version, NULL)) {
-		_ERR("'version', not a number");
+	if (u->version[0] && (!oio_str_is_number(u->version, NULL) && 0 != strcmp(u->version, "null"))) {
+		_ERR("'version', not a number or 'null'");
 		return FALSE;
 	}
 

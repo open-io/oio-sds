@@ -2,7 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -160,7 +160,15 @@ test_configure_invalid(void)
 	g_assert_true(oio_url_check(url, "NS", &err));
 	oio_url_set(url, OIOURL_VERSION, "aabbcc");
 	g_assert_false(oio_url_check(url, "NS", &err));
-	g_assert_cmpstr(err, ==, "'version', not a number");
+	g_assert_cmpstr(err, ==, "'version', not a number or 'null'");
+	oio_url_pclean (&url);
+
+	url = oio_url_init("NS/ACCT/MB//thisisparta");
+	g_assert_true(oio_url_check(url, "NS", &err));
+	oio_url_set(url, OIOURL_VERSION, "null");
+	g_assert_true(oio_url_check(url, "NS", &err));
+	g_assert_false(oio_url_has(url, OIOURL_VERSION));
+	g_assert_null(oio_url_get(url, OIOURL_VERSION));
 	oio_url_pclean (&url);
 
 	url = oio_url_init("NS/ACCT/Beno\xEEt//obj");

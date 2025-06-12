@@ -2,7 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -277,7 +277,10 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			return u;
 
 		case OIOURL_VERSION:
-			g_strlcpy(u->version, v, sizeof(u->version));
+			if (g_ascii_strcasecmp(v, "null") == 0)
+				u->version[0] = '\0';
+			else
+				g_strlcpy(u->version, v, sizeof(u->version));
 			oio_str_clean(&u->fullpath);
 			return u;
 
