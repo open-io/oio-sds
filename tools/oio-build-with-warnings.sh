@@ -24,7 +24,7 @@ echo "Compiling with extra warnings enabled..."
 D=$(mktemp -d)
 cd $D
 cmake ${CMAKE_OPTS} -D CMAKE_BUILD_TYPE=Release -D EXTRA_WARNINGS=1 ${SRCDIR}
-make -j  all 2>warnings.log
+make -j  all  2> >(tee warnings.log >&2)
 echo
 echo "--- Summary of warnings ------------------------------------------------"
 sed -r -n -e 's,([^\[]+)\[-W([^\]+)\],\2,p' warnings.log | sort | uniq -c
