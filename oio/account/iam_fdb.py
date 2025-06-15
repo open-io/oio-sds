@@ -71,6 +71,7 @@ IMPLEMENTED_S3_ACTIONS = [
     "GetBucketTagging",
     "GetBucketVersioning",
     "GetBucketWebsite",
+    "GetEncryptionConfiguration",
     "GetIntelligentTieringConfiguration",
     "GetLifecycleConfiguration",
     "GetObject",
@@ -91,6 +92,7 @@ IMPLEMENTED_S3_ACTIONS = [
     "PutBucketTagging",
     "PutBucketVersioning",
     "PutBucketWebsite",
+    "PutEncryptionConfiguration",
     "PutIntelligentTieringConfiguration",
     "PutLifecycleConfiguration",
     "PutObject",
@@ -248,10 +250,7 @@ class FdbIamDb(object):
             of all statements (not JSON)
         """
         all_statements = self._load_merged_user_policies(self.db, account, user)
-        if all_statements:
-            return {"Statement": all_statements}
-        else:
-            return None
+        return {"Statement": all_statements}
 
     @catch_service_errors
     def get_user_policy(self, account, user, policy_name=""):
@@ -421,7 +420,7 @@ class FdbIamDb(object):
     @fdb.transactional
     def _load_merged_user_policies(self, tr, account, user):
         iterator = tr.get_range_startswith(self.iam_space.pack((account, user)))
-        statements = list()
+        statements = []
         for key, value in iterator:
             _, _, _, policy = unpack(key)
             if value is not None:
