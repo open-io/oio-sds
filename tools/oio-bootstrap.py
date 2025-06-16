@@ -1854,7 +1854,7 @@ use = egg:oio#xcute
 #cache_size = 50
 """
 
-template_billing_agent_service = """
+template_billing_account_agent_service = """
 [billing-agent]
 user = ${USER}
 
@@ -1891,6 +1891,42 @@ amqp_auto_delete = False
 # Storage classes
 storage_class.GLACIER = SINGLE,TWOCOPIES
 storage_class.STANDARD = THREECOPIES,EC
+"""
+
+template_billing_early_deletion_agent_service = """
+[billing-agent]
+user = ${USER}
+
+namespace = ${NS}
+
+wait_random_time_before_starting = True
+interval = 1200
+report_interval = 300
+
+# Common log stuff
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${SRVTYPE}
+
+agent_type = early-delete
+
+# Billing message
+reseller_prefix = AUTH_
+event_type = telemetry.polling
+publisher_id = ceilometer.polling
+counter_name = storage.bucket.objects.earlydeletion
+batch_size = 5
+
+# RabbitMQ
+amqp_url = ${AMQP_URL}
+amqp_exchange = swift
+amqp_queue = notifications.info
+amqp_durable = True
+amqp_auto_delete = False
+
+# Redis
+redis_host = ${IP}:${REDIS_PORT}
 """
 
 template_conscience_agent = """
@@ -3520,10 +3556,10 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
 
     # billing buckets
-    crawler_target = register_target("billing", root_target)
+    crawler_target = register_target("billing-account", root_target)
     env = subenv(
         {
-            "SRVTYPE": "billing-agent",
+            "SRVTYPE": "billing-account-agent",
             "GROUPTYPE": "billing",
             "EXE": "oio-billing-agent",
             "SRVNUM": 1,
@@ -3532,7 +3568,7 @@ def generate(options):
     )
     cluster_file = cluster(env)
     env.update({"CLUSTERFILE": cluster_file})
-    tpl = Template(template_billing_agent_service)
+    tpl = Template(template_billing_account_agent_service)
     to_write = tpl.safe_substitute(env)
     path = "{CFGDIR}/{SRVTYPE}.conf".format(**env)
     with open(path, "w+") as f:
@@ -3543,6 +3579,34 @@ def generate(options):
         crawler_target,
         add_service_to_conf=False,
     )
+
+    # billing early deletions
+    crawler_target = register_target("billing-early-deletion", root_target)
+    env = subenv(
+        {
+            "SRVTYPE": "billing-early-deletion-agent",
+            "GROUPTYPE": "billing",
+            "EXE": "oio-billing-agent",
+            "SRVNUM": 1,
+            "AMQP_URL": options["billing"]["amqp_url"],
+            "IP": hosts[0],
+            "REDIS_PORT": 6379,
+        }
+    )
+    cluster_file = cluster(env)
+    env.update({"CLUSTERFILE": cluster_file})
+    tpl = Template(template_billing_early_deletion_agent_service)
+    to_write = tpl.safe_substitute(env)
+    path = "{CFGDIR}/{SRVTYPE}.conf".format(**env)
+    with open(path, "w+") as f:
+        f.write(to_write)
+    register_service(
+        env,
+        template_systemd_service_billing_agent,
+        crawler_target,
+        add_service_to_conf=False,
+    )
+
 
     # tinyproxy
     if TINYPROXY_CONFIG:

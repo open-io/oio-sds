@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import Mock, patch
 
 from oio.common.statsd import get_statsd
 from oio.event.evob import EventTypes
@@ -48,12 +48,18 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
         self,
         account=None,
         container=None,
-        ctime=None,
+        mtime=None,
         ttime=None,
         policy=None,
         mpu_size=None,
+        when=18200000000,
     ):
-        event = {"event": EventTypes.CONTENT_DELETED, "url": {}, "data": []}
+        event = {
+            "event": EventTypes.CONTENT_DELETED,
+            "url": {},
+            "data": [],
+            "when": when,
+        }
         if account:
             event["url"]["account"] = account
         if container:
@@ -68,11 +74,11 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                 headers["mime-type"] = f"binary/octet-stream;swift_bytes={mpu_size}"
             event["data"].append(headers)
 
-        if ctime:
+        if mtime:
             event["data"].append(
                 {
                     "type": "aliases",
-                    "ctime": ctime,
+                    "mtime": mtime,
                 }
             )
         if ttime:
@@ -99,7 +105,16 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             500, "Container is missing in event", delay=None
         )
 
-    def test_no_ctime_nor_ttime(self):
+    def test_no_when(self):
+        mock_cb = Mock()
+        event_filter = EarlyDeleteDetection(self.app, self.conf)
+        event_filter.process(
+            self._create_event(account="foo", container="bar", when=None),
+            mock_cb,
+        )
+        mock_cb.assert_called_once_with(500, "When is missing in event", delay=None)
+
+    def test_no_mtime_nor_ttime(self):
         mock_cb = Mock()
         event_filter = EarlyDeleteDetection(self.app, self.conf)
         event_filter.process(
@@ -112,15 +127,14 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
         mock_cb = Mock()
         event_filter = EarlyDeleteDetection(self.app, self.conf)
         event_filter.process(
-            self._create_event(account="foo", container="bar", ctime=123),
+            self._create_event(account="foo", container="bar", mtime=123),
             mock_cb,
         )
         mock_cb.assert_called_once_with(
             500, "Unable to extract object policy", delay=None
         )
 
-    @patch("time.time", MagicMock(return_value=18200))
-    def test_early_ctime(self):
+    def test_early_mtime(self):
         mock_cb = Mock()
         with patch(
             "oio.billing.helpers.BillingAdjustmentClient.add_adjustment"
@@ -128,14 +142,13 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             event_filter = EarlyDeleteDetection(self.app, self.conf)
             event_filter.process(
                 self._create_event(
-                    account="foo", container="bar", policy="SINGLE", ctime=10000
+                    account="foo", container="bar", policy="SINGLE", mtime=10000
                 ),
                 mock_cb,
             )
             mock_cb.assert_not_called()
             mock_add_adjustment.assert_called_once_with("foo", "bar", "STANDARD_IA", 5)
 
-    @patch("time.time", MagicMock(return_value=18200))
     def test_early_ttime(self):
         mock_cb = Mock()
         with patch(
@@ -147,7 +160,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                     account="foo",
                     container="bar",
                     policy="SINGLE",
-                    ctime=1000,
+                    mtime=1000,
                     ttime=10000,
                 ),
                 mock_cb,
@@ -155,7 +168,6 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             mock_cb.assert_not_called()
             mock_add_adjustment.assert_called_once_with("foo", "bar", "STANDARD_IA", 5)
 
-    @patch("time.time", MagicMock(return_value=18200))
     def test_early_shards(self):
         mock_cb = Mock()
         with patch(
@@ -167,7 +179,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                     account=".shards_foo",
                     container="bar-CID-timestamp-index",
                     policy="SINGLE",
-                    ctime=1000,
+                    mtime=1000,
                     ttime=10000,
                 ),
                 mock_cb,
@@ -175,7 +187,6 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             mock_cb.assert_not_called()
             mock_add_adjustment.assert_called_once_with("foo", "bar", "STANDARD_IA", 5)
 
-    @patch("time.time", MagicMock(return_value=18200))
     def test_early_mpu_manifest(self):
         mock_cb = Mock()
         with patch(
@@ -187,7 +198,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                     account=".shards_foo",
                     container="bar",
                     policy="SINGLE",
-                    ctime=1000,
+                    mtime=1000,
                     ttime=10000,
                     mpu_size=400,
                 ),
@@ -198,7 +209,6 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                 "foo", "bar", "STANDARD_IA", 200
             )
 
-    @patch("time.time", MagicMock(return_value=10000))
     def test_early_parts_skipped(self):
         mock_cb = Mock()
         with patch(
@@ -210,7 +220,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                     account="foo",
                     container="bar+segments",
                     policy="SINGLE",
-                    ctime=1000,
+                    mtime=1000,
                     ttime=9000,
                 ),
                 mock_cb,
@@ -218,7 +228,6 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             mock_cb.assert_not_called()
             mock_add_adjustment.assert_not_called()
 
-    @patch("time.time", MagicMock(return_value=30000))
     def test_over_storage_threshold(self):
         mock_cb = Mock()
         with patch(
@@ -230,7 +239,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                     account=".shards_foo",
                     container="bar+segments",
                     policy="SINGLE",
-                    ctime=1000,
+                    mtime=1000,
                     ttime=20000,
                 ),
                 mock_cb,

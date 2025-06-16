@@ -24,8 +24,7 @@ default_storage_class = STANDARD
 event_type = telemetry.polling
 ## Publisher ID
 publisher_id = ceilometer.polling
-## Counter name
-counter_name = storage.bucket.objects.size
+
 ## Number of buckets sent in a single billing message
 batch_size = 50
 
@@ -56,3 +55,37 @@ publish_retries = 5
 
 # FoundationDB
 fdb_file = ${CLUSTERFILE}
+
+## Counter name
+counter_name = storage.bucket.objects.size
+
+
+######################### Early-deletion billing agent #########################
+agent_type = early-delete
+
+# Namespace
+namespace = OPENIO
+
+## Counter name
+counter_name = storage.bucket.objects.earlydeletion
+
+# Configure Redis backend
+redis_host = 127.0.0.1:6379
+# or
+#redis_sentinel_hosts = 10.0.1.24:6012,10.0.1.27:6012,10.0.1.25:6012
+#redis_sentinel_name = SENTINEL-master-1
+#
+# Redis parameters (see redis.connection module)
+#redis_socket_timeout=None
+#redis_socket_connect_timeout=None
+#redis_socket_keepalive=False
+#redis_retry_on_timeout=False
+#redis_max_connections=2**31
+
+# Redis sentinel parameters, override Redis parameters
+# for connections to the sentinels.
+#redis_sentinel_socket_timeout=None
+#redis_sentinel_socket_connect_timeout=None
+#redis_sentinel_socket_keepalive=False
+#redis_sentinel_retry_on_timeout=False
+#redis_sentinel_max_connections=2**31

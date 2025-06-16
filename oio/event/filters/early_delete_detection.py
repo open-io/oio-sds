@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
 
 from oio.billing.helpers import BillingAdjustmentClient
 from oio.common.constants import (
@@ -52,9 +51,9 @@ class EarlyDeleteDetection(Filter):
             duration = int(value.strip())
             self._storage_durations[storage_class] = duration
 
-    def _compute_due_time(self, storage_class, instant):
+    def _compute_due_time(self, storage_class, instant, when):
         minimal_duration = self._storage_durations.get(storage_class, 0)
-        stored_duration = int(time.time()) - instant
+        stored_duration = when - instant
         return max(0, minimal_duration - stored_duration)
 
     def _get_object_size(self, event):
@@ -105,20 +104,24 @@ class EarlyDeleteDetection(Filter):
             err_resp = EventError(event=event, body="Account is missing in event")
             return err_resp(env, cb)
 
-        ctime = None
+        if not event.when:
+            err_resp = EventError(event=event, body="When is missing in event")
+            return err_resp(env, cb)
+
+        mtime = None
         ttime = None
         policy = None
         # Extract policy, ctime and ttime from event data
         for entry in event.data:
             entry_type = entry.get("type")
             if entry_type == "aliases":
-                ctime = int(entry.get("ctime", 0))
+                mtime = int(entry.get("mtime", 0))
             elif entry_type == "properties" and entry.get("key") == "ttime":
                 ttime = int(entry.get("value", 0))
             elif entry_type == "contents_headers":
                 policy = entry.get("policy")
 
-        last_store_time = ttime if ttime else ctime
+        last_store_time = ttime if ttime else mtime
         if last_store_time is None:
             err_resp = EventError(event=event, body="Unable to extract object age")
             return err_resp(env, cb)
@@ -128,7 +131,8 @@ class EarlyDeleteDetection(Filter):
             return err_resp(env, cb)
 
         storage_class = self._policy_to_class.get(policy)
-        due_time = self._compute_due_time(storage_class, last_store_time)
+        when = event.when // 1000000  # seconds
+        due_time = self._compute_due_time(storage_class, last_store_time, when)
         if due_time > 0:
             # Object has been deleted before minimal storage duration.
             # Charge due duration.
