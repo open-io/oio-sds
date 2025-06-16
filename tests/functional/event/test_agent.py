@@ -16,7 +16,11 @@
 import tempfile
 import time
 from multiprocessing import Queue
+from unittest.mock import patch
 
+from mock import MagicMock as Mock
+
+from oio.common import exceptions as exc
 from oio.common.configuration import load_namespace_conf
 from oio.common.easy_value import int_value
 from oio.common.kafka import DEFAULT_ENDPOINT, DEFAULT_TOPIC
@@ -219,3 +223,105 @@ broker_endpoint = {endpoint}
             # No errors should be in the queue as producer
             # error are not expected from the worker
             self.assertTrue(errors.empty())
+
+    def test_event_agent_delete_producer_oio_protocol(self):
+        """Check that event is delayed when oioProtcol errors occur"""
+        cname = f"event-agent-delete-{time.time()}"
+        create_reqid = request_id("event-agent-delete-chunk-")
+        delete_reqid = request_id("event-agent-delete-chunk-")
+        self.create_objects(cname, 10, reqid=create_reqid)
+        # Stop treating chunks delete events
+        self.logger.debug("Stopping the event system responsible for delete events")
+        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        # Stop rawx services
+        self._service("oio-rawx.target", "stop", wait=5)
+
+        KafkaEventWorker.process_message = Mock(side_effect=exc.OioProtocolError)
+        # Delete objects created
+        for obj in self.created_objects:
+            self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)
+
+        rejected_without_delay = Queue()
+
+        def _reject_message(*args, **kwargs):
+            if "delay" not in kwargs:
+                rejected_without_delay.put(1)
+
+        with patch(
+            "oio.event.kafka_consumer.KafkaConsumerWorker._reject_message",
+            wraps=_reject_message,
+        ):
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".conf") as temp:
+                temp.write(self.handlers_conf.format(endpoint=self.endpoint))
+                temp.flush()
+                self.agent_conf["handlers_conf"] = temp.name
+                self.pool = KafkaConsumerPool(
+                    self.agent_conf,
+                    self.endpoint,
+                    self.topic,
+                    worker_class=KafkaEventWorker,
+                    group_id=self.group_id,
+                    logger=self.logger,
+                    processes=self.workers,
+                )
+                errors = Queue()
+
+                def start_worker(worker_id):
+                    self.pool._workers[worker_id] = self.pool.worker_class(
+                        self.pool.topic,
+                        self.pool.logger,
+                        self.pool._events_queue,
+                        self.pool._offsets_queue,
+                        worker_id,
+                        *self.pool.worker_args,
+                        app_conf=self.pool.conf,
+                        **self.pool.worker_kwargs,
+                    )
+
+                    def error():
+                        errors.put(worker_id)
+                        return SystemError("Broker does not respond")
+
+                    self.pool._workers[worker_id]._connect_producer = error
+                    self.pool.logger.info(
+                        "Spawning worker %s %d",
+                        self.pool.worker_class.__name__,
+                        worker_id,
+                    )
+                    self.pool._workers[worker_id].start()
+
+                def run_limited_time():
+                    "Run workers for 180s"
+                    nb_processes = self.pool.processes + 1
+                    worker_factories = {"feeder": self.pool._start_feeder}
+
+                    self.pool._workers = {w: None for w in range(nb_processes)}
+                    self.pool._workers["feeder"] = None
+                    counter = 0
+                    max_time = 45
+                    while counter < max_time:
+                        for worker_id, instance in self.pool._workers.items():
+                            if instance is None or not instance.is_alive():
+                                if instance:
+                                    self.pool.logger.info(
+                                        "Joining dead worker %s", worker_id
+                                    )
+                                    instance.join()
+                                factory = worker_factories.get(worker_id, start_worker)
+                                factory(worker_id)
+                        time.sleep(1)
+                        counter += 1
+                    for worker_id, worker in self.pool._workers.items():
+                        self.pool.logger.info("Stopping worker %s", worker_id)
+                        worker.stop()
+                    for worker in self.pool._workers.values():
+                        worker.join()
+                    self.pool.logger.info("All workers stopped")
+
+                # Start a kafka consumer pool on oio-delete topic
+                self.pool.run = run_limited_time
+                self.pool.run()
+                # No errors should be in the queue as producer
+                # error are not expected from the worker
+                self.assertTrue(errors.empty())
+                self.assertTrue(rejected_without_delay.empty())

@@ -24,6 +24,7 @@ from multiprocessing.queues import Empty
 from confluent_kafka import TopicPartition
 
 from oio.common.easy_value import float_value, int_value
+from oio.common.exceptions import OioProtocolError
 from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
     KafkaConsumer,
@@ -489,13 +490,20 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
                 # Rejects all events on hold
                 for evt_hold, _ in self._get_events_on_hold(event):
                     self._reject_message(evt_hold, delay=delay)
+            except OioProtocolError:
+                self.logger.exception(
+                    "OioProtocolError, failed to process message %s", event
+                )
+                self._reject_message(event, delay=self._retry_delay)
+                for evt_hold, _ in self._get_events_on_hold(event):
+                    self._reject_message(evt_hold, delay=self._retry_delay)
             except Exception:
                 self.logger.exception("Failed to process message %s", event)
                 # If the message makes the process crash, do not retry it,
                 # or we may end up in a crash loop...
                 self._reject_message(event)
                 for evt_hold, _ in self._get_events_on_hold(event):
-                    self._reject_message(evt_hold, delay=delay)
+                    self._reject_message(evt_hold, delay=self._retry_delay)
             else:
                 # Restart pipelines on hold
                 for hold in self._get_events_on_hold(event):
