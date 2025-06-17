@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,17 +66,18 @@ class ContentReaperFilter(Filter):
         for resp in resps:
             if isinstance(resp, Exception):
                 url = resp.chunk.get("real_url", resp.chunk["url"])
-                self.logger.warn(
+                self.logger.warning(
                     "failed to delete chunk %s (%s)",
                     url,
                     resp,
                 )
             elif resp.status not in (204, 404):
-                self.logger.warn(
-                    "failed to delete chunk %s (%s %s)",
+                self.logger.warning(
+                    "failed to delete chunk %s (%s %s): %s",
                     resp.chunk.get("real_url", resp.chunk["url"]),
                     resp.status,
                     resp.reason,
+                    resp.data.decode("utf-8") if resp.data else "<unknown>",
                 )
             else:
                 # No error
