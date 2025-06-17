@@ -15,10 +15,11 @@
 # License along with this library.
 
 import os
+import re
 from urllib.parse import urlparse
 
+from urllib3 import HTTPResponse, make_headers
 from urllib3 import exceptions as urllibexc
-from urllib3 import make_headers
 
 from oio.common.exceptions import (
     EventletUrllibBug,
@@ -37,6 +38,7 @@ DEFAULT_NB_POOL_CONNECTIONS = 32
 DEFAULT_POOL_MAXSIZE = 32
 DEFAULT_RETRIES = 0
 DEFAULT_BACKOFF = 0
+IOERROR_RE = re.compile(r"IO.?error", re.I)
 
 URLLIB3_REQUESTS_KWARGS = (
     "fields",
@@ -190,3 +192,25 @@ def oio_exception_from_httperror(exc, reqid=None, url=None):
         reraise(OioTimeout, exc, extra)
     else:
         reraise(OioException, exc, extra)
+
+
+def resp_is_io_error(resp) -> bool:
+    """
+    Tell if resp represents an IO error.
+
+    :type resp: HTTPResponse, IOError, str or bytes
+    """
+    if isinstance(resp, IOError):
+        return True
+
+    if isinstance(resp, HTTPResponse):
+        msg = resp.data
+    else:
+        msg = resp
+
+    if isinstance(msg, bytes):
+        msg = msg.decode("utf-8")
+    elif not isinstance(msg, str):
+        msg = str(msg)
+
+    return IOERROR_RE.search(msg) is not None

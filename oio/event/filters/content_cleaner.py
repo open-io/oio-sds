@@ -17,7 +17,11 @@
 from oio.blob.client import BlobClient
 from oio.common.constants import REQID_HEADER
 from oio.common.easy_value import boolean_value, float_value, int_value
-from oio.common.http_urllib3 import URLLIB3_POOLMANAGER_KWARGS, urllib3
+from oio.common.http_urllib3 import (
+    URLLIB3_POOLMANAGER_KWARGS,
+    resp_is_io_error,
+    urllib3,
+)
 from oio.common.kafka import get_retry_delay
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventTypes, RetryableEventError
@@ -37,6 +41,9 @@ class ContentReaperFilter(Filter):
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"], **kwargs
         )
         self._retry_delay = get_retry_delay(self.conf)
+        self._serious_issue_delay = self._retry_delay * int_value(
+            self.conf.get("serious_issue_factor"), 60
+        )
         self.chunk_concurrency = int_value(self.conf.get("concurrency"), 3)
         self.chunk_timeout = float_value(self.conf.get("timeout"), None)
         if not self.chunk_timeout:
@@ -46,6 +53,7 @@ class ContentReaperFilter(Filter):
                 connect=connection_timeout, read=read_timeout
             )
         self._allow_retry = boolean_value(self.conf.get("allow_retry"), True)
+        self.retry_io_errors = boolean_value(self.conf.get("retry_on_io_error"), True)
 
     def _process_rawx(self, url, chunks, reqid):
         cid = url.get("id")
@@ -71,7 +79,9 @@ class ContentReaperFilter(Filter):
                     url,
                     resp,
                 )
-            elif resp.status not in (204, 404):
+            # 200 and 202 are improbable, but a future implementation may return them,
+            # and we should not consider them as errors.
+            elif resp.status not in (204, 404, 202, 200):
                 self.logger.warning(
                     "failed to delete chunk %s (%s %s): %s",
                     resp.chunk.get("real_url", resp.chunk["url"]),
@@ -83,7 +93,7 @@ class ContentReaperFilter(Filter):
                 # No error
                 continue
 
-            errs.append(resp.chunk)
+            errs.append((resp.chunk, resp))
         return errs
 
     def process(self, env, cb):
@@ -108,11 +118,22 @@ class ContentReaperFilter(Filter):
             if chunks:
                 reqid = event.reqid or request_id("content-cleaner-")
                 errs = self._process_rawx(url, chunks, reqid)
-                if self._allow_retry and errs:
+                only_io_errors = all(resp_is_io_error(e) for e in errs)
+                if errs and (only_io_errors and not self.retry_io_errors):
+                    self.logger.info(
+                        "Errors are all IO errors, chunk deletion will not be retried"
+                    )
+                elif self._allow_retry and errs:
+                    # Long retry delay if there are only IO errors
+                    retry_delay = (
+                        self._serious_issue_delay
+                        if only_io_errors
+                        else self._retry_delay
+                    )
                     err_resp = RetryableEventError(
                         event=event,
                         body="Unable to delete all chunks",
-                        delay=self._retry_delay,
+                        delay=retry_delay,
                     )
                     return err_resp(env, cb)
                 return self.app(env, cb)

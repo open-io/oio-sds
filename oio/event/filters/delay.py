@@ -53,10 +53,14 @@ class DelayFilter(Filter):
         if not data:
             return EventError(body="'data' field is missing")
 
+        # next_due_time is the time the event is to be analyzed again.
+        # It is BEFORE due_time and if it is not reached already, the
+        # process will be put to sleep. Then the event will be rescheduled.
         next_due_time = data.get("next_due_time")
         if next_due_time is None:
             return EventError(body="'next_due_time' field is missing")
 
+        # "Due time" is the time we expect the event to be replayed.
         due_time = data.get("due_time")
         if due_time is None:
             return EventError(body="'due_time' field is missing")

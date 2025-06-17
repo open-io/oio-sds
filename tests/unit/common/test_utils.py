@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,6 +27,7 @@ from oio.common.easy_value import (
     convert_size,
     is_hexa,
 )
+from oio.common.http_urllib3 import HTTPResponse, resp_is_io_error
 from oio.common.utils import (
     is_chunk_id_valid,
     oio_versionid_to_str_versionid,
@@ -102,3 +103,17 @@ class TestUtils(unittest.TestCase):
         self.assertFalse(is_hexa(12))
         self.assertFalse(is_hexa("12", size=1))
         self.assertFalse(is_hexa("12MB"))
+
+    def test_resp_is_io_error(self):
+        ioerror_msg = b"IO error on rawx-91377"
+        self.assertTrue(resp_is_io_error(ioerror_msg))
+        self.assertTrue(resp_is_io_error(ioerror_msg.decode("utf-8")))
+        self.assertTrue(resp_is_io_error(HTTPResponse(body=ioerror_msg)))
+        self.assertTrue(resp_is_io_error(Exception(ioerror_msg)))
+        self.assertTrue(resp_is_io_error(IOError("whatever")))
+
+        other_error_msg = b"uploadChunk() error (unexpected EOF)"
+        self.assertFalse(resp_is_io_error(other_error_msg))
+        self.assertFalse(resp_is_io_error(other_error_msg.decode("utf-8")))
+        self.assertFalse(resp_is_io_error(HTTPResponse(body=other_error_msg)))
+        self.assertFalse(resp_is_io_error(Exception(other_error_msg)))

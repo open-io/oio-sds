@@ -57,6 +57,18 @@ use = egg:oio#content_cleaner
 #read_timeout=5.0
 #allow_retry=true
 
+# Retry deletion if rawx services report IO errors. Setting this to false
+# will consider the chunk is already lost in case of an IO error, and the event
+# will be acknowledged (instead of being sent to the deadletter topic).
+retry_on_io_error=true
+
+# Time in seconds before an event should be reprocessed
+retry_delay = 60
+
+# Factor to apply on the retry delay for serious issues
+# (e.g. IO error on rawx)
+serious_issue_factor = 60
+
 # -----------------------------------------------------------------
 # For container events: update counters inside the account service
 [filter:account_update]
@@ -120,7 +132,8 @@ retry_delay = 60
 # Retry events
 [filter:delay]
 use = egg:oio#delay
-# Events time to live in seconds (one day)
+# Events time to live in seconds (one day).
+# After that time, they are sent to the deadletter topic.
 events_time_to_live = 86400
 
 # -----------------------------------------------------------------

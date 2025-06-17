@@ -433,7 +433,7 @@ sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
 			break;
 		case GLOB_ABORTED:
 			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
-					"I/O error");
+					"IO error");
 			break;
 
 		case GLOB_NOMATCH:

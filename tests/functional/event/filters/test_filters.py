@@ -20,12 +20,13 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from mock import patch
+from mock import MagicMock, patch
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common.exceptions import ServiceBusy
 from oio.common.statsd import get_statsd
-from oio.event.evob import Event
+from oio.event.evob import Event, EventTypes
+from oio.event.filters.content_cleaner import ContentReaperFilter
 from oio.event.filters.lifecycle_actions import LifecycleActionContext, LifecycleActions
 from oio.event.filters.notify import KafkaNotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
@@ -39,6 +40,74 @@ class _App(object):
     def __init__(self, env, cb):
         self.env = env
         self.cb = cb
+
+
+class TestContentReaperFilter(BaseTestCase):
+    def setUp(self):
+        super().setUp()
+        _App.app_env["watchdog"] = self.watchdog
+
+    def _create_event(self):
+        event = {}
+        event["when"] = time.time()
+        event["event"] = EventTypes.CONTENT_DELETED
+        event["data"] = [
+            {
+                "type": "chunks",
+                "id": "http://rawx-81407/58D02E5E",
+            }
+        ]
+        return event
+
+    def test_only_io_errors_no_retry(self):
+        self.conf.update({"allow_retry": True, "retry_on_io_error": False})
+        with patch(
+            "oio.event.filters.content_cleaner.ContentReaperFilter._process_rawx",
+            return_value=[("rawx-0", Exception("IO error"))],
+        ):
+            event = self._create_event()
+            myfilter = ContentReaperFilter(app=_App, conf=self.conf)
+            cb = MagicMock()
+            resp = myfilter.process(event, cb)
+            cb.assert_not_called()
+            self.assertEqual(resp.env, event)
+
+    def test_only_io_errors_retry(self):
+        self.conf.update({"allow_retry": True, "retry_on_io_error": True})
+        with patch(
+            "oio.event.filters.content_cleaner.ContentReaperFilter._process_rawx",
+            return_value=[("rawx-0", Exception("IO error"))],
+        ):
+            event = self._create_event()
+            myfilter = ContentReaperFilter(app=_App, conf=self.conf)
+            cb = MagicMock()
+            resp = myfilter.process(event, cb)
+            cb.assert_called_once_with(
+                503,
+                "Unable to delete all chunks",
+                delay=myfilter._serious_issue_delay,
+            )
+            self.assertIsNone(resp)
+
+    def test_some_io_errors_retry(self):
+        self.conf.update({"allow_retry": True, "retry_on_io_error": False})
+        with patch(
+            "oio.event.filters.content_cleaner.ContentReaperFilter._process_rawx",
+            return_value=[
+                ("rawx-0", Exception("IO error")),
+                ("rawx-1", Exception("Connection refused")),
+            ],
+        ):
+            event = self._create_event()
+            myfilter = ContentReaperFilter(app=_App, conf=self.conf)
+            cb = MagicMock()
+            resp = myfilter.process(event, cb)
+            cb.assert_called_once_with(
+                503,
+                "Unable to delete all chunks",
+                delay=myfilter._retry_delay,
+            )
+            self.assertIsNone(resp)
 
 
 class TestContentRebuildFilter(BaseTestCase):
