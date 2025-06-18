@@ -416,17 +416,9 @@ class ReplicationRecovery(Command):
             "(default=1000)",
         )
         parser.add_argument(
-            "--use-marker",
-            choices=["0", "1", "2"],
-            default="0",
-            help="""
-            Indicate whether or not maker is to be considered:
-            0: Execute the command but stop the process if marker found.
-               If marker exists, only option 1 or 2 are accepted.
-            1: enable use of maker
-            2: bypass marker
-            (default=0)
-            """,
+            "--do-not-use-marker",
+            action="store_true",
+            help="Use this option to disable the marker usage.",
         )
         parser.add_argument(
             "--marker-update-after",
@@ -467,13 +459,13 @@ class ReplicationRecovery(Command):
                     parent_dir = dir_path
                     break
                 except OSError as err:
-                    self.log.warning(
+                    self.log.error(
                         "Failed to create marker directory in %s: %s",
                         dir_path,
                         err,
                     )
         else:
-            self.log.warning("Failed to build marker file path")
+            self.log.error("Failed to build marker file path")
             return None
         return f"{parent_dir}/replicationrecovery/{marker_file_name}"
 
@@ -522,7 +514,8 @@ class ReplicationRecovery(Command):
         bucket = parsed_args.bucket
         pending = parsed_args.pending
         only_metadata = parsed_args.only_metadata
-        use_marker = parsed_args.use_marker
+        # invert the condition for readability
+        use_marker = not parsed_args.do_not_use_marker
         marker_update_after = parsed_args.marker_update_after
         if not (pending or only_metadata or parsed_args.all):
             # When no option is defined, use pending by default
@@ -559,20 +552,12 @@ class ReplicationRecovery(Command):
             operation = "all"
         self.marker_file = self._get_marker_file_path(operation, account, bucket)
         marker = None
-        if self.marker_file:
+        use_marker = use_marker and self.marker_file
+        if use_marker:
             if os.path.exists(self.marker_file):
                 with open(self.marker_file, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     marker = data.get(str((account, bucket)))
-        if marker:
-            if use_marker == "0":
-                raise ValueError(
-                    f"Use-maker option must be set to 1 or 2 "
-                    f"if a marker is found: marker={marker}"
-                )
-            elif use_marker == "2":
-                # Start from the beginning
-                marker = None
 
         replication_conf = self._load_replication_configuration(account, bucket)
         self.log.info("Scan bucket %s in account %s", bucket, account)
@@ -599,20 +584,21 @@ class ReplicationRecovery(Command):
                     conf, obj, dest_buckets, object_event, dry_run, kafka_conf
                 )
                 counter += 1
-                if counter == marker_update_after and self.success:
+                if use_marker and counter >= marker_update_after and self.success:
                     self.flush_and_update_marker(account, bucket, obj)
                     # Reinitialize the counter
                     counter = 0
         except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
-            if obj and self.success:
+            if use_marker and obj and self.success:
                 # If the latest listed object is defined
                 # and we were always able to send event
                 self.update_marker_file(obj["name"], bucket, account)
         else:
-            if marker:
+            if use_marker:
                 try:  # Remove the marker file
-                    os.remove(self.marker_file)
-                    self.log.info(f"Marker file {self.marker_file} removed")
+                    if os.path.exists(self.marker_file):
+                        os.remove(self.marker_file)
+                        self.log.info(f"Marker file {self.marker_file} removed")
                 except Exception as err:
                     self.log.error(
                         f"Failed to remove marker file: {self.marker_file}: {err}"
