@@ -17,7 +17,13 @@
 from random import shuffle
 
 from oio.api.ec import ECRebuildHandler, ECWriteHandler
-from oio.common.exceptions import ChunkException, Conflict, OrphanChunk
+from oio.common.exceptions import (
+    ChunkException,
+    Conflict,
+    ObjectUnavailable,
+    OrphanChunk,
+    UnrecoverableContent,
+)
 from oio.common.storage_functions import (
     _get_weighted_random_score,
     _sort_chunks,
@@ -34,20 +40,17 @@ class ECContent(Content):
         service_id=None,
         allow_same_rawx=False,
         chunk_pos=None,
-        allow_frozen_container=True,
         cur_items=None,
         max_attempts=3,
         read_all_available_sources=False,
         reqid=None,
+        **_kwargs,
     ):
         # TODO(FVE): factorize with similar code in oio/content/plain.py
         if reqid is None:
             reqid = request_id("eccontent-")
         # Identify the chunk to rebuild
-        candidates = self.chunks.filter(id=chunk_id)
-        if service_id is not None:
-            candidates = candidates.filter(host=service_id)
-        current_chunk = candidates.one()
+        current_chunk = self.chunks.filter(id=chunk_id, host=service_id).one()
 
         if current_chunk is None and chunk_pos is None:
             raise OrphanChunk("Chunk not found in content")
@@ -105,6 +108,28 @@ class ECContent(Content):
                 )
         raise last_error
 
+    def _create_spare_chunk(self, current_chunk, new_chunk, extras=None):
+        meta = {
+            "chunk_id": new_chunk.id,
+            "chunk_pos": current_chunk.pos,
+            "container_id": self.container_id,
+            # FIXME: should be 'content_chunkmethod' everywhere but sadly it isn't
+            "chunk_method": self.chunk_method,
+            # FIXME: should be 'content_id' everywhere but sadly it isn't
+            "id": self.content_id,
+            "content_path": self.path,
+            # FIXME: should be 'content_policy' everywhere but sadly it isn't
+            "policy": self.policy,
+            # FIXME: should be 'content_version' everywhere but sadly it isn't
+            "version": self.version,
+            "metachunk_hash": current_chunk.checksum,
+            "metachunk_size": current_chunk.size,
+            "full_path": self.full_path,
+        }
+        if extras:
+            meta["extra_properties"] = extras
+        return meta
+
     def _actually_rebuild(
         self,
         chunk_id,
@@ -121,6 +146,7 @@ class ECContent(Content):
         candidates = list(source_chunks.all())
         if read_all_available_sources:
             shuffle(candidates)  # Workaround bug with silently corrupt chunks
+            source_chunks = source_chunks + current_chunk
         spare_url, _quals = self._get_spare_chunk(
             candidates, broken_list, position=current_chunk.pos, reqid=reqid
         )
@@ -134,50 +160,38 @@ class ECContent(Content):
                 cfg[k] = self.conf[k]
 
         # Regenerate the lost chunk's data, from existing chunks
-        handler = ECRebuildHandler(
-            source_chunks.raw(),
-            current_chunk.subpos,
-            self.storage_method,
-            read_all_available_sources=read_all_available_sources,
-            watchdog=self.blob_client.watchdog,
-            reqid=reqid,
-            logger=self.logger,
-            **cfg,
-        )
-        expected_chunk_size, stream, extra_properties = handler.rebuild()
+        expected_chunk_size = 0
+        for all_sources in set((read_all_available_sources, True)):
+            try:
+                handler = ECRebuildHandler(
+                    (*(source_chunks.raw()), current_chunk.raw()),
+                    current_chunk.subpos,
+                    self.storage_method,
+                    read_all_available_sources=all_sources,
+                    watchdog=self.blob_client.watchdog,
+                    reqid=reqid,
+                    logger=self.logger,
+                    **cfg,
+                )
+                expected_chunk_size, stream, extra_properties = handler.rebuild()
 
-        # Actually create the spare chunk
-        meta = {}
-        meta["chunk_id"] = new_chunk.id
-        meta["chunk_pos"] = current_chunk.pos
-        meta["container_id"] = self.container_id
+                # Actually create the spare chunk
+                meta = self._create_spare_chunk(
+                    current_chunk, new_chunk, extras=extra_properties
+                )
+                bytes_transferred, _ = self.blob_client.chunk_put(
+                    spare_url[0], meta, GeneratorIO(stream), reqid=reqid
+                )
+                break
+            except (UnrecoverableContent, ObjectUnavailable):
+                if not all_sources:
+                    self.logger.debug(
+                        "Retry chunk rebuild with 'read_all_available_sources' option"
+                    )
+                    # Give another chance to rebuild the chunk
+                    continue
+                raise
 
-        # FIXME: should be 'content_chunkmethod' everywhere
-        # but sadly it isn't
-        meta["chunk_method"] = self.chunk_method
-
-        # FIXME: should be 'content_id' everywhere
-        # but sadly it isn't
-        meta["id"] = self.content_id
-
-        meta["content_path"] = self.path
-
-        # FIXME: should be 'content_policy' everywhere
-        # but sadly it isn't
-        meta["policy"] = self.policy
-
-        # FIXME: should be 'content_version' everywhere
-        # but sadly it isn't
-        meta["version"] = self.version
-
-        meta["metachunk_hash"] = current_chunk.checksum
-        meta["metachunk_size"] = current_chunk.size
-        meta["full_path"] = self.full_path
-        if extra_properties:
-            meta["extra_properties"] = extra_properties
-        bytes_transferred, _ = self.blob_client.chunk_put(
-            spare_url[0], meta, GeneratorIO(stream), reqid=reqid
-        )
         if expected_chunk_size is not None and bytes_transferred != expected_chunk_size:
             try:
                 self.blob_client.chunk_delete(spare_url[0], reqid=reqid)
