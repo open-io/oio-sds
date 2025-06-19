@@ -144,6 +144,31 @@ class ReplicationRecoveryTest(CliTestCase):
             f"replication recovery {container_src} {option}",
             coverage="",
         )
+
+        def _check_event(event_to_check, is_deletion):
+            self.assertIsNotNone(event_to_check)
+            self.assertEqual(container_dst, event_to_check.repli["destinations"])
+            self.assertEqual("repliRecoveryId", event_to_check.repli["replicator_id"])
+            self.assertEqual(
+                "repliRecoveryRole", event_to_check.repli["src_project_id"]
+            )
+            found = False
+            for d in event_to_check.data:
+                deleted = d.get("deleted")
+                if deleted is not None:
+                    if is_deletion:
+                        self.assertTrue(true_value(deleted))
+                        break
+                    else:
+                        self.assertFalse(true_value(deleted))
+                key = d.get("key")
+                if key and key == "x-object-sysmeta-s3api-acl":
+                    self.assertEqual("myuseracls", d["value"])
+                    found = True
+                    break
+            if not is_deletion:
+                self.assertTrue(found)
+
         event = self.wait_for_kafka_event(
             types=event_types,
             fields={
@@ -154,27 +179,21 @@ class ReplicationRecoveryTest(CliTestCase):
             kafka_consumer=self._cls_replication_consumer,
             timeout=60,
         )
-        self.assertIsNotNone(event)
-        self.assertEqual(container_dst, event.repli["destinations"])
-        self.assertEqual("repliRecoveryId", event.repli["replicator_id"])
-        self.assertEqual("repliRecoveryRole", event.repli["src_project_id"])
-        self.assertIsNotNone(event)
-        found = False
-        for d in event.data:
-            deleted = d.get("deleted")
-            if deleted is not None:
-                if is_deletion:
-                    self.assertTrue(true_value(deleted))
-                    break
-                else:
-                    self.assertFalse(true_value(deleted))
-            key = d.get("key")
-            if key and key == "x-object-sysmeta-s3api-acl":
-                self.assertEqual("myuseracls", d["value"])
-                found = True
-                break
-        if not is_deletion:
-            self.assertTrue(found)
+        _check_event(event, is_deletion)
+
+        # In case of deletion, the "valid" object also needs to be recovered.
+        if is_deletion:
+            event = self.wait_for_kafka_event(
+                types=event_types,
+                fields={
+                    "account": account,
+                    "user": container_src,
+                },
+                origin="s3-replication-recovery",
+                kafka_consumer=self._cls_replication_consumer,
+                timeout=60,
+            )
+            _check_event(event, False)
 
     def test_replication_recovery_content_new(self):
         self._test_recovery_tool()
