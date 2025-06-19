@@ -184,6 +184,8 @@ class ReplicationRecovery(Command):
     log = None
     kafka_producer = None
     marker_file = None
+    nb_objects_recovered = 0
+    nb_delete_markers_recovered = 0
 
     def _load_replication_configuration(self, account, bucket) -> None:
         info = self.app.client_manager.storage.container_get_properties(account, bucket)
@@ -300,7 +302,11 @@ class ReplicationRecovery(Command):
                     )
                     self.success = False
                 continue
-            yield obj, dest_buckets, role
+            if not is_delete_marker:
+                self.nb_objects_recovered += 1
+            else:
+                self.nb_delete_markers_recovered += 1
+            yield obj, dest_buckets, role, is_delete_marker
 
     def object_to_event(
         self,
@@ -389,13 +395,15 @@ class ReplicationRecovery(Command):
         event: Dict[str, Any],
         dry_run: bool,
         kafka_conf: Dict[str, Any],
+        is_delete_marker: bool,
     ):
         log = self.log.info if dry_run else self.log.debug
         log(
-            "Sending event to replicate object %s (%d) to %s",
+            "Sending event to replicate object %s (%d) to %s %s",
             obj["name"],
             obj["version"],
             dest_buckets,
+            "(delete marker)" if is_delete_marker else "(object)",
         )
         if not dry_run:
             if self.kafka_producer is None:
@@ -481,6 +489,11 @@ class ReplicationRecovery(Command):
             # Close the producer
             self.kafka_producer.close()
         self.log.info("Replication recovery exiting.")
+        self.log.info(
+            "nb_objects_recovered=%d nb_delete_markers_recovered=%d",
+            self.nb_objects_recovered,
+            self.nb_delete_markers_recovered,
+        )
 
     def _get_marker_file_path(self, operation, account, bucket):
         """Return the path to the appropriate marker file"""
@@ -613,12 +626,18 @@ class ReplicationRecovery(Command):
         obj = None
         counter = 0
         try:
-            for obj, dest_buckets, role in objects_to_replicate:
+            for obj, dest_buckets, role, is_delete_marker in objects_to_replicate:
                 object_event = self.object_to_event(
                     obj, dest_buckets, role, namespace, account, bucket, event_type
                 )
                 self.send_event(
-                    conf, obj, dest_buckets, object_event, dry_run, kafka_conf
+                    conf,
+                    obj,
+                    dest_buckets,
+                    object_event,
+                    dry_run,
+                    kafka_conf,
+                    is_delete_marker,
                 )
                 counter += 1
                 if use_marker and counter >= marker_update_after and self.success:
@@ -635,7 +654,7 @@ class ReplicationRecovery(Command):
                 try:  # Remove the marker file
                     if os.path.exists(self.marker_file):
                         os.remove(self.marker_file)
-                        self.log.info(f"Marker file {self.marker_file} removed")
+                        self.log.debug(f"Marker file {self.marker_file} removed")
                 except Exception as err:
                     self.log.error(
                         f"Failed to remove marker file: {self.marker_file}: {err}"
