@@ -40,7 +40,11 @@ class ReplicationRecoveryTest(CliTestCase):
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
 
     def _test_recovery_tool(
-        self, is_deletion=False, is_update=False, with_invalid_option=False
+        self,
+        is_deletion=False,
+        is_update=False,
+        with_invalid_option=False,
+        real_delete_version=False,
     ):
         account = self.account_from_env()
         obj = "test-repli-recovery" + random_str(6)
@@ -72,7 +76,7 @@ class ReplicationRecoveryTest(CliTestCase):
         reqid = request_id()
         replication_status = "COMPLETED" if is_update else "PENDING"
         # Create an object
-        self.storage.object_create_ext(
+        _, _, _, obj_meta = self.storage.object_create_ext(
             account,
             container_src,
             obj_name=obj,
@@ -87,6 +91,7 @@ class ReplicationRecoveryTest(CliTestCase):
                 "x-object-transient-sysmeta-myprop": "toto",
             },
         )
+        obj_version = obj_meta["version"]
         event = self.wait_for_kafka_event(
             reqid=reqid,
             types=(EventTypes.CONTENT_NEW,),
@@ -122,6 +127,23 @@ class ReplicationRecoveryTest(CliTestCase):
                     else:
                         self.assertFalse(true_value(deleted))
                     break
+
+            if real_delete_version:
+                # Now that delete marker is created, delete the version
+                reqid = request_id()
+                self.storage.object_delete(
+                    account,
+                    container_src,
+                    obj=obj,
+                    reqid=reqid,
+                    version=obj_version,
+                )
+                event = self.wait_for_kafka_event(
+                    reqid=reqid,
+                    types=(EventTypes.CONTENT_DELETED,),
+                )
+                self.assertIsNotNone(event)
+
         option = "--pending"
         event_types = (EventTypes.CONTENT_NEW,)
         if is_update:
@@ -177,12 +199,16 @@ class ReplicationRecoveryTest(CliTestCase):
             },
             origin="s3-replication-recovery",
             kafka_consumer=self._cls_replication_consumer,
-            timeout=60,
+            timeout=30,
         )
-        _check_event(event, is_deletion)
+        if not real_delete_version:
+            _check_event(event, is_deletion)
+        else:
+            # Only delete marker exists, we should not recreate any events
+            self.assertIsNone(event)
 
         # In case of deletion, the "valid" object also needs to be recovered.
-        if is_deletion:
+        if is_deletion and not real_delete_version:
             event = self.wait_for_kafka_event(
                 types=event_types,
                 fields={
@@ -191,7 +217,7 @@ class ReplicationRecoveryTest(CliTestCase):
                 },
                 origin="s3-replication-recovery",
                 kafka_consumer=self._cls_replication_consumer,
-                timeout=60,
+                timeout=30,
             )
             _check_event(event, False)
 
@@ -200,6 +226,10 @@ class ReplicationRecoveryTest(CliTestCase):
 
     def test_replication_recovery_content_delete(self):
         self._test_recovery_tool(is_deletion=True)
+
+    def test_replication_recovery_content_delete_no_events(self):
+        # Run recovery tool only on a delete marker (no events should be created)
+        self._test_recovery_tool(is_deletion=True, real_delete_version=True)
 
     def test_replication_recovery_content_update(self):
         self._test_recovery_tool(is_update=True)

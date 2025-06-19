@@ -31,6 +31,8 @@ from oio.common.constants import (
     OBJECT_REPLICATION_PENDING,
     OBJECT_REPLICATION_REPLICA,
 )
+from oio.common.easy_value import boolean_value
+from oio.common.exceptions import NoSuchObject
 from oio.common.kafka import DEFAULT_REPLICATION_TOPIC, KafkaSender
 from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
@@ -190,6 +192,29 @@ class ReplicationRecovery(Command):
         )
         return replication_conf
 
+    def _get_replication_status_on_previous_version(
+        self, account: str, bucket: str, key: str, version: str
+    ) -> str:
+        """
+        Get the replication status of the previous version which is not a delete marker.
+        If it is a delete marker, get the previous version etc...
+        """
+        try:
+            older_version = str(int(version) - 1)
+            props = self.app.client_manager.storage.object_get_properties(
+                account=account, container=bucket, obj=key, version=older_version
+            )
+            if boolean_value(props.get("deleted", False)):
+                return self._get_replication_status_on_previous_version(
+                    account, bucket, key, version - 1
+                )
+            else:
+                return props.get("properties", {}).get(
+                    "x-object-sysmeta-s3api-replication-status"
+                )
+        except NoSuchObject:
+            return None
+
     def get_objects_to_replicate(
         self,
         account,
@@ -215,7 +240,7 @@ class ReplicationRecovery(Command):
         for obj in objects_gen:
             key = obj["name"]
             metadata = obj.get("properties") or {}
-            is_delete_marker = obj["deleted"]
+            is_delete_marker = obj.get("deleted", False)
 
             # Unable to tell if the deletion marker has already been replicated
             # or if it's a replica
@@ -242,6 +267,16 @@ class ReplicationRecovery(Command):
                     # COMPLETED: replication is already done
                     # REPLICA: it's replicated object (cannot replicate)
                     continue
+            else:
+                # For delete markers, only recreate events if the previous valid version
+                # is replicated.
+                # This is to avoid creating events for versions older than the
+                # replication conf if this tool is run on a big old bucket.
+                if not self._get_replication_status_on_previous_version(
+                    account, bucket, key, obj["version"]
+                ):
+                    continue
+
             if until and obj["version"] > until:
                 continue
 
@@ -383,17 +418,19 @@ class ReplicationRecovery(Command):
         group.add_argument(
             "--pending",
             action="store_true",
-            help="Resend only events from objects pending to be replicated.",
+            help="Resend only events from objects pending to be replicated (default).",
         )
         group.add_argument(
             "--only-metadata",
             action="store_true",
-            help="Resend only events from objects with metadatata to be replicated",
+            help="""Resend only events from objects with metadatata to be replicated
+            (only on objects with COMPLETED status).
+            """,
         )
         group.add_argument(
             "--all",
             action="store_true",
-            help="Resend events from all objects",
+            help="Resend events from all objects no matter their statuses.",
         )
         parser.add_argument(
             "--until",
