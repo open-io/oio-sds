@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
+from itertools import chain
 
 from oio.api.replication import ReplicatedWriteHandler
 from oio.common.exceptions import (
@@ -80,10 +82,7 @@ class PlainContent(Content):
         if reqid is None:
             reqid = request_id("plaincontent-")
         # Identify the chunk to rebuild
-        candidates = self.chunks.filter(id=chunk_id)
-        if service_id is not None:
-            candidates = candidates.filter(host=service_id)
-        current_chunk = candidates.one()
+        current_chunk = self.chunks.filter(id=chunk_id, host=service_id).one()
         if current_chunk is None and chunk_pos is None:
             raise OrphanChunk("Chunk not found in content")
         if chunk_pos is None:
@@ -122,11 +121,16 @@ class PlainContent(Content):
         spare_url = spare_urls[0]
 
         # Actually create the spare chunk, by duplicating a good one
+        # Use the chunk to rebuild as source in last resort
         errors = []
-        for src in duplicate_chunks:
+        for src in chain(duplicate_chunks, broken_list):
             try:
                 first = True
                 while True:
+                    if spare_url == src.url:
+                        raise Conflict(
+                            "The source url cannot be the same as destination"
+                        )
                     try:
                         self.blob_client.chunk_copy(
                             src.url,

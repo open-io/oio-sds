@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -65,6 +65,13 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             help="Deprecated",
         )
         parser.add_argument(
+            "--not-same-rawx",
+            action="store_true",
+            help=(
+                "Prevent rebuilt rawx to be considered as destination rawx candidate"
+            ),
+        )
+        parser.add_argument(
             "--read-all-available-sources",
             action="store_true",
             help="For objects using erasure-coding, connect to all apparently "
@@ -99,6 +106,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "rdir_timeout": parsed_args.rdir_timeout,
             "rawx_timeout": parsed_args.rawx_timeout,
             "dry_run": parsed_args.dry_run,
+            "allow_same_rawx": not parsed_args.not_same_rawx,
             "read_all_available_sources": parsed_args.read_all_available_sources,
             "try_chunk_delete": parsed_args.delete_faulty_chunks,
             "set_incident_date": parsed_args.set_incident_date,

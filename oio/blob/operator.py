@@ -115,7 +115,7 @@ class ChunkOperator(object):
                 tags = data.get("tags", {})
                 loc = tags.get("tag.loc")
                 if not loc:
-                    self.logger.warn("Location is missing for rawx %s", data["id"])
+                    self.logger.warning("Location is missing for rawx %s", data["id"])
                     continue
                 loc = tuple(loc.split("."))
                 # Here data["id"] represents the rawx service id
@@ -140,7 +140,7 @@ class ChunkOperator(object):
                 content.blob_client.chunk_delete(chunk.url, **kwargs)
                 self.logger.info("Old chunk %s deleted", chunk.url)
             except Exception as exc:
-                self.logger.warn("Failed to delete old chunk %s: %s", chunk.url, exc)
+                self.logger.warning("Failed to delete old chunk %s: %s", chunk.url, exc)
 
         # This call does not raise exception if chunk is not referenced
         if chunk_id is not None:
@@ -149,7 +149,7 @@ class ChunkOperator(object):
                     chunk.host, container_id, content_id, chunk_id, **kwargs
                 )
             except Exception as exc:
-                self.logger.warn(
+                self.logger.warning(
                     "Failed to delete chunk entry (%s) from the rdir (%s): %s",
                     chunk_id,
                     chunk.host,
