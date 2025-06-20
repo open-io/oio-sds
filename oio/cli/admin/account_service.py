@@ -68,11 +68,16 @@ class AccountServiceClean(ShowOne):
             logger=self.logger,
         )
         self.success = cleaner.run(reqid=reqid)
+        if self.success:
+            if cleaner.deleted_containers > 0:
+                self.error_code = 2
+            elif cleaner.deleted_buckets > 0:
+                self.error_code = 3
         return (
             ("dry-run", "success", "deleted-containers", "deleted-buckets"),
             (
                 parsed_args.dry_run,
-                self.success,
+                cleaner.success,
                 cleaner.deleted_containers,
                 cleaner.deleted_buckets,
             ),
