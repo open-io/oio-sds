@@ -85,11 +85,18 @@ class AccountServiceClean(ShowOne):
             elif cleaner.deleted_buckets > 0:
                 self.error_code = 3
         return (
-            ("dry-run", "success", "deleted-containers", "deleted-buckets"),
+            (
+                "dry-run",
+                "success",
+                "deleted-containers",
+                "deleted-buckets",
+                "excess-volume",
+            ),
             (
                 parsed_args.dry_run,
                 cleaner.success,
                 cleaner.deleted_containers,
                 cleaner.deleted_buckets,
+                cleaner.excess_volume,
             ),
         )

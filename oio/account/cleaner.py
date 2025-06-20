@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from collections import Counter
 from time import time
 
 from oio.api.object_storage import ObjectStorageApi
@@ -42,6 +43,8 @@ class AccountServiceCleaner(object):
         self.success = True
         self.deleted_containers = 0
         self.deleted_buckets = 0
+        self.excess_volume_per_bucket = Counter()
+        self.excess_volume = 0
 
     def get_accounts(self, sharding_accounts=False, reqid=None):
         if not self.account:
@@ -124,7 +127,7 @@ class AccountServiceCleaner(object):
                 mtime = float(meta["mtime"])
                 now = time()
                 if now - self.SAFETY_DELAY > mtime:
-                    yield container, meta["mtime"], bucket
+                    yield container, meta["mtime"], meta["bytes"], bucket
                 else:
                     self.logger.debug(
                         "Ignore container %s/%s: Modified %f seconds ago",
@@ -148,10 +151,10 @@ class AccountServiceCleaner(object):
         List all container belonging to this cluster (using the region).
         """
         for account in self.get_accounts(sharding_accounts=True, reqid=reqid):
-            for container, mtime, bucket in self.all_containers_from_account(
+            for container, mtime, size, bucket in self.all_containers_from_account(
                 account, reqid=reqid
             ):
-                yield account, container, mtime, bucket
+                yield account, container, mtime, size, bucket
 
     def container_exists(self, account, container, reqid=None):
         """
@@ -231,7 +234,7 @@ class AccountServiceCleaner(object):
                 mtime = float(bucket["mtime"])
                 now = time()
                 if now - self.SAFETY_DELAY > mtime:
-                    yield bucket["name"], bucket["containers"]
+                    yield bucket["name"], bucket["containers"], bucket["bytes"]
                 else:
                     self.logger.debug(
                         "Ignore bucket %s/%s: Modified %f seconds ago",
@@ -254,29 +257,29 @@ class AccountServiceCleaner(object):
         List all buckets belonging to this cluster (using the region).
         """
         for account in self.get_accounts(reqid=reqid):
-            for bucket, containers in self.all_buckets_from_account(
+            for bucket, containers, size in self.all_buckets_from_account(
                 account, reqid=reqid
             ):
-                yield account, bucket, containers
+                yield account, bucket, containers, size
 
     def bucket_exists(self, account, bucket, reqid=None):
         """
         Check if the bucket still exists (in account service).
         """
         try:
-            _ = self.api.bucket.bucket_show(bucket, account=account, reqid=reqid)
+            meta = self.api.bucket.bucket_show(bucket, account=account, reqid=reqid)
             self.logger.debug(
                 "Bucket %s/%s still exists (account service) reqid=%s",
                 account,
                 bucket,
                 reqid,
             )
-            return True
+            return True, meta["bytes"]
         except NotFound:
             self.logger.info(
                 "Bucket %s/%s no longer exists reqid=%s", account, bucket, reqid
             )
-            return False
+            return False, None
         except Exception as exc:
             self.success = False
             self.logger.error(
@@ -288,7 +291,7 @@ class AccountServiceCleaner(object):
                 reqid,
             )
             # If in doubt, assume it exists
-            return True
+            return True, None
 
     def is_owner(self, account, bucket, reqid=None):
         """
@@ -328,7 +331,7 @@ class AccountServiceCleaner(object):
             # If in doubt, assume account is not the owner
             return False
 
-    def delete_bucket(self, account, bucket, reqid=None):
+    def delete_bucket(self, account, bucket, size=None, reqid=None):
         """
         Delete the bucket.
         """
@@ -337,6 +340,9 @@ class AccountServiceCleaner(object):
                 self.api.bucket.bucket_delete(bucket, account, reqid=reqid)
             self.logger.info("Delete bucket %s/%s reqid=%s", account, bucket, reqid)
             self.deleted_buckets += 1
+            if size:
+                self.excess_volume_per_bucket[(account, bucket)] += size
+                self.excess_volume += size
         except Exception as exc:
             self.success = False
             self.logger.error(
@@ -347,7 +353,9 @@ class AccountServiceCleaner(object):
                 reqid,
             )
 
-    def delete_container(self, account, container, dtime, bucket=None, reqid=None):
+    def delete_container(
+        self, account, container, dtime, size, bucket=None, reqid=None
+    ):
         """
         Delete the container in account service.
         If the bucket no longer exists after this deletion,
@@ -380,12 +388,16 @@ class AccountServiceCleaner(object):
             return
         if account.startswith(SHARDING_ACCOUNT_PREFIX):
             account = account[len(SHARDING_ACCOUNT_PREFIX) :]
-        if self.bucket_exists(account, bucket, reqid=reqid):
+        bucket_exists, bucket_size = self.bucket_exists(account, bucket, reqid=reqid)
+        if bucket_exists:
+            if size:
+                self.excess_volume_per_bucket[(account, bucket)] += size
+                self.excess_volume += size
             return
         if not self.is_owner(account, bucket, reqid=reqid):
             return
         # The bucket was deleted, release the bucket name
-        self.delete_bucket(account, bucket, reqid=reqid)
+        self.delete_bucket(account, bucket, bucket_size, reqid=reqid)
 
     def run(self, reqid=None):
         """
@@ -407,7 +419,7 @@ class AccountServiceCleaner(object):
 
         counter = 0
         # Clean containers
-        for account, container, mtime, bucket in self.all_containers_from_region(
+        for account, container, mtime, size, bucket in self.all_containers_from_region(
             reqid=reqid
         ):
             counter += 1
@@ -421,11 +433,13 @@ class AccountServiceCleaner(object):
             # to avoid deleting a container that has just been modified
             dtime = (int(mtime * 1000000) + 1) / 1000000
             self.delete_container(
-                account, container, dtime, bucket=bucket, reqid=sub_reqid
+                account, container, dtime, size, bucket=bucket, reqid=sub_reqid
             )
 
         # Clean buckets
-        for account, bucket, containers in self.all_buckets_from_region(reqid=reqid):
+        for account, bucket, containers, size in self.all_buckets_from_region(
+            reqid=reqid
+        ):
             counter += 1
             sub_reqid = f"{reqid}-{counter}"
             self.logger.debug(
@@ -443,6 +457,19 @@ class AccountServiceCleaner(object):
                     sub_reqid,
                 )
             else:
-                self.delete_bucket(account, bucket, reqid=sub_reqid)
+                self.delete_bucket(account, bucket, size, reqid=sub_reqid)
+
+        if self.dry_run:
+            verb = "is"
+        else:
+            verb = "was"
+        for (account, bucket), excess_volume in self.excess_volume_per_bucket.items():
+            self.logger.warning(
+                "Bucket %s/%s %s oversized by %d bytes",
+                account,
+                bucket,
+                verb,
+                excess_volume,
+            )
 
         return self.success
