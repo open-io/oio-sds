@@ -351,7 +351,7 @@ class AccountServiceCleaner(object):
             if containers > 0:
                 continue
             if self.container_exists(account, bucket, reqid=sub_reqid):
-                self.logger.warning(
+                self.logger.debug(
                     "Bucket %s/%s does not know of a container, "
                     "but the root container exists: "
                     "we should refresh the bucket reqid=%s",
