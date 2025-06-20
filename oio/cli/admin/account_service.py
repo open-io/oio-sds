@@ -16,6 +16,7 @@
 from oio.account.cleaner import AccountServiceCleaner
 from oio.cli import ShowOne
 from oio.common.easy_value import boolean_value
+from oio.common.exceptions import CommandError
 
 
 class AccountServiceClean(ShowOne):
@@ -30,6 +31,10 @@ class AccountServiceClean(ShowOne):
 
     def get_parser(self, prog_name):
         parser = super(AccountServiceClean, self).get_parser(prog_name)
+        parser.add_argument(
+            "--bucket",
+            help="The name of the bucket to clean",
+        )
         parser.add_argument(
             "--no-dry-run",
             dest="dry_run",
@@ -62,8 +67,14 @@ class AccountServiceClean(ShowOne):
                     ("Aborted", 0, 0),
                 )
 
+        try:
+            account = self.app.client_manager.account
+        except CommandError:
+            account = None
         cleaner = AccountServiceCleaner(
             self.app.client_manager.namespace,
+            account=account,
+            bucket=parsed_args.bucket,
             dry_run=parsed_args.dry_run,
             logger=self.logger,
         )

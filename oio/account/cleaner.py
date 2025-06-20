@@ -31,15 +31,74 @@ class AccountServiceCleaner(object):
 
     SAFETY_DELAY = 900  # 15 minutes
 
-    def __init__(self, namespace, dry_run=True, logger=None):
+    def __init__(self, namespace, account=None, bucket=None, dry_run=True, logger=None):
         ns_conf = load_namespace_conf(namespace)
         self.dry_run = dry_run
         self.logger = logger or get_logger(ns_conf)
         self.api = ObjectStorageApi(namespace, logger=logger)
         self.region = self.api.bucket.region.upper()
+        self.account = account
+        self.bucket = bucket
         self.success = True
         self.deleted_containers = 0
         self.deleted_buckets = 0
+
+    def get_accounts(self, sharding_accounts=False, reqid=None):
+        if not self.account:
+            if not self.bucket:
+                accounts = depaginate(
+                    self.api.account.account_list,
+                    listing_key=lambda x: x["listing"],
+                    item_key=lambda x: x["id"],
+                    marker_key=lambda x: x["next_marker"],
+                    truncated_key=lambda x: x["truncated"],
+                    sharding_accounts=sharding_accounts,
+                    reqid=reqid,
+                )
+                for account in accounts:
+                    yield account
+                return
+
+            try:
+                meta = self.api.bucket.bucket_show(self.bucket, reqid=reqid)
+                self.account = meta["account"]
+            except Exception as exc:
+                self.success = False
+                self.logger.error(
+                    "Failed to check bucket %s exists: %s reqid=%s",
+                    self.bucket,
+                    exc,
+                    reqid,
+                )
+        try:
+            _ = self.api.account.account_show(self.account, reqid=reqid)
+            yield self.account
+        except Exception as exc:
+            self.success = False
+            self.logger.error(
+                "Failed to check account %s exist: %s reqid=%s",
+                self.account,
+                exc,
+                reqid,
+            )
+        if sharding_accounts:
+            sharding_account = f"{SHARDING_ACCOUNT_PREFIX}{self.account}"
+            try:
+                _ = self.api.account.account_show(sharding_account, reqid=reqid)
+                yield sharding_account
+            except NotFound:
+                # No shards
+                pass
+            except Exception as exc:
+                self.success = False
+                self.logger.error(
+                    "Failed to check if technical account shards %s exists: "
+                    "%s reqid=%s",
+                    sharding_account,
+                    exc,
+                    reqid,
+                )
+        return
 
     def all_containers_from_account(self, account, reqid=None):
         """
@@ -59,10 +118,13 @@ class AccountServiceCleaner(object):
         for container in containers:
             try:
                 meta = self.api.account.container_show(account, container, reqid=reqid)
+                bucket = meta.get("bucket")
+                if self.bucket and bucket != self.bucket:
+                    continue
                 mtime = float(meta["mtime"])
                 now = time()
                 if now - self.SAFETY_DELAY > mtime:
-                    yield container, meta["mtime"], meta.get("bucket")
+                    yield container, meta["mtime"], bucket
                 else:
                     self.logger.debug(
                         "Ignore container %s/%s: Modified %f seconds ago",
@@ -85,16 +147,7 @@ class AccountServiceCleaner(object):
         """
         List all container belonging to this cluster (using the region).
         """
-        accounts = depaginate(
-            self.api.account.account_list,
-            listing_key=lambda x: x["listing"],
-            item_key=lambda x: x["id"],
-            marker_key=lambda x: x["next_marker"],
-            truncated_key=lambda x: x["truncated"],
-            sharding_accounts=True,
-            reqid=reqid,
-        )
-        for account in accounts:
+        for account in self.get_accounts(sharding_accounts=True, reqid=reqid):
             for container, mtime, bucket in self.all_containers_from_account(
                 account, reqid=reqid
             ):
@@ -138,15 +191,41 @@ class AccountServiceCleaner(object):
         List buckets of the account belonging to this cluster
         (using the region).
         """
-        buckets = depaginate(
-            self.api.account.bucket_list,
-            listing_key=lambda x: x["listing"],
-            marker_key=lambda x: x["next_marker"],
-            truncated_key=lambda x: x["truncated"],
-            account=account,
-            region=self.region,
-            reqid=reqid,
-        )
+        if self.bucket:
+            buckets = []
+            try:
+                meta = self.api.bucket.bucket_show(
+                    self.bucket, account=account, reqid=reqid
+                )
+                if meta["region"] != self.region:
+                    self.success = False
+                    self.logger.error(
+                        "Bucket %s/%s does not belong to this region: %s reqid=%s",
+                        account,
+                        self.bucket,
+                        meta["region"],
+                        reqid,
+                    )
+                meta["name"] = self.bucket
+                buckets.append(meta)
+            except Exception as exc:
+                self.success = False
+                self.logger.error(
+                    "Failed to check bucket %s exists: %s reqid=%s",
+                    self.bucket,
+                    exc,
+                    reqid,
+                )
+        else:
+            buckets = depaginate(
+                self.api.account.bucket_list,
+                listing_key=lambda x: x["listing"],
+                marker_key=lambda x: x["next_marker"],
+                truncated_key=lambda x: x["truncated"],
+                account=account,
+                region=self.region,
+                reqid=reqid,
+            )
         for bucket in buckets:
             try:
                 mtime = float(bucket["mtime"])
@@ -174,15 +253,7 @@ class AccountServiceCleaner(object):
         """
         List all buckets belonging to this cluster (using the region).
         """
-        accounts = depaginate(
-            self.api.account.account_list,
-            listing_key=lambda x: x["listing"],
-            item_key=lambda x: x["id"],
-            marker_key=lambda x: x["next_marker"],
-            truncated_key=lambda x: x["truncated"],
-            reqid=reqid,
-        )
-        for account in accounts:
+        for account in self.get_accounts(reqid=reqid):
             for bucket, containers in self.all_buckets_from_account(
                 account, reqid=reqid
             ):
@@ -322,6 +393,18 @@ class AccountServiceCleaner(object):
         """
         if not reqid:
             reqid = request_id("account-cleaner-")
+        if self.account:
+            if self.bucket:
+                self.logger.info(
+                    "Cleaning the bucket %s in the account %s",
+                    self.bucket,
+                    self.account,
+                )
+            else:
+                self.logger.info("Cleaning the account %s", self.account)
+        elif self.bucket:
+            self.logger.info("Cleaning the bucket %s", self.bucket)
+
         counter = 0
         # Clean containers
         for account, container, mtime, bucket in self.all_containers_from_region(
