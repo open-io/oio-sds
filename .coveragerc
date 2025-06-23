@@ -13,4 +13,5 @@ tools =
 	/tmp/*/run/tools
 
 [run]
+dynamic_context = test_function
 parallel = True
