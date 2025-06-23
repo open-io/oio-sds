@@ -21,7 +21,6 @@ from oio.common.exceptions import (
     ChunkException,
     Conflict,
     ObjectUnavailable,
-    OrphanChunk,
     UnrecoverableContent,
 )
 from oio.common.storage_functions import (
@@ -46,14 +45,14 @@ class ECContent(Content):
         reqid=None,
         **_kwargs,
     ):
-        # TODO(FVE): factorize with similar code in oio/content/plain.py
         if reqid is None:
             reqid = request_id("eccontent-")
-        # Identify the chunk to rebuild
-        current_chunk = self.chunks.filter(id=chunk_id, host=service_id).one()
+        current_chunk = self._filter_chunk_to_rebuild(
+            chunk_id,
+            service_id=service_id,
+            chunk_pos=chunk_pos,
+        )
 
-        if current_chunk is None and chunk_pos is None:
-            raise OrphanChunk("Chunk not found in content")
         if current_chunk is None:
             current_chunk = self.chunks.filter(pos=chunk_pos).one()
             if current_chunk is None:

@@ -20,7 +20,6 @@ from oio.api.replication import ReplicatedWriteHandler
 from oio.common.exceptions import (
     Conflict,
     ObjectUnavailable,
-    OrphanChunk,
     UnrecoverableContent,
 )
 from oio.common.storage_functions import (
@@ -81,10 +80,11 @@ class PlainContent(Content):
     ):
         if reqid is None:
             reqid = request_id("plaincontent-")
-        # Identify the chunk to rebuild
-        current_chunk = self.chunks.filter(id=chunk_id, host=service_id).one()
-        if current_chunk is None and chunk_pos is None:
-            raise OrphanChunk("Chunk not found in content")
+        current_chunk = self._filter_chunk_to_rebuild(
+            chunk_id,
+            service_id=service_id,
+            chunk_pos=chunk_pos,
+        )
         if chunk_pos is None:
             chunk_pos = current_chunk.pos
 
@@ -146,11 +146,6 @@ class PlainContent(Content):
                         break
                     except Conflict as exc:
                         if not first:
-                            raise
-                        if (
-                            len(duplicate_chunks)
-                            > self.storage_method.expected_chunks - 2
-                        ):
                             raise
                         # Now that chunk IDs are predictable,
                         # it is possible to have conflicts

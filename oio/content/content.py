@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2024 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -122,6 +122,13 @@ class Content(object):
         if not self._storage_method:
             self._storage_method = STORAGE_METHODS.load(self.chunk_method)
         return self._storage_method
+
+    def _filter_chunk_to_rebuild(self, chunk_id, service_id=None, chunk_pos=None):
+        """Identify the chunk to rebuild among all the chunks of the object"""
+        current_chunk = self.chunks.filter(id=chunk_id, host=service_id).one()
+        if current_chunk is None and chunk_pos is None:
+            raise exc.OrphanChunk("Chunk not found in content")
+        return current_chunk
 
     def _get_spare_chunk(
         self,
