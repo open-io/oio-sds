@@ -20,6 +20,7 @@ import json
 import os
 
 from oio import ObjectStorageApi
+from oio.common.configuration import load_namespace_conf
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -44,8 +45,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     sds_namespace = os.environ.get("OIO_NS", "OPENIO")
-    uri = "http://127.0.0.1:6000"
-    api = ObjectStorageApi(sds_namespace, endpoint=uri)
+    conf = load_namespace_conf(sds_namespace)
+    api = ObjectStorageApi(sds_namespace, endpoint=f"http://{conf['proxy']}")
     meta = api.object_get_properties(
         args.account,
         args.container,
