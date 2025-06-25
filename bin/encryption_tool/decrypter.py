@@ -19,7 +19,7 @@ import argparse
 import json
 import sys
 
-from encryption_tool.encryption import Decrypter
+from oio.common.encryption import Decrypter
 
 ROOT_KEY = b"Next-Gen Object Storage & Serverless Computing\n"
 

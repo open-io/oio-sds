@@ -30,8 +30,8 @@ jobs:
         script:
           - set -x
           - . $HOME/venv/bin/activate
-          - ruff format --diff "oio" "tests" "tools" "bin" --exclude="oio-bootstrap.py"
-          - ruff check "oio" "tests" "tools" "bin" --exclude="oio-bootstrap.py"
+          - ruff format --diff "oio" "tests" "tools" "bin"
+          - ruff check "oio" "tests" "tools" "bin"
 
     requirements:
       - model: ubuntu-focal

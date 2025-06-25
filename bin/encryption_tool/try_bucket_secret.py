@@ -19,13 +19,12 @@ import argparse
 import json
 import sys
 
-from encryption_tool.encryption import Encrypter
+from oio.common.encryption import Decrypter, decode_secret, hmac_etag
 
 ROOT_KEY = b"Next-Gen Object Storage & Serverless Computing\n"
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="encryption tool")
-    parser.add_argument("--rootkey", type=str, default=ROOT_KEY, help="root key")
+    parser = argparse.ArgumentParser(description="try bucket_secret tool")
     parser.add_argument(
         "--metadata",
         type=str,
@@ -35,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--account",
         type=str,
-        default="AUTH_demo",
+        required=True,
         help="name of the account in which the object is stored",
     )
     parser.add_argument(
@@ -48,10 +47,10 @@ if __name__ == "__main__":
         "--obj", type=str, required=True, help="name of the object to fetch"
     )
     parser.add_argument(
-        "--iv",
+        "--bucket_secret",
         type=str,
-        default="iv.json",
-        help="path of json file that contains IVs to reuse",
+        required=True,
+        help="bucket_secret can be providied",
     )
     args = parser.parse_args()
 
@@ -60,29 +59,36 @@ if __name__ == "__main__":
         metadata = json.load(infile)
         infile.close()
 
-    # Read IVs
-    with open(args.iv, "r") as infile:
-        iv = json.load(infile)
-        infile.close()
-
-    # Encrypter object
-    encrypter = Encrypter(
-        root_key=args.rootkey,
+    # Use bucket secret to decrypt X-Object-Sysmeta-Crypto-Etag, use this ETag
+    # and object_key to calculate the HMAC, the result should be the same as the
+    # metadata key X-Object-Sysmeta-Crypto-Etag-Mac.
+    decrypter = Decrypter(
+        root_key=ROOT_KEY,
         account=args.account,
         container=args.container,
         obj=args.obj,
-        iv=iv,
+        metadata=metadata,
+        bucket_secret=args.bucket_secret,
     )
+    etag_from_metadata = decrypter.get_decrypted_etag(metadata=metadata)
 
-    while 1:
-        chunk = sys.stdin.buffer.read()
-        if not chunk:
-            break
-        ciphertext = encrypter.encrypt(chunk)
-        sys.stdout.buffer.write(ciphertext)
+    print(
+        "Calculate HMAC with ETag from X-Object-Sysmeta-Crypto-Etag metadata and \
+    provided key:"
+    )
+    object_key = decode_secret(args.bucket_secret)
+    etag_from_metadata_hmac = hmac_etag(object_key, etag_from_metadata)
+    print(etag_from_metadata_hmac)
 
-    new_metadata = encrypter.encrypt_metadata(metadata)
-    encrypter.update_metadata(new_metadata)
-    with open(args.metadata, "w") as outfile:
-        json.dump(new_metadata, outfile)
-        outfile.close()
+    print("HMAC from X-Object-Sysmeta-Crypto-Etag-Mac metadata:")
+    etag_mac_from_metadata = metadata.get("properties").get(
+        "x-object-sysmeta-crypto-etag-mac"
+    )
+    print(etag_mac_from_metadata)
+
+    if etag_from_metadata_hmac == etag_mac_from_metadata:
+        print("The provided key is the RIGHT key!")
+        sys.exit(0)
+    else:
+        print("The provided key is the WRONG key.")
+        sys.exit(1)

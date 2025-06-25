@@ -85,11 +85,11 @@ markers = [
 target-version = "py37"
 line-length = 88
 extend-include = ["bin/*", "tools/**/*.py"]
+exclude = ["tools/oio-bootstrap.py", "bin/encryption_tool/README.md", "confgen.py"]
 
 [tool.ruff.lint]
 extend-select = ["E", "I"]
 ignore = ["D203", "D212"]
-exclude = ["tools/oio-bootstrap.py"]
 
 [tool.ruff.lint.per-file-ignores]
 "{tests,tools}/**" = ["D"]
