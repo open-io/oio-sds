@@ -457,10 +457,10 @@ class ContainerLifecycle(object):
         _query = " "
 
         _upload_finished_cond = (
+            " INNER JOIN contents ct ON al.content = ct.id AND ct.size=0"
             " INNER JOIN properties pr ON al.alias=pr.alias AND"
             " al.version=pr.version AND"
-            " pr.key='x-object-sysmeta-s3api-has-content-type'"
-            " AND CAST(pr.value AS TEXT)='no'"
+            " pr.key='x-object-sysmeta-s3api-tmpacl'"
         )
 
         _query = f"{_query}{_upload_finished_cond}"

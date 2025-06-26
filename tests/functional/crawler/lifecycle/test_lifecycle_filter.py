@@ -2167,7 +2167,8 @@ class TestLifecycleCrawler(BaseTestCase):
             count=10,
             prefix="doc/",
             container=self.container_segment,
-            properties={"x-object-sysmeta-s3api-has-content-type": "no"},
+            size=0,
+            properties={"x-object-sysmeta-s3api-tmpacl": "{'Owner': 'test'"},
         )
         mpu_parts = [(f"{mpu}/{i}", None) for mpu, _ in mpus for i in range(20)]
         self._create_objects_for_rule(
@@ -2181,7 +2182,8 @@ class TestLifecycleCrawler(BaseTestCase):
             count=10,
             prefix="foo/",
             container=self.container_segment,
-            properties={"x-object-sysmeta-s3api-has-content-type": "no"},
+            size=0,
+            properties={"x-object-sysmeta-s3api-tmpacl": "{'Owner': 'test'"},
         )
         mpu_parts = [(f"{mpu}/{i}", None) for mpu, _ in mpus for i in range(20)]
         self._create_objects_for_rule(
