@@ -57,7 +57,11 @@ class TestFilterMpuCleanerBase(BaseTestCase):
         )["system"]
         self.container_id = syst["sys.name"].split(".", 1)[0]
 
-        self.mpu_cleaner = MpuPartCleaner(app=_App, conf=self.conf)
+        self.mpu_cleaner = MpuPartCleaner(
+            app=_App,
+            conf=self.conf,
+            logger=self.logger,
+        )
 
         # Used for sharding (not used if no sharding)
         self.nb_other_objects = 0

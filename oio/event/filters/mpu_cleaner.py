@@ -23,7 +23,12 @@ from oio.common.constants import (
     SHARDING_ACCOUNT_PREFIX,
 )
 from oio.common.easy_value import boolean_value, int_value
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import (
+    DeadlineReached,
+    NotFound,
+    OioNetworkException,
+    ServiceBusy,
+)
 from oio.common.utils import request_id
 from oio.container.client import ContainerClient
 from oio.event.evob import Event, EventTypes
@@ -58,38 +63,18 @@ class MpuPartCleaner(Filter):
             int_value(self.conf.get("timeout_manifest_still_exists"), 900) * 1000000
         )
 
-    def process(self, env, cb):
-        event = Event(env)
-        ev_type = event.event_type
-        if ev_type != EventTypes.MANIFEST_DELETED:
-            return self.app(env, cb)
+    def _delete_is_possible(
+        self, event, account, container, path, version, upload_id, reqid=None
+    ) -> bool:
+        """
+        Check if it's possible (and allowed) to delete the parts of the
+        specified MPU.
 
-        reqid = event.reqid
-        if not reqid:
-            reqid = request_id("MpuPartCleaner-")
-
-        url = event.url
-        account = url.get("account")
-        container = url.get("user")
-        path = url.get("path")
-
-        # Adapt to root container if event comes from a shard
-        if account.startswith(SHARDING_ACCOUNT_PREFIX):
-            # Remove prefix
-            account = account[len(SHARDING_ACCOUNT_PREFIX) :]
-            # Remove suffix with root cid, timestamp and shard index
-            container = container.rsplit("-", 3)[0]
-
-        version = event.env.get("manifest_version")
-        if not version:
-            # Event malformed, do not drop the event and fix the emitter
-            raise RejectMessage("Missing version in event")
-
-        upload_id = event.env.get("upload_id")
-        if not upload_id:
-            # Event malformed, do not drop the event and fix the emitter
-            raise RejectMessage("Missing upload_id in event")
-
+        :raises RetryLater: if the manifest still exists
+        :raises RejectMessage: if there is a problem with the event
+        :returns: True if the parts can be safely deleted,
+            False if there is nothing to do
+        """
         try:
             # Make sure manifest doesn't exist. Nominal path is "content_get_properties"
             # raises a NotFound because the manifest is deleted.
@@ -122,7 +107,7 @@ class MpuPartCleaner(Filter):
             present = datetime.now()
             now = present.timestamp() * 1000000
             if event.when + self.timeout_manifest_still_exists > now:
-                return self.app(env, cb)
+                return False
 
             # Don't retry event if manifest has legal hold or retention
             if event.origin == LIFECYCLE_USER_AGENT:
@@ -133,34 +118,35 @@ class MpuPartCleaner(Filter):
                     and datetime.strptime(retain_date, "%Y-%m-%dT%H:%M:%S.%fZ")
                     > present
                 ):
-                    return self.app(env, cb)
+                    # There is a lock, don't delete anything
+                    return False
 
             # No exception raised, retry later if manifest does still exist
             raise RetryLater(delay=self.retry_delay)
         except NotFound:
-            pass
+            # Manifest does not exist anymore, we can delete the parts
+            return True
 
+    def _list_parts(self, account, part_container, path, upload_id, reqid=None):
+        """
+        List the parts of the specified MPU.
+
+        :raises NotFound: if the part container has been deleted
+        :returns: the list of parts, and a boolean telling if it is truncated
+        """
         prefix = f"{path}/{upload_id}/"
-        segment_name = f"{container}{MULTIUPLOAD_SUFFIX}"
 
-        try:
-            headers, content_list = self.container_client.content_list(
-                account=account,
-                reference=segment_name,
-                limit=self.object_deletion_concurrency,
-                marker=None,
-                prefix=prefix,
-                force_master=True,
-                reqid=reqid,
-            )
-        except NotFound:
-            # This happens if the customer deletes its bucket before this event is
-            # processed. As everything is already deleted, we shouldn't do anything
-            # else here.
-            return self.app(env, cb)
-        listing_truncated = boolean_value(headers.get("x-oio-list-truncated"))
+        headers, content_list = self.container_client.content_list(
+            account=account,
+            reference=part_container,
+            limit=self.object_deletion_concurrency,
+            marker=None,
+            prefix=prefix,
+            force_master=True,
+            reqid=reqid,
+        )
 
-        paths = []
+        parts = []
         for obj in content_list["objects"]:
             # What's after the prefix should be an integer (the part number)
             part_number = obj["name"].split(prefix)[1]
@@ -168,29 +154,91 @@ class MpuPartCleaner(Filter):
                 part_number_int = int(part_number)
                 if part_number_int < 1 or part_number_int > 10000:
                     raise ValueError("part number should be between 1 and 10000")
-                paths.append(obj["name"])
+                parts.append(obj["name"])
             except ValueError:
                 # Ignore this object (not a part of the MPU)
                 continue
 
-        if not paths:
+        return parts, boolean_value(headers.get("x-oio-list-truncated"))
+
+    def process(self, env, cb):
+        event = Event(env)
+        ev_type = event.event_type
+        if ev_type != EventTypes.MANIFEST_DELETED:
+            return self.app(env, cb)
+
+        reqid = event.reqid
+        if not reqid:
+            reqid = request_id("MpuPartCleaner-")
+
+        url = event.url
+        account = url.get("account")
+        container = url.get("user")
+        path = url.get("path")
+
+        # Adapt to root container if event comes from a shard
+        if account.startswith(SHARDING_ACCOUNT_PREFIX):
+            # Remove prefix
+            account = account[len(SHARDING_ACCOUNT_PREFIX) :]
+            # Remove suffix with root cid, timestamp and shard index
+            container = container.rsplit("-", 3)[0]
+
+        version = event.env.get("manifest_version")
+        if not version:
+            # Event malformed, do not drop the event and fix the emitter
+            raise RejectMessage("Missing version in event")
+
+        upload_id = event.env.get("upload_id")
+        if not upload_id:
+            # Event malformed, do not drop the event and fix the emitter
+            raise RejectMessage("Missing upload_id in event")
+
+        if not self._delete_is_possible(
+            event, account, container, path, version, upload_id, reqid=reqid
+        ):
+            return self.app(env, cb)
+
+        part_container = f"{container}{MULTIUPLOAD_SUFFIX}"
+        try:
+            parts, listing_truncated = self._list_parts(
+                account, part_container, path, upload_id, reqid=reqid
+            )
+        except NotFound:
+            # This happens if the customer deletes its bucket before this event is
+            # processed. As everything is already deleted, we shouldn't do anything
+            # else here.
+            return self.app(env, cb)
+
+        if not parts:
             # Only happens if the event is replayed but has already been processed.
             return self.app(env, cb)
 
-        deleted = self.container_client.content_delete_many(
-            account=account,
-            reference=segment_name,
-            paths=paths,
-            reqid=reqid,
-            headers=make_headers(user_agent=event.origin),
-        )
+        try:
+            deleted = self.container_client.content_delete_many(
+                account=account,
+                reference=part_container,
+                paths=parts,
+                reqid=reqid,
+                headers=make_headers(user_agent=event.origin),
+            )
+        except (DeadlineReached, OioNetworkException, ServiceBusy) as exc:
+            self.logger.warning(
+                "Failed to delete parts of acct=%s bucket=%s obj=%s: %s, "
+                "will retry later...",
+                account,
+                container,
+                path,
+                exc,
+            )
+            raise RetryLater(delay=self.retry_delay) from exc
+
         # Make sure all parts are deleted.
         for obj_name, status in deleted:
             if not status:
                 self.logger.error(
                     "Failed to delete acct=%s reference=%s obj=%s, retry later..",
                     account,
-                    segment_name,
+                    part_container,
                     obj_name,
                 )
                 raise RetryLater(delay=self.retry_delay)
