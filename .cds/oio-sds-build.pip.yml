@@ -51,6 +51,15 @@ jobs:
           export REPO_SUBREPO=main
           export REPO_LIMIT=0
           export REPO_URL="https://{{ .cds.proj.drive_mirrors_objectstorage_openio_user }}:{{ .cds.proj.drive_mirrors_objectstorage_openio_password }}@{{ .cds.proj.drive_mirrors_hostname }}"
+
+          export PACKAGE_RAWX=${PACKAGE/#oio-sds-/oio-sds-rawx-}
+          export PACKAGE_OIOPROXY=${PACKAGE/#oio-sds-/oio-sds-oioproxy-}
+          export PACKAGE_META0=${PACKAGE/#oio-sds-/oio-sds-meta0-}
+          export PACKAGE_META1=${PACKAGE/#oio-sds-/oio-sds-meta1-}
+          export PACKAGE_META2=${PACKAGE/#oio-sds-/oio-sds-meta2-}
+          export PACKAGE_RDIR=${PACKAGE/#oio-sds-/oio-sds-rdir-}
+          export PACKAGE_CONSCIENCE=${PACKAGE/#oio-sds-/oio-sds-conscience-}
+
           make -f /external-packages/ubuntu/focal/Makefile.common install-apt-repo
           make -f /external-packages/ubuntu/focal/Makefile.common deb_changelog
           make -f /external-packages/ubuntu/focal/Makefile.common

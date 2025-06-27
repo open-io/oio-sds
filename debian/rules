@@ -6,6 +6,13 @@
 export DEB_BUILD_OPTIONS += nocheck
 
 DESTDIR=$(CURDIR)/debian/${PACKAGE}
+DESTDIR_RAWX=$(CURDIR)/debian/${PACKAGE_RAWX}
+DESTDIR_OIOPROXY=$(CURDIR)/debian/${PACKAGE_OIOPROXY}
+DESTDIR_META0=$(CURDIR)/debian/${PACKAGE_META0}
+DESTDIR_META1=$(CURDIR)/debian/${PACKAGE_META1}
+DESTDIR_META2=$(CURDIR)/debian/${PACKAGE_META2}
+DESTDIR_RDIR=$(CURDIR)/debian/${PACKAGE_RDIR}
+DESTDIR_CONSCIENCE=$(CURDIR)/debian/${PACKAGE_CONSCIENCE}
 PREFIX=/opt/${PACKAGE}
 # Only one Python path is expected
 PYTHON_PATH=$(shell readlink -f /opt/python-* | sort -V | tail -n 1)
@@ -48,6 +55,7 @@ override_dh_install:
 	echo "Name: oio" > PKG-INFO
 	dh_virtualenv \
 	  --python ${PYTHON_PATH}/bin/python \
+	  --package=${PACKAGE} \
 	  --install-suffix ${PACKAGE} \
 	  --use-system-packages \
 	  --builtin-venv \
@@ -57,24 +65,77 @@ override_dh_install:
 	  --extra-pip-arg --no-binary=pyeclib \
 	  --extras "all" \
 	  --index-url https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
+
 	# do dh_install after dh_virtualenv as it cleans everything
 	# make install, to install oio except the python part
 	dh_install
+
 	# copy zookeeper libraries not to depend on zookeeper package
 	cp -a ${ZOOKEEPER_PATH}/lib/lib* $(DESTDIR)/${PREFIX}/lib/
+
 	# create env file for library directory
 	echo "LD_LIBRARY_PATH=${PREFIX}/lib:${PYTHON_PATH}/lib" > $(DESTDIR)/${PREFIX}/ld_library_path.env
+
 	# create ld.so.conf file
 	echo ${PREFIX}/lib > $(DESTDIR)${PREFIX}/ld.so.conf
 	echo ${PYTHON_PATH}/lib >> $(DESTDIR)${PREFIX}/ld.so.conf
+
 	# Install OpenIO SDS directories
 	mkdir -pv $(DESTDIR)/var/log/oio/sds \
 		$(DESTDIR)/var/lib/oio/sds \
 		$(DESTDIR)/etc/oio/sds \
 		$(DESTDIR)/run/oio/sds
+
 	# fix shebangs
 	sed -i "s@${DESTDIR}@@" $(DESTDIR)$(PREFIX)/bin/*
+
 	./tools/patch-python-modules.sh "${DESTDIR}${PREFIX}"
+
+	# create sub package oio-sds-rawx
+	mkdir -p ${DESTDIR_RAWX}/opt/${PACKAGE_RAWX}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_RAWX}/opt/${PACKAGE_RAWX}/ --include=bin/ --include=bin/oio-rawx --exclude='*'
+
+	# create sub package oio-sds-oioproxy
+	mkdir -p ${DESTDIR_OIOPROXY}/opt/${PACKAGE_OIOPROXY}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_OIOPROXY}/opt/${PACKAGE_OIOPROXY}/ --include=bin/ --include=bin/oio-proxy --include=lib/ --include=lib/liboio* --include=lib/libzookeeper* --exclude='*'
+	echo "LD_LIBRARY_PATH=/opt/${PACKAGE_OIOPROXY}/lib" > ${DESTDIR_OIOPROXY}/opt/${PACKAGE_OIOPROXY}/ld_library_path.env
+	echo /opt/${PACKAGE_OIOPROXY}/lib > ${DESTDIR_OIOPROXY}/opt/${PACKAGE_OIOPROXY}/ld.so.conf
+	find ${DESTDIR_OIOPROXY} -type f -a -name '*oio*'| xargs -L1 patchelf --set-rpath "/opt/${PACKAGE_OIOPROXY}/lib:$(PYTHON_PATH)/lib"
+
+	# create sub package oio-sds-meta0
+	mkdir -p ${DESTDIR_META0}/opt/${PACKAGE_META0}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_META0}/opt/${PACKAGE_META0}/ --include=bin/ --include=bin/oio-meta0* --include=lib/ --include=lib/liboio* --include=lib/libzookeeper* --exclude='*'
+	echo "LD_LIBRARY_PATH=/opt/${PACKAGE_META0}/lib" > ${DESTDIR_META0}/opt/${PACKAGE_META0}/ld_library_path.env
+	echo /opt/${PACKAGE_META0}/lib > ${DESTDIR_META0}/opt/${PACKAGE_META0}/ld.so.conf
+	find ${DESTDIR_META0} -type f -a -name '*oio*'| xargs -L1 patchelf --set-rpath "/opt/${PACKAGE_META0}/lib:$(PYTHON_PATH)/lib"
+
+	# create sub package oio-sds-meta1
+	mkdir -p ${DESTDIR_META1}/opt/${PACKAGE_META1}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_META1}/opt/${PACKAGE_META1}/ --include=bin/ --include=bin/oio-meta1-server --include=lib/ --include=lib/liboio* --include=lib/libzookeeper* --exclude='*'
+	echo "LD_LIBRARY_PATH=/opt/${PACKAGE_META1}/lib" > ${DESTDIR_META1}/opt/${PACKAGE_META1}/ld_library_path.env
+	echo /opt/${PACKAGE_META1}/lib > ${DESTDIR_META1}/opt/${PACKAGE_META1}/ld.so.conf
+	find ${DESTDIR_META1} -type f -a -name '*oio*'| xargs -L1 patchelf --set-rpath "/opt/${PACKAGE_META1}/lib:$(PYTHON_PATH)/lib"
+
+	# create sub package oio-sds-meta2
+	mkdir -p ${DESTDIR_META2}/opt/${PACKAGE_META2}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_META2}/opt/${PACKAGE_META2}/ --include=bin/ --include=bin/oio-meta2-server --include=lib/ --include=lib/liboio* --include=lib/libzookeeper* --exclude='*'
+	echo "LD_LIBRARY_PATH=/opt/${PACKAGE_META2}/lib" > ${DESTDIR_META2}/opt/${PACKAGE_META2}/ld_library_path.env
+	echo /opt/${PACKAGE_META2}/lib > ${DESTDIR_META2}/opt/${PACKAGE_META2}/ld.so.conf
+	find ${DESTDIR_META2} -type f -a -name '*oio*'| xargs -L1 patchelf --set-rpath "/opt/${PACKAGE_META2}/lib:$(PYTHON_PATH)/lib"
+
+	# create sub package oio-sds-rdir
+	mkdir -p ${DESTDIR_RDIR}/opt/${PACKAGE_RDIR}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_RDIR}/opt/${PACKAGE_RDIR}/ --include=bin/ --include=bin/oio-rdir-server --include=lib/ --include=lib/liboio* --include=lib/libzookeeper* --exclude='*'
+	echo "LD_LIBRARY_PATH=/opt/${PACKAGE_RDIR}/lib" > ${DESTDIR_RDIR}/opt/${PACKAGE_RDIR}/ld_library_path.env
+	echo /opt/${PACKAGE_RDIR}/lib > ${DESTDIR_RDIR}/opt/${PACKAGE_RDIR}/ld.so.conf
+	find ${DESTDIR_RDIR} -type f -a -name '*oio*'| xargs -L1 patchelf --set-rpath "/opt/${PACKAGE_RDIR}/lib:$(PYTHON_PATH)/lib"
+
+	# create sub package oio-sds-conscience
+	mkdir -p ${DESTDIR_CONSCIENCE}/opt/${PACKAGE_CONSCIENCE}
+	rsync -a -v ${DESTDIR}/opt/${PACKAGE}/ ${DESTDIR_CONSCIENCE}/opt/${PACKAGE_CONSCIENCE}/ --include=bin/ --include=bin/oio-daemon --include=lib/ --include=lib/liboio* --include=lib/libzookeeper* --exclude='*'
+	echo "LD_LIBRARY_PATH=/opt/${PACKAGE_CONSCIENCE}/lib" > ${DESTDIR_CONSCIENCE}/opt/${PACKAGE_CONSCIENCE}/ld_library_path.env
+	echo /opt/${PACKAGE_CONSCIENCE}/lib > ${DESTDIR_CONSCIENCE}/opt/${PACKAGE_CONSCIENCE}/ld.so.conf
+	find ${DESTDIR_CONSCIENCE} -type f -a -name '*oio*'| xargs -L1 patchelf --set-rpath "/opt/${PACKAGE_CONSCIENCE}/lib:$(PYTHON_PATH)/lib"
 
 # remove postinst from dh-virtualenv as it's buggy and useless
 override_dh_installdeb:
@@ -85,4 +146,7 @@ override_dh_auto_install:
 	dh_auto_install --destdir=${DESTDIR}
 
 override_dh_shlibdeps:
+	# skip
+
+override_dh_makeshlibs:
 	# skip

@@ -28,15 +28,26 @@ Build-Depends:
   libattr1-dev,
   libleveldb-dev,
   libsystemd-dev,
+  rsync,
+  patchelf,
 Standards-Version: 3.9.5
 Homepage: https://openio.io
 
 Package: ${PACKAGE}
 Architecture: any
 Depends:
-  ${shlibs:Depends},
   ${misc:Depends},
   python-3.10.16-ovh213,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_OIOPROXY}
+Architecture: any
+Depends:
+  ${misc:Depends},
   libcurl4,
   zlib1g,
   libglib2.0-0,
@@ -47,6 +58,116 @@ Depends:
   asn1c,
   libattr1,
   libleveldb1v5 | libleveldb1d,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_META0}
+Architecture: any
+Depends:
+  ${misc:Depends},
+  libcurl4,
+  zlib1g,
+  libglib2.0-0,
+  libjson-c3 | libjson-c4,
+  librdkafka1,
+  librabbitmq4,
+  libzmq5,
+  asn1c,
+  libattr1,
+  libleveldb1v5 | libleveldb1d,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_META1}
+Architecture: any
+Depends:
+  ${misc:Depends},
+  libcurl4,
+  zlib1g,
+  libglib2.0-0,
+  libjson-c3 | libjson-c4,
+  librdkafka1,
+  librabbitmq4,
+  libzmq5,
+  asn1c,
+  libattr1,
+  libleveldb1v5 | libleveldb1d,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_META2}
+Architecture: any
+Depends:
+  ${misc:Depends},
+  libcurl4,
+  zlib1g,
+  libglib2.0-0,
+  libjson-c3 | libjson-c4,
+  librdkafka1,
+  librabbitmq4,
+  libzmq5,
+  asn1c,
+  libattr1,
+  libleveldb1v5 | libleveldb1d,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_RDIR}
+Architecture: any
+Depends:
+  ${misc:Depends},
+  libcurl4,
+  zlib1g,
+  libglib2.0-0,
+  libjson-c3 | libjson-c4,
+  librdkafka1,
+  librabbitmq4,
+  libzmq5,
+  asn1c,
+  libattr1,
+  libleveldb1v5 | libleveldb1d,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_CONSCIENCE}
+Architecture: any
+Depends:
+  ${misc:Depends},
+  libcurl4,
+  zlib1g,
+  libglib2.0-0,
+  libjson-c3 | libjson-c4,
+  librdkafka1,
+  librabbitmq4,
+  libzmq5,
+  asn1c,
+  libattr1,
+  libleveldb1v5 | libleveldb1d,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE_RAWX}
+Architecture: any
+Depends:
+  ${misc:Depends},
 Description: OpenIO Cloud Storage Solution
  OpenIO software storage solution is designed to handle PETA-bytes of
  data in a distributed way, data such as: images, videos, documents, emails,
