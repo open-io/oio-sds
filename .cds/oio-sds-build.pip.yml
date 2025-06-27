@@ -76,7 +76,6 @@ jobs:
           cat << EOF > $HOME/oiovenv/pip.conf
           [global]
           index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
-          extra-index-url = https://${CDS_INTEGRATION_ARTIFACT_MANAGER_TOKEN_NAME}:{{.cds.integration.artifact_manager.token}}@artifactory.ovhcloud.tools/artifactory/api/pypi/pypi-remote/simple
           [install]
           progress-bar = off
           EOF
