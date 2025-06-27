@@ -186,7 +186,7 @@ class LifecycleActions(Filter):
         super().__init__(app, conf, logger=logger)
 
     def init(self):
-        self.api = self.app_env["api"]
+        self.api = self.app.app_env["api"]
         self.retry_delay = get_retry_delay(self.conf)
         self.limit_listing = int_value(self.conf.get("limit_listing"), 100)
         self.container_client = self.api.container

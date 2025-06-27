@@ -636,6 +636,82 @@ class ContainerClient(ProxyClient):
         resp, body = self._request("GET", "/list", params=params, **kwargs)
         return resp.headers, body
 
+    def container_lifecycle_views(
+        self,
+        account=None,
+        reference=None,
+        cid=None,
+        service_id=None,
+        payload=None,
+        params=None,
+        **kwargs,
+    ):
+        """
+        Create views in container for lifecycle purpose.
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        :param cid: container id that can be used instead of account
+            and reference
+        :type cid: `str`
+        :param service_id: volume id
+        :type service_id: `str`
+        :param payload: request payload
+        :type queries: `dict`
+        """
+        params = self._make_params(
+            account=account, reference=reference, cid=cid, params=params
+        )
+        params["service_id"] = service_id
+        resp, _body = self._request(
+            "POST", "lifecycle/views/create", params=params, json=payload, **kwargs
+        )
+        return resp.status == 204
+
+    def container_lifecycle_apply(
+        self,
+        account=None,
+        reference=None,
+        cid=None,
+        service_id=None,
+        action_type=None,
+        payload=None,
+        params=None,
+        **kwargs,
+    ):
+        """
+        Apply lifecycle rule on container.
+
+        :param account: account in which the container is
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        :param cid: container id that can be used instead of account
+            and reference
+        :type cid: `str`
+        :param suffix: container suffix
+        :type suffix: `str`
+        :param service_id: volume id
+        :type service_id: `str`
+        :param queries: queries describing views to create
+        :type queries: `dict`
+        """
+        params = self._make_params(
+            account=account, reference=reference, cid=cid, params=params
+        )
+        params["service_id"] = service_id
+        params["action_type"] = action_type
+
+        resp, _body = self._request(
+            "POST", "lifecycle/apply", params=params, json=payload, **kwargs
+        )
+
+        count = int(resp.headers.get("x-oio-count", 0))
+
+        return resp.status == 204, count
+
     def _deprecated_warning(self, old_func, new_func):
         warnings.simplefilter("once")
         warnings.warn(

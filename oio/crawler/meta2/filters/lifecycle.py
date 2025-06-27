@@ -16,7 +16,6 @@
 import datetime
 from os.path import basename
 
-from oio.common.client import ProxyClient
 from oio.common.constants import (
     ACL_PROPERTY_KEY,
     LOGGING_PROPERTY_KEY,
@@ -37,7 +36,6 @@ from oio.common.utils import (
     read_storage_mappings,
     request_id,
 )
-from oio.container.client import ContainerClient
 from oio.container.lifecycle import (
     AbortMpuAction,
     ContainerLifecycle,
@@ -49,7 +47,6 @@ from oio.container.lifecycle import (
 )
 from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
-from oio.directory.admin import AdminClient
 from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, LifecycleStep
 
 
@@ -167,6 +164,7 @@ class Lifecycle(Meta2Filter):
         self.lifecycle_backup_account = None
         self.lifecycle_backup_bucket = None
         self.context = None
+        self.container_client = None
         # Progress tracking
         self.events_produced_for_container = 0
         # Stats
@@ -183,18 +181,7 @@ class Lifecycle(Meta2Filter):
 
     def init(self):
         self.api = self.app_env["api"]
-        # Clients
-        self.proxy_client = ProxyClient(
-            self.conf, pool_manager=self.api.container.pool_manager, logger=self.logger
-        )
-        self.admin_client = AdminClient(
-            self.conf, logger=self.logger, force_master=True
-        )
-        self.container = ContainerClient(
-            self.conf,
-            pool_manager=self.api.container.pool_manager,
-            logger=self.logger,
-        )
+        self.container_client = self.api.container
         # Lifecycle backup bucket credentials
         self.lifecycle_backup_account = self.conf.get(
             "lifecycle_configuration_backup_account"
@@ -705,32 +692,6 @@ class Lifecycle(Meta2Filter):
             self.logger.debug("Container '%s' fully processed", self.context.path)
             self._set_finished_status(self.context._meta2db, "container")
 
-    def _create_views_request(self, view_queries):
-        """Create views
-
-        Views depends on rules and actions parameters, they
-        are created at the beginning of action.
-        """
-
-        params = {
-            "cid": self.context.cid,
-            "service_id": self.context.volume_id,
-        }
-        create_views_data = {
-            "suffix": self.context.suffix,
-        }
-        for key, val in view_queries.items():
-            create_views_data[key] = val
-
-        resp, _ = self.proxy_client._request(
-            "POST",
-            "/container/lifecycle/views/create",
-            params=params,
-            json=create_views_data,
-            reqid=self.context.reqid,
-        )
-        return resp
-
     def _set_finished_status(self, meta2db, key):
         """
         Store {key, 1} in admin table, the key reflects a finished action,
@@ -772,9 +733,16 @@ class Lifecycle(Meta2Filter):
         rule_id,
         action_class,
     ):
-        # Create view
-        resp = self._create_views_request(view_queries)
-        if resp.status != 204:
+        views_created = self.container_client.container_lifecycle_views(
+            cid=self.context.cid,
+            payload={
+                "suffix": self.context.suffix,
+                **view_queries,
+            },
+            service_id=self.context.volume_id,
+            reqid=self.context.reqid,
+        )
+        if not views_created:
             self.logger.error(
                 "Failed to create views for rule %s, action %s",
                 rule_id,
@@ -802,32 +770,23 @@ class Lifecycle(Meta2Filter):
                 data["is_markers"] = 1
             if prefix:
                 data["prefix"] = prefix
-
             if isinstance(action_class, (NonCurrentTransitionAction, TransitionAction)):
                 data["policies_order"] = self.policies_order
 
-            params = {
-                "cid": self.context.cid,
-                "service_id": self.context.volume_id,
-                "action_type": "current" if action_class.current else "noncurrent",
-            }
-
-            resp, _ = self.proxy_client._request(
-                "POST",
-                "/container/lifecycle/apply",
-                params=params,
-                json=data,
+            applied, count = self.container_client.container_lifecycle_apply(
+                cid=self.context.cid,
+                service_id=self.context.volume_id,
+                action_type="current" if action_class.current else "noncurrent",
+                payload=data,
                 reqid=self.context.reqid,
             )
-            if resp.status != 204:
+            if not applied:
                 self.logger.error(
                     "Failed to apply batch for rule %s, action %s",
                     rule_id,
                     action_class.field,
                 )
                 return False
-
-            count = int(resp.headers.get("x-oio-count", default=0))
 
             self._update_container_stats(action_class, count)
             if count == 0:
