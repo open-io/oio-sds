@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -113,7 +113,7 @@ class RdirConsistency(Lister):
 
     def __is_orphan(self, container, path, version):
         try:
-            self.cm.storage.container.content_locate(
+            self.cm.storage.content.content_locate(
                 cid=container, path=path, version=version
             )
         except NotFound:

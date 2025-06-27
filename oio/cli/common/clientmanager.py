@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -39,8 +39,6 @@ class ClientManager(object):
 
         # Various API client classes
         self._account_client = None
-        self._xcute_client = None
-        self._xcute_customer_client = None
         self._admin_client = None
         self._conscience_client = None
         self._directory_client = None
@@ -96,69 +94,27 @@ class ClientManager(object):
 
     @property
     def account_client(self):
-        if self._account_client is None:
-            from oio.account.client import AccountClient
-
-            self._account_client = AccountClient(
-                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
-            )
-        return self._account_client
+        return self.storage.account
 
     @property
     def xcute_client(self):
-        if self._xcute_client is None:
-            from oio.xcute.client import XcuteClient
-
-            self._xcute_client = XcuteClient(
-                self.client_conf,
-                xcute_type="internal",
-                pool_manager=self.pool_manager,
-                logger=self.logger,
-            )
-        return self._xcute_client
+        return self.storage.xcute
 
     @property
     def xcute_customer_client(self):
-        if self._xcute_customer_client is None:
-            from oio.xcute.client import XcuteClient
-
-            self._xcute_customer_client = XcuteClient(
-                self.client_conf,
-                xcute_type="customer",
-                pool_manager=self.pool_manager,
-                logger=self.logger,
-            )
-        return self._xcute_customer_client
+        return self.storage.xcute_customer
 
     @property
     def admin(self):
-        if self._admin_client is None:
-            from oio.directory.admin import AdminClient
-
-            self._admin_client = AdminClient(
-                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
-            )
-        return self._admin_client
+        return self.storage.admin
 
     @property
     def conscience(self):
-        if self._conscience_client is None:
-            from oio.conscience.client import ConscienceClient
-
-            self._conscience_client = ConscienceClient(
-                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
-            )
-        return self._conscience_client
+        return self.storage.conscience
 
     @property
     def directory(self):
-        if self._directory_client is None:
-            from oio.directory.client import DirectoryClient
-
-            self._directory_client = DirectoryClient(
-                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
-            )
-        return self._directory_client
+        return self.storage.directory
 
     @property
     def logger(self):
@@ -170,13 +126,7 @@ class ClientManager(object):
 
     @property
     def rdir(self):
-        if self._rdir_client is None:
-            from oio.rdir.client import RdirClient
-
-            self._rdir_client = RdirClient(
-                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
-            )
-        return self._rdir_client
+        return self.storage.rdir
 
     @property
     def rdir_dispatcher(self):
@@ -255,7 +205,7 @@ class ClientManager(object):
             if m1d:
                 self._meta1_digits = int(m1d)
             else:
-                LOG.warn("ns.meta1_digits not set or invalid, default is 4")
+                LOG.warning("ns.meta1_digits not set or invalid, default is 4")
                 self._meta1_digits = 4
         return self._meta1_digits
 

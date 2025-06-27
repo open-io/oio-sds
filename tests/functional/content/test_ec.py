@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,6 @@ from oio.common.exceptions import (
 )
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
-from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.ec import ECContent
 from oio.content.factory import ContentFactory
@@ -54,9 +53,13 @@ class TestECContent(BaseTestCase):
             self.gridconf,
             logger=self.logger,
             watchdog=self.watchdog,
+            blob_client=self.storage.blob_client,
+            container_client=self.storage.container,
+            content_client=self.storage.content,
         )
-        self.container_client = ContainerClient(self.gridconf)
-        self.blob_client = self.content_factory.blob_client
+        self.container_client = self.storage.container
+        self.content_client = self.storage.content
+        self.blob_client = self.storage.blob_client
         self.container_name = "TestECContent%f" % time.time()
         self.container_client.container_create(
             account=self.account, reference=self.container_name
@@ -85,7 +88,7 @@ class TestECContent(BaseTestCase):
         # perform the content creation
         content.create(BytesIO(data))
 
-        meta, chunks = self.container_client.content_locate(
+        meta, chunks = self.content_client.content_locate(
             cid=self.container_id, content=content.content_id
         )
         # verify metadata

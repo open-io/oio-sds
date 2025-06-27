@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,11 +26,10 @@ from tests.utils import BaseTestCase, random_str
 
 
 class _App(object):
-    app_env = {
-        "statsd_client": get_statsd(),
-    }
+    def __init__(self, app_env):
+        self.app_env = app_env
 
-    def __init__(self, env, cb):
+    def __call__(self, env, cb):
         self.env = env
         self.cb = cb
 
@@ -58,7 +57,12 @@ class TestFilterMpuCleanerBase(BaseTestCase):
         self.container_id = syst["sys.name"].split(".", 1)[0]
 
         self.mpu_cleaner = MpuPartCleaner(
-            app=_App,
+            app=_App(
+                app_env={
+                    "statsd_client": get_statsd(),
+                    "api": self.storage,
+                }
+            ),
             conf=self.conf,
             logger=self.logger,
         )

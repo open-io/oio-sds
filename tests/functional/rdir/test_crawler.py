@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -79,7 +79,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         self.wait_until_empty(topic="oio", group_id="event-agent")
 
     def _prepare(self, container, path):
-        _, chunks = self.api.container.content_prepare(
+        _, chunks = self.api.content.content_prepare(
             self.account, container, path, size=1
         )
         return chunks
@@ -143,7 +143,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         self.assertEqual(0, rdir_crawler.repaired)
 
         # Check that there is nothing where the chunk should be located
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         new_chunk_path, _ = self._chunk_info(new_chunks[0])
@@ -185,7 +185,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         # Check that one chunk is repaired
         self.assertEqual(1, rdir_crawler.repaired)
 
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         # The number of chunks should be the same as before the deletion
@@ -357,10 +357,10 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
 
         # Check that one chunk is repaired
         self.assertGreaterEqual(rdir_crawler.repaired, 1)
-        _, new_chunks_a = self.api.container.content_locate(
+        _, new_chunks_a = self.api.content.content_locate(
             self.account, container_a, object_name_a
         )
-        _, new_chunks_b = self.api.container.content_locate(
+        _, new_chunks_b = self.api.content.content_locate(
             self.account, container_b, object_name_b
         )
         if cid_a > cid_b:
@@ -394,10 +394,10 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         self.assertGreaterEqual(rdir_crawler.repaired, 1)
         # We should be able to find the chunk not selected for rebuild
         # during the last pass.
-        _, new_chunks_a = self.api.container.content_locate(
+        _, new_chunks_a = self.api.content.content_locate(
             self.account, container_a, object_name_a
         )
-        _, new_chunks_b = self.api.container.content_locate(
+        _, new_chunks_b = self.api.content.content_locate(
             self.account, container_b, object_name_b
         )
         # Objects from previously not selected container will be repaired
@@ -473,7 +473,7 @@ class TestRdirCrawlerForRawx(RdirCrawlerTestTool):
         cid = cid_from_name(self.account, container)
         # Retrieve version and content id in order
         # to register a false entry (orphan chunk) into rdir directory
-        obj_meta, _ = self.api.container.content_locate(
+        obj_meta, _ = self.api.content.content_locate(
             path=object_name,
             cid=cid,
             force_master=True,

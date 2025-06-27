@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -67,7 +67,7 @@ class ContainerClientTest(unittest.TestCase):
         ):
             self.assertRaises(
                 OioNetworkException,
-                self.api.container.content_create,
+                self.api.content.content_create,
                 self.account,
                 self.container,
                 "test",
@@ -82,7 +82,7 @@ class ContainerClientTest(unittest.TestCase):
         ):
             self.assertRaises(
                 Conflict,
-                self.api.container.content_create,
+                self.api.content.content_create,
                 self.account,
                 self.container,
                 "test",
@@ -97,7 +97,7 @@ class ContainerClientTest(unittest.TestCase):
             "oio.api.base.HttpApi._direct_request",
             Mock(side_effect=[OioNetworkException(), Conflict("")]),
         ):
-            self.api.container.content_create(
+            self.api.content.content_create(
                 self.account,
                 self.container,
                 "test",
@@ -114,7 +114,7 @@ class ContainerClientTest(unittest.TestCase):
         ):
             self.assertRaises(
                 Conflict,
-                self.api.container.content_create,
+                self.api.content.content_create,
                 self.account,
                 self.container,
                 "test",
@@ -130,7 +130,7 @@ class ContainerClientTest(unittest.TestCase):
         ):
             self.assertRaises(
                 ServiceBusy,
-                self.api.container.content_create,
+                self.api.content.content_create,
                 self.account,
                 self.container,
                 "test",

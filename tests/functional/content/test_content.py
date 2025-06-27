@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,7 @@ from mock import MagicMock as Mock
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, get_hasher
-from oio.container.client import ContainerClient
+from oio.content.client import ContentClient
 from oio.content.ec import ECContent
 from oio.content.factory import ContentFactory
 from oio.content.plain import PlainContent
@@ -55,10 +55,17 @@ class TestContentFactory(BaseTestCase):
         self.wait_for_score(("meta2",))
         self.chunk_size = self.conf["chunk_size"]
         self.gridconf = {"namespace": self.ns}
-        self.content_factory = ContentFactory(self.gridconf, watchdog=self.watchdog)
+        self.content_factory = ContentFactory(
+            self.gridconf,
+            watchdog=self.watchdog,
+            blob_client=self.storage.blob_client,
+            container_client=self.storage.container,
+            content_client=self.storage.content,
+        )
         self.container_name = "TestContentFactory%f" % time.time()
-        self.blob_client = self.content_factory.blob_client
-        self.container_client = ContainerClient(self.gridconf)
+        self.blob_client = self.storage.blob_client
+        self.container_client = self.storage.container
+        self.content_client = self.storage.content
         self.container_client.container_create(
             account=self.account, reference=self.container_name
         )
@@ -69,11 +76,11 @@ class TestContentFactory(BaseTestCase):
         self.stgpol_ec = "EC"
 
     def tearDown(self):
-        self.content_factory.container_client.content_locate = (
-            ContainerClient.content_locate
+        self.content_factory.content_client.content_locate = (
+            ContentClient.content_locate
         )
-        self.content_factory.container_client.content_prepare = (
-            ContainerClient.content_prepare
+        self.content_factory.content_client.content_prepare = (
+            ContentClient.content_prepare
         )
         super(TestContentFactory, self).tearDown()
 
@@ -117,7 +124,7 @@ class TestContentFactory(BaseTestCase):
                 "hash": "DA9D7F72AEEA5791565724424CE45C16",
             },
         ]
-        self.content_factory.container_client.content_locate = Mock(
+        self.content_factory.content_client.content_locate = Mock(
             return_value=(meta, chunks)
         )
         c = self.content_factory.get(
@@ -176,7 +183,7 @@ class TestContentFactory(BaseTestCase):
                 "hash": "E952A419957A6E405BFC53EC65483F73",
             },
         ]
-        self.content_factory.container_client.content_locate = Mock(
+        self.content_factory.content_client.content_locate = Mock(
             return_value=(meta, chunks)
         )
         c = self.content_factory.get(
@@ -250,7 +257,7 @@ class TestContentFactory(BaseTestCase):
                 "hash": "00000000000000000000000000000000",
             },
         ]
-        self.content_factory.container_client.content_prepare = Mock(
+        self.content_factory.content_client.content_prepare = Mock(
             return_value=(meta, chunks)
         )
         c = self.content_factory.new(
@@ -372,7 +379,7 @@ class TestContentFactory(BaseTestCase):
             content = self._new_content(self.stgpol, b"nobody cares", cname)
             answers[cname] = content
 
-        _, listing = self.container_client.content_list(
+        _, listing = self.container_client.container_list_content(
             self.account, self.container_name
         )
         obj_set = {k["name"] for k in listing["objects"]}

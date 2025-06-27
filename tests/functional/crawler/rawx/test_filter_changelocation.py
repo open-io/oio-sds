@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -76,7 +76,7 @@ class TestFilterChangelocation(BaseTestCase):
         return super().tearDown()
 
     def _prepare(self, container, path):
-        _, chunks = self.api.container.content_prepare(
+        _, chunks = self.api.content.content_prepare(
             self.account, container, path, size=1
         )
         return chunks
@@ -194,7 +194,7 @@ class TestFilterChangelocation(BaseTestCase):
             self.assertEqual(
                 changelocation.relocated_chunks + changelocation.removed_symlinks, 1
             )
-            _, new_chunks = self.api.container.content_locate(
+            _, new_chunks = self.api.content.content_locate(
                 self.account, container, object_name
             )
             self.assertEqual(len(chunks), len(new_chunks))
@@ -361,7 +361,7 @@ class TestFilterChangelocation(BaseTestCase):
                 volume_path,
                 volume_id,
             )
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         # Check if there is no more misplaced chunk
@@ -409,7 +409,7 @@ class TestFilterChangelocation(BaseTestCase):
                 volume_path,
                 volume_id,
             )
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         # Check if there is no more misplaced chunk
@@ -501,7 +501,7 @@ class TestFilterChangelocation(BaseTestCase):
             self.assertEqual(changelocation.orphan_chunks_found, 0)
             chunk_ids.append(chunk_id)
 
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         # Check all misplaced chunks still there
@@ -555,7 +555,7 @@ class TestFilterChangelocation(BaseTestCase):
                 volume_path,
                 volume_id,
             )
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         # Check if there is only one misplaced chunk
@@ -618,7 +618,7 @@ class TestFilterChangelocation(BaseTestCase):
         # Check if the irrelevant symlink has been deleted
         self.assertEqual(changelocation.removed_symlinks, 1)
         # Check if the new misplaced chunk has been created where it should be
-        _, final_chunks = self.api.container.content_locate(
+        _, final_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         final_misplaced_chunk, _ = self._get_misplaced_chunks(final_chunks)
@@ -680,7 +680,7 @@ class TestFilterChangelocation(BaseTestCase):
             self.assertEqual(upper[1:], test_shards[index]["upper"])
 
             # check object names in each shard
-            _, listing = self.api.container.content_list(cid=shard["cid"])
+            _, listing = self.api.container.container_list_content(cid=shard["cid"])
 
             list_objects = []
             for obj in listing["objects"]:

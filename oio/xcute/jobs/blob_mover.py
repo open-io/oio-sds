@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -53,7 +53,10 @@ class RawxDecommissionTask(XcuteTask):
             self.conf, logger=self.logger, watchdog=self.watchdog
         )
         self.content_factory = ContentFactory(
-            self.conf, blob_client=self.blob_client, watchdog=self.watchdog
+            self.conf,
+            blob_client=self.blob_client,
+            logger=self.logger,
+            watchdog=self.watchdog,
         )
         self.conscience_client = self.blob_client.conscience_client
 

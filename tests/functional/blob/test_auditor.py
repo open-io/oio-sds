@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -34,7 +34,7 @@ class TestBlobAuditor(BaseTestCase):
         self.blob_client = self.api.blob_client
 
         self.api.container_create(self.account, self.container)
-        _, chunks = self.api.container.content_prepare(
+        _, chunks = self.api.content.content_prepare(
             self.account, self.container, self.path, size=1
         )
         services = self.conscience.all_services("rawx")

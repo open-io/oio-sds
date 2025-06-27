@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -57,7 +57,7 @@ def _get_container_metadata_cache_key(account=None, reference=None, cid=None):
 
 @set_cache_perfdata("getcontainermeta")
 def get_cached_container_metadata(
-    account=None, reference=None, cid=None, cache=None, **kwargs
+    account=None, reference=None, cid=None, cache=None, **_kwargs
 ):
     """
     Get the container metadata from the cache (if there is one)
@@ -73,7 +73,7 @@ def get_cached_container_metadata(
 
 @set_cache_perfdata("setcontainermeta")
 def set_cached_container_metadata(
-    container_meta, account=None, reference=None, cid=None, cache=None, **kwargs
+    container_meta, account=None, reference=None, cid=None, cache=None, **_kwargs
 ):
     """
     Set the object metadata and location in the cache (if there is one)
@@ -92,7 +92,7 @@ def set_cached_container_metadata(
 
 @set_cache_perfdata("delcontainermeta")
 def del_cached_container_metadata(
-    account=None, reference=None, cid=None, cache=None, **kwargs
+    account=None, reference=None, cid=None, cache=None, **_kwargs
 ):
     """
     Delete the object metadata and location from the cache (if there is one)
@@ -127,7 +127,7 @@ def get_cached_object_metadata(
     properties=False,
     cache=None,
     force_master=False,
-    **kwargs,
+    **_kwargs,
 ):
     """
     Get the object metadata and location from the cache (if there is one)
@@ -171,7 +171,7 @@ def set_cached_object_metadata(
     version=None,
     properties=False,
     cache=None,
-    **kwargs,
+    **_kwargs,
 ):
     """
     Set the object metadata and location in the cache (if there is one)
@@ -206,13 +206,7 @@ def set_cached_object_metadata(
 
 @set_cache_perfdata("delobjmeta")
 def del_cached_object_metadata(
-    account=None,
-    reference=None,
-    path=None,
-    cid=None,
-    version=None,
-    cache=None,
-    **kwargs,
+    account=None, reference=None, path=None, cid=None, cache=None, **_kwargs
 ):
     """
     Delete the object metadata and location from the cache (if there is one)

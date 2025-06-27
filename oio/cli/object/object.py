@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -520,7 +520,7 @@ class SetObject(ObjectCommandMixin, Command):
             properties[TAGGING_KEY] = tags_xml
 
         if not properties and not new_hash:
-            raise Command("Nothing to do")
+            raise CommandError("Nothing to do")
 
         if properties:
             self.app.client_manager.storage.object_set_properties(
@@ -1095,7 +1095,7 @@ class PurgeObject(ObjectCommandMixin, Command):
         container = parsed_args.container
         cid = parsed_args.cid
         account = self.app.client_manager.account
-        self.app.client_manager.storage.container.content_purge(
+        self.app.client_manager.storage.content.content_purge(
             account,
             container,
             parsed_args.object,

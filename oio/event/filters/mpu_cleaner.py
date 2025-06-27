@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,7 +32,6 @@ from oio.common.exceptions import (
     ServiceBusy,
 )
 from oio.common.utils import request_id
-from oio.container.client import ContainerClient
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
 
@@ -49,7 +48,9 @@ class MpuPartCleaner(Filter):
 
     def __init__(self, *args, **kwargs):
         super(MpuPartCleaner, self).__init__(*args, **kwargs)
-        self.container_client = ContainerClient(self.conf, logger=self.logger)
+        self.api = self.app_env["api"]
+        self.container_client = self.api.container
+        self.content_client = self.api.content
 
     def init(self):
         self.object_deletion_concurrency = int_value(
@@ -80,7 +81,7 @@ class MpuPartCleaner(Filter):
             # Make sure manifest doesn't exist. Nominal path is "content_get_properties"
             # raises a NotFound because the manifest is deleted.
             # Then we can delete parts.
-            props = self.container_client.content_get_properties(
+            props = self.content_client.content_get_properties(
                 account=account,
                 reference=container,
                 path=path,
@@ -137,7 +138,7 @@ class MpuPartCleaner(Filter):
         """
         prefix = f"{path}/{upload_id}/"
 
-        headers, content_list = self.container_client.content_list(
+        headers, content_list = self.container_client.container_list_content(
             account=account,
             reference=part_container,
             limit=self.object_deletion_concurrency,
@@ -215,7 +216,7 @@ class MpuPartCleaner(Filter):
             return self.app(env, cb)
 
         try:
-            deleted = self.container_client.content_delete_many(
+            deleted = self.content_client.content_delete_many(
                 account=account,
                 reference=part_container,
                 paths=parts,

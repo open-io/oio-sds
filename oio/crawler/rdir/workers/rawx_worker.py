@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -154,7 +154,7 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
         content_id = value["content_id"]
         version = value["version"]
         try:
-            _, chunks = self.container_client.content_locate(
+            _, chunks = self.content_client.content_locate(
                 content=content_id,
                 cid=container_id,
                 version=version,

@@ -776,7 +776,7 @@ class _MetachunkWriter(object):
         reqid=None,
         perfdata=None,
         watchdog=None,
-        **kwargs,
+        **_kwargs,
     ):
         self.storage_method = storage_method
         self._quorum = quorum
@@ -888,7 +888,7 @@ class MetachunkLinker(_MetachunkWriter):
                 chunk_id = compute_chunk_id(
                     cid, path, vers, chunk_target["pos"], self.policy
                 )
-                resp, new_chunk_url = self.blob_client.chunk_link(
+                _resp, new_chunk_url = self.blob_client.chunk_link(
                     chunk_target["url"],
                     chunk_id,
                     self.fullpath,
@@ -999,17 +999,17 @@ class MetachunkPreparer(object):
     """Get metadata for a new object and continuously yield new metachunks."""
 
     def __init__(
-        self, container_client, account, container, obj_name, policy=None, **kwargs
+        self, content_client, account, container, obj_name, policy=None, **kwargs
     ):
         self.account = account
         self.container = container
         self.obj_name = obj_name
         self.policy = policy
-        self.container_client = container_client
+        self.content_client = content_client
         self.extra_kwargs = kwargs
 
         # TODO: optimize by asking more than one metachunk at a time
-        self.obj_meta, self.first_body = self.container_client.content_prepare(
+        self.obj_meta, self.first_body = self.content_client.content_prepare(
             account, container, obj_name, size=1, stgpol=policy, **kwargs
         )
         self.stg_method = STORAGE_METHODS.load(self.obj_meta["chunk_method"])
@@ -1040,7 +1040,7 @@ class MetachunkPreparer(object):
             # listening (he is uploading data). It seems a good idea to
             # postpone the deadline.
             set_deadline_from_read_timeout(self.extra_kwargs, force=True)
-            meta, next_body = self.container_client.content_prepare(
+            meta, next_body = self.content_client.content_prepare(
                 self.account,
                 self.container,
                 self.obj_name,
@@ -1070,7 +1070,7 @@ def make_iter_from_resp(resp):
     if resp.status == 200:
         content_length = int(resp.getheader("Content-Length"))
         return iter([(0, content_length - 1, content_length, resp.getheaders(), resp)])
-    content_type, params = parse_content_type(resp.getheader("Content-Type"))
+    content_type, _params = parse_content_type(resp.getheader("Content-Type"))
     if content_type != "multipart/byteranges":
         start, end, _ = parse_content_range(resp.getheader("Content-Range"))
         return iter([(start, end, end - start + 1, resp.getheaders(), resp)])

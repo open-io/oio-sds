@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2025 OVH SAS
+# Copyright (C) 2020-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,6 @@
 import json
 import time
 
-from oio.blob.client import BlobClient
 from oio.common import exceptions as exc
 from oio.common.decorators import ensure_request_id2
 from oio.common.exceptions import (
@@ -31,7 +30,6 @@ from oio.common.storage_functions import (
     _get_weighted_random_score,
 )
 from oio.common.storage_method import STORAGE_METHODS
-from oio.container.client import ContainerClient
 from oio.content.quality import ensure_better_chunk_qualities, pop_chunk_qualities
 from oio.event.evob import EventTypes
 
@@ -52,8 +50,9 @@ class Content(object):
         storage_method,
         account,
         container_name,
-        blob_client=None,
-        container_client=None,
+        blob_client,
+        container_client,
+        content_client,
         logger=None,
     ):
         self.conf = conf
@@ -63,10 +62,9 @@ class Content(object):
         self.chunks = ChunksHelper(chunks)
         self._storage_method = storage_method
         self.logger = logger or get_logger(self.conf)
-        self.blob_client = blob_client or BlobClient(conf, logger=self.logger)
-        self.container_client = container_client or ContainerClient(
-            self.conf, logger=self.logger
-        )
+        self.blob_client = blob_client
+        self.container_client = container_client
+        self.content_client = content_client
 
         # FIXME: all these may be properties
         self.content_id = self.metadata["id"]
@@ -170,7 +168,7 @@ class Content(object):
         bal = 0
         for attempt in range(max_attempts):
             try:
-                spare_resp = self.container_client.content_spare(
+                spare_resp = self.content_client.content_spare(
                     cid=self.container_id,
                     path=self.path,
                     version=self.version,
@@ -248,12 +246,12 @@ class Content(object):
                 self.logger.debug(
                     "Chunk %s deleted due to registration failure: %s", url, str(err)
                 )
-            except Exception as exc:
+            except Exception as err_rb:
                 self.logger.warning(
                     "Rollback failed to remove chunk %s after registration"
                     " was unsuccessful: %s",
                     url,
-                    str(exc),
+                    str(err_rb),
                 )
         raise err
 
@@ -325,7 +323,7 @@ class Content(object):
 
     def _create_object(self, **kwargs):
         data = {"chunks": self.chunks.raw(), "properties": self.properties}
-        self.container_client.content_create(
+        self.content_client.content_create(
             cid=self.container_id,
             path=self.path,
             content_id=self.content_id,
@@ -358,7 +356,7 @@ class Content(object):
         raise NotImplementedError()
 
     def delete(self, **kwargs):
-        self.container_client.content_delete(
+        self.content_client.content_delete(
             cid=self.container_id, path=self.path, **kwargs
         )
 

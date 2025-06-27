@@ -58,7 +58,7 @@ class LifecycleDeleteRestoreFilter(Filter):
 
         # TODO: restore ctime and mtime
         try:
-            self._api.container.content_create(
+            self._api.content.content_create(
                 account=get_account_from_event(event),
                 reference=event.url["bucket"],
                 path=event.url["path"],

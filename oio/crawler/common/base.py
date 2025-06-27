@@ -127,7 +127,7 @@ class ChunkSymlinkFilter(Filter):
         :raises exc.OrphanChunk: raised in case a orphan chunk is found
         """
         # Get all object chunks location
-        _, chunks = self.api.container.content_locate(
+        _, chunks = self.api.content.content_locate(
             content=chunk.meta["content_id"],
             cid=chunk.meta["container_id"],
             path=chunk.meta["content_path"],

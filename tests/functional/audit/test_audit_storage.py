@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@ from oio.common.fullpath import encode_fullpath
 from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, compute_chunk_id, get_hasher
 from oio.container.client import ContainerClient
+from oio.content.client import ContentClient
 from tests.utils import BaseTestCase, random_id, random_str
 
 
@@ -76,9 +77,17 @@ class TestBlobAuditorFunctional(BaseTestCase):
         self.rawx_id = "http://" + (rawx_uuid if rawx_uuid else rawx_addr)
 
         self.auditor = BlobAuditorWorker(self.conf, get_logger(None), None)
-        self.container_client = ContainerClient(self.conf)
+        self.container_client = ContainerClient(self.conf, logger=self.logger)
+        self.content_client = ContentClient(
+            self.conf,
+            logger=self.logger,
+            pool_manager=self.container_client.pool_manager,
+        )
         self.blob_client = BlobClient(
-            conf=self.conf, logger=self.logger, watchdog=self.watchdog
+            conf=self.conf,
+            logger=self.logger,
+            watchdog=self.watchdog,
+            pool_manager=self.container_client.pool_manager,
         )
 
         self.container_client.container_create(self.account, self.ref)
@@ -115,7 +124,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
         super(TestBlobAuditorFunctional, self).tearDown()
 
         try:
-            self.container_client.content_delete(
+            self.content_client.content_delete(
                 self.account, self.ref, self.content.path
             )
         except Exception:
@@ -138,7 +147,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             "hash": self.chunk.metachunk_hash,
             "size": self.chunk.metachunk_size,
         }
-        self.container_client.content_create(
+        self.content_client.content_create(
             self.account,
             self.ref,
             self.content.path,

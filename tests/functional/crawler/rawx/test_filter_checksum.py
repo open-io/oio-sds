@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -55,7 +55,7 @@ class TestRawxFilterChecksum(BaseTestCase):
         self.conf.update({"quarantine_mountpoint": False})
 
     def _prepare(self, container, path):
-        _, chunks = self.api.container.content_prepare(
+        _, chunks = self.api.content.content_prepare(
             self.account, container, path, size=1
         )
         return chunks
@@ -125,7 +125,7 @@ class TestRawxFilterChecksum(BaseTestCase):
         self.assertEqual(1, checksum.unrecoverable_content)
 
         # Check that there is nothing where the chunk should be located
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         _, new_chunk_path, _, _ = self._chunk_info(new_chunks[0])
@@ -164,7 +164,7 @@ class TestRawxFilterChecksum(BaseTestCase):
         self.assertEqual(1, checksum.recovered_chunk)
         self.assertEqual(0, checksum.errors)
         self.assertEqual(0, checksum.unrecoverable_content)
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         self.assertEqual(len(chunks), len(new_chunks))

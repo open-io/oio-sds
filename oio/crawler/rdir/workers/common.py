@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ from oio.common.easy_value import boolean_value, int_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
+from oio.content.client import ContentClient
 from oio.crawler.common.crawler import CrawlerWorker
 from oio.rdir.client import RdirClient
 
@@ -65,6 +66,11 @@ class RdirWorker(CrawlerWorker):
         )
         self.container_client = ContainerClient(
             self.conf, logger=self.logger, watchdog=watchdog
+        )
+        self.content_client = ContentClient(
+            self.conf,
+            logger=self.logger,
+            pool_manager=self.container_client.pool_manager,
         )
 
     def _can_send_report(self, now):

@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,6 +30,7 @@ from oio.common.storage_method import STORAGE_METHODS
 from oio.common.tool import Tool, ToolWorker
 from oio.common.utils import cid_from_name, request_id
 from oio.container.client import ContainerClient
+from oio.content.client import ContentClient
 
 
 class ContentRepairer(Tool):
@@ -129,6 +130,11 @@ class ContentRepairerWorker(ToolWorker):
             self.conf, logger=self.logger, watchdog=self.tool.watchdog
         )
         self.container_client = ContainerClient(self.conf, logger=self.logger)
+        self.content_client = ContentClient(
+            self.conf,
+            logger=self.logger,
+            pool_manager=self.container_client.pool_manager,
+        )
 
         self.read_all_available_sources = self.conf.get(
             "read_all_available_sources", False
@@ -409,7 +415,7 @@ class ContentRepairerWorker(ToolWorker):
                 f"(actual={namespace}, expected={self.tool.namespace})"
             )
 
-        obj_meta, chunks = self.container_client.content_locate(
+        obj_meta, chunks = self.content_client.content_locate(
             account=account,
             reference=container,
             path=obj_name,
@@ -450,7 +456,7 @@ class ContentRepairerWorker(ToolWorker):
         if exceptions:
             raise Exception(exceptions)
 
-        self.container_client.content_touch(
+        self.content_client.content_touch(
             account=account,
             reference=container,
             path=obj_name,

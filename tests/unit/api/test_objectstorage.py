@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -292,7 +292,7 @@ class ObjectStorageTest(unittest.TestCase):
             OBJECT_HEADERS["hash"]: content_hash,
             OBJECT_HEADERS["mime_type"]: content_type,
         }
-        api.container._direct_request = Mock(return_value=(resp, {"properties": {}}))
+        api.content._direct_request = Mock(return_value=(resp, {"properties": {}}))
         obj = api.object_show(self.account, self.container, name, **self.common_kwargs)
 
         uri = "%s/content/get_properties" % self.uri_base
@@ -300,9 +300,8 @@ class ObjectStorageTest(unittest.TestCase):
             "acct": self.account,
             "ref": self.container,
             "path": name,
-            "version": None,
         }
-        api.container._direct_request.assert_called_once_with(
+        api.content._direct_request.assert_called_once_with(
             "POST", uri, params=params, data=None, autocreate=True, **self.common_kwargs
         )
         self.assertIsNotNone(obj)
@@ -417,7 +416,7 @@ class ObjectStorageTest(unittest.TestCase):
         self.api._object_prepare = Mock(return_value=(obj_meta_in, None, None))
         self.api._object_upload = Mock(return_value=([], 0, None))
         resp = FakeApiResponse()
-        self.api.container._direct_request = Mock(return_value=(resp, None))
+        self.api.content._direct_request = Mock(return_value=(resp, None))
         name = "fake"
         props_cb = Mock(return_value=obj_meta_ext)
         _, _, _, obj_meta_out = self.api.object_create_ext(
@@ -464,7 +463,7 @@ class ObjectStorageTest(unittest.TestCase):
         value = random_str(32)
         meta = {key: value}
         resp = FakeApiResponse()
-        api.container._direct_request = Mock(return_value=(resp, None))
+        api.content._direct_request = Mock(return_value=(resp, None))
         api.object_set_properties(
             self.account, self.container, name, meta, **self.common_kwargs
         )
@@ -473,13 +472,13 @@ class ObjectStorageTest(unittest.TestCase):
         data = json.dumps(data)
         uri = "%s/content/set_properties" % self.uri_base
         params = {"acct": self.account, "ref": self.container, "path": name}
-        api.container._direct_request.assert_called_once_with(
+        api.content._direct_request.assert_called_once_with(
             "POST", uri, data=data, params=params, autocreate=True, **self.common_kwargs
         )
 
     def test_object_del_properties(self):
         resp = FakeApiResponse()
-        self.api.container._direct_request = Mock(return_value=(resp, None))
+        self.api.content._direct_request = Mock(return_value=(resp, None))
         self.api.object_del_properties(
             self.account, self.container, "a", ["a"], version="17", **self.common_kwargs
         )
@@ -490,7 +489,7 @@ class ObjectStorageTest(unittest.TestCase):
             "path": "a",
             "version": "17",
         }
-        self.api.container._direct_request.assert_called_once_with(
+        self.api.content._direct_request.assert_called_once_with(
             "POST",
             uri,
             data=json.dumps(["a"]),
@@ -504,22 +503,20 @@ class ObjectStorageTest(unittest.TestCase):
         name = random_str(32)
         resp_body = [chunk("AAAA", "0"), chunk("BBBB", "1"), chunk("CCCC", "2")]
         resp = FakeApiResponse()
-        api.container._direct_request = Mock(return_value=(resp, resp_body))
+        api.content._direct_request = Mock(return_value=(resp, resp_body))
 
         api.object_delete(self.account, self.container, name, **self.common_kwargs)
 
         uri = "%s/content/delete" % self.uri_base
         params = {"acct": self.account, "ref": self.container, "path": name}
-        api.container._direct_request.assert_called_once_with(
+        api.content._direct_request.assert_called_once_with(
             "POST", uri, params=params, data="{}", autocreate=True, **self.common_kwargs
         )
 
     def test_object_delete_not_found(self):
         api = self.api
         name = random_str(32)
-        api.container._direct_request = Mock(
-            side_effect=exceptions.NotFound("No object")
-        )
+        api.content._direct_request = Mock(side_effect=exceptions.NotFound("No object"))
         self.assertRaises(
             exceptions.NoSuchObject,
             api.object_delete,
@@ -529,7 +526,7 @@ class ObjectStorageTest(unittest.TestCase):
         )
 
     def test_object_touch(self):
-        self.api.container._direct_request = Mock()
+        self.api.content._direct_request = Mock()
         self.api.object_touch(
             self.account, self.container, "obj", version="31", **self.common_kwargs
         )
@@ -540,7 +537,7 @@ class ObjectStorageTest(unittest.TestCase):
             "path": "obj",
             "version": "31",
         }
-        self.api.container._direct_request.assert_called_once_with(
+        self.api.content._direct_request.assert_called_once_with(
             "POST", uri, params=params, autocreate=True, **self.common_kwargs
         )
 

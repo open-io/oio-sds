@@ -349,7 +349,7 @@ class TestSharding(BaseTestCase):
             self._check_shards_objectlock_properties(resp)
 
             # check object names in each shard
-            _, listing = self.storage.container.content_list(cid=shard["cid"])
+            _, listing = self.storage.container.container_list_content(cid=shard["cid"])
 
             list_objects = list()
             for obj in listing["objects"]:

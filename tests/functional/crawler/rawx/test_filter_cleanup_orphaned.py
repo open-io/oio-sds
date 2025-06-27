@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -74,7 +74,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
         return super().tearDown()
 
     def _prepare(self, container, path):
-        _, chunks = self.api.container.content_prepare(
+        _, chunks = self.api.content.content_prepare(
             self.account, container, path, size=1
         )
         return chunks
@@ -474,7 +474,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             self.assertEqual(cleanuporphaned.false_orphaned_chunks, 1)
             self.assertEqual(cleanuporphaned.created_non_optimal_symlinks, 1)
 
-        _, new_chunks = self.api.container.content_locate(
+        _, new_chunks = self.api.content.content_locate(
             self.account, container, object_name
         )
         # Check if there is no more misplaced chunk

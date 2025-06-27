@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,7 @@ from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import get_hasher, is_chunk_id_valid, paths_gen, ratelimit
-from oio.container.client import ContainerClient
+from oio.content.client import ContentClient
 
 SLEEP_TIME = 30
 
@@ -50,7 +50,7 @@ class BlobAuditorWorker(object):
         self.report_interval = int_value(conf.get("report_interval"), 3600)
         self.max_chunks_per_second = int_value(conf.get("chunks_per_second"), 30)
         self.max_bytes_per_second = int_value(conf.get("bytes_per_second"), 10000000)
-        self.container_client = ContainerClient(conf, logger=self.logger)
+        self.content_client = ContentClient(conf, logger=self.logger)
 
     def audit_pass(self):
         self.namespace, self.address = check_volume(self.volume)
@@ -194,7 +194,7 @@ class BlobAuditorWorker(object):
         try:
             container_id = meta["container_id"]
             content_id = meta["content_id"]
-            _obj_meta, data = self.container_client.content_locate(
+            _obj_meta, data = self.content_client.content_locate(
                 cid=container_id, content=content_id, properties=False
             )
 
@@ -233,7 +233,7 @@ class BlobAuditor(Daemon):
     orphaned chunk.
     """
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, **_kwargs):
         super(BlobAuditor, self).__init__(conf)
         self.logger = get_logger(conf)
         volume = conf.get("volume")
@@ -249,7 +249,7 @@ class BlobAuditor(Daemon):
                 worker = BlobAuditorWorker(self.conf, self.logger, self.volume)
                 worker.audit_pass()
             except Exception as e:
-                self.logger.exception("ERROR in audit: %s" % e)
+                self.logger.exception("ERROR in audit: %s", e)
             if kwargs.get("daemon"):
                 work = True
                 self._sleep()

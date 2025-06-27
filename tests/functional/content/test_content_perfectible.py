@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -267,7 +267,7 @@ class TestPerfectibleContent(BaseTestCase):
         self._aggregate_rawx_by_place()
         self.assertRaises(
             ServiceBusy,
-            self.api.container.content_prepare,
+            self.api.content.content_prepare,
             self.account,
             "whatever",
             "whatever",
@@ -282,7 +282,7 @@ class TestPerfectibleContent(BaseTestCase):
         detect this case thanks to chunk metadata.
         """
         self._aggregate_rawx_by_place()
-        meta, _chunks = self.api.container.content_prepare(
+        meta, _chunks = self.api.content.content_prepare(
             self.account, "whatever", "whatever", size=1, stgpol="JUSTENOUGH"
         )
         soft_margins = []

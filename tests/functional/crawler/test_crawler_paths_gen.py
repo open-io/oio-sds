@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -57,7 +57,7 @@ class TestCrawlerPathGen(BaseTestCase):
         self.conf.update({"quarantine_mountpoint": False})
 
     def _prepare(self, container, path):
-        _, chunks = self.api.container.content_prepare(
+        _, chunks = self.api.content.content_prepare(
             self.account, container, path, size=1
         )
         return chunks

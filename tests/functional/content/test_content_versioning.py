@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2025 OVH SAS
+# Copyright (C) 2020-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -144,7 +144,7 @@ class TestContentVersioning(BaseTestCase):
         oldest_version = min(objects, key=lambda x: x["version"])
 
         # use the maxvers of the container configuration
-        self.api.container.content_purge(self.account, self.container, "versioned")
+        self.api.content.content_purge(self.account, self.container, "versioned")
         listing = self.api.object_list(self.account, self.container, versions=True)
         objects = listing["objects"]
         self.assertEqual(3, len(objects))
@@ -152,7 +152,7 @@ class TestContentVersioning(BaseTestCase):
         oldest_version = min(objects, key=lambda x: x["version"])
 
         # use the maxvers of the request
-        self.api.container.content_purge(
+        self.api.content.content_purge(
             self.account, self.container, "versioned", maxvers=1
         )
         listing = self.api.object_list(self.account, self.container, versions=True)
@@ -173,7 +173,7 @@ class TestContentVersioning(BaseTestCase):
         self.assertEqual(5, len(objects))
 
         # use the maxvers of the container configuration
-        self.api.container.content_purge(self.account, self.container, "versioned")
+        self.api.content.content_purge(self.account, self.container, "versioned")
         listing = self.api.object_list(self.account, self.container, versions=True)
         objects = listing["objects"]
         self.assertEqual(5, len(objects))
@@ -308,7 +308,7 @@ class TestContentVersioning(BaseTestCase):
         )
         check_num_objects(6)
 
-        self.api.container.content_purge(self.account, self.container, "versioned")
+        self.api.content.content_purge(self.account, self.container, "versioned")
         self.assertRaises(
             NoSuchObject,
             self.api.object_locate,
@@ -322,7 +322,7 @@ class TestContentVersioning(BaseTestCase):
         self.api.container_set_properties(self.account, self.container, system=system)
         time.sleep(2)
 
-        self.api.container.content_purge(self.account, self.container, "versioned")
+        self.api.content.content_purge(self.account, self.container, "versioned")
         check_num_objects(0)
 
     def test_list_objects(self):

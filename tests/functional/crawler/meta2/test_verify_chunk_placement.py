@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,7 +29,6 @@ from oio.crawler.meta2.filters.verify_chunk_placement import (
     VerifyChunkPlacement,
 )
 from oio.crawler.meta2.meta2db import Meta2DB
-from oio.directory.admin import AdminClient
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
 
@@ -71,15 +70,18 @@ class TestVerifyChunkPlacement(BaseTestCase):
         super(TestVerifyChunkPlacement, self).setUp()
         self.app_env = dict()
         self.api = self.app_env["api"] = self.storage
-        self.admin_client = AdminClient(
-            self.conf, logger=self.logger, pool_manager=self.api.container.pool_manager
-        )
+        self.admin_client = self.api.admin
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
         self.app_env["stop_requested"] = Event()
         self.app = App(self.app_env)
         self.conscience_client = self.api.conscience
         self.content_factory = ContentFactory(
-            self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
+            self.conf,
+            logger=self.logger,
+            watchdog=self.app_env["watchdog"],
+            blob_client=self.api.blob_client,
+            content_client=self.api.content,
+            container_client=self.api.container,
         )
         self.reqid = request_id()
         self.rawx_srv_list = self.conscience_client.all_services(
@@ -284,7 +286,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
             self.assertEqual(upper[1:], test_shards[index]["upper"])
 
             # check object names in each shard
-            _, listing = self.api.container.content_list(cid=shard["cid"])
+            _, listing = self.api.container.container_list_content(cid=shard["cid"])
 
             list_objects = list()
             for obj in listing["objects"]:

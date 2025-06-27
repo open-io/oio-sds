@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -46,6 +46,7 @@ class TestContentReaperFilter(BaseTestCase):
     def setUp(self):
         super().setUp()
         _App.app_env["watchdog"] = self.watchdog
+        _App.app_env["api"] = self.storage
 
     def _create_event(self):
         event = {}
@@ -136,6 +137,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self.container_id = syst["sys.name"].split(".", 1)[0]
         self.conf["queue_url"] = self.ns_conf["event-agent"]
         self.conf["topic"] = BlobRebuilder.DEFAULT_WORKER_TUBE
+        _App.app_env["api"] = self.storage
         self.notify_filter = NotifyFilter(
             app=_App, conf=self.conf, endpoint=self.ns_conf["event-agent"]
         )
@@ -530,6 +532,7 @@ class TestNotifyFilter(BaseTestCase):
         self.conf["queue_url"] = self.ns_conf["event-agent"]
         self.conf["topic"] = BlobRebuilder.DEFAULT_WORKER_TUBE
         self.conf["exclude"] = []
+        _App.app_env["api"] = self.storage
         self.notify_filter = NotifyFilter(
             app=_App, conf=self.conf, endpoint=self.conf["queue_url"]
         )
@@ -578,6 +581,7 @@ class TestLifecycleAccessLoggerFilter(BaseTestCase):
         self.conf["log_prefix"] = "lifecycle_access-"
         self.conf["redis_host"] = "127.0.0.1:4000"
         self.queue_url = self.ns_conf["event-agent"].replace("kafka://", "")
+        _App.app_env["api"] = self.storage
         self.filter = LifecycleActions(app=_App, conf=self.conf)
 
     def test_should_log(self):

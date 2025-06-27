@@ -138,19 +138,6 @@ class ObjectStorageApi(object):
 
         from oio.container.client import ContainerClient
 
-        self.container = ContainerClient(conf, logger=self.logger, **kwargs)
-
-        self._init_kwargs = kwargs
-        self._acct_kwargs = kwargs.copy()
-        self._xcute_kwargs = kwargs.copy()
-        if "pool_manager" not in self._init_kwargs:
-            self._init_kwargs["pool_manager"] = self.container.pool_manager
-        # In AccountClient, "endpoint" is the account service, not the proxy
-        self._acct_kwargs["proxy_endpoint"] = self._acct_kwargs.pop("endpoint", None)
-        self._acct_kwargs["endpoint"] = self._acct_kwargs.pop("account_endpoint", None)
-        # In XcuteClient, "endpoint" is the xcute service, not the proxy
-        self._xcute_kwargs["proxy_endpoint"] = self._xcute_kwargs.pop("endpoint", None)
-        self._xcute_kwargs["endpoint"] = self._xcute_kwargs.pop("xcute_endpoint", None)
         self._account_client = None
         self._account_metrics_client = None
         self._bucket_client = None
@@ -164,6 +151,23 @@ class ObjectStorageApi(object):
         self._admin_client = None
         self._xcute_client = None
         self._xcute_customer_client = None
+        self._content_client = None
+
+        self._init_kwargs = kwargs
+        self._acct_kwargs = kwargs.copy()
+        self._xcute_kwargs = kwargs.copy()
+
+        self.container = ContainerClient(
+            conf, content_client=self.content, logger=self.logger, **kwargs
+        )
+        if "pool_manager" not in self._init_kwargs:
+            self._init_kwargs["pool_manager"] = self.container.pool_manager
+        # In AccountClient, "endpoint" is the account service, not the proxy
+        self._acct_kwargs["proxy_endpoint"] = self._acct_kwargs.pop("endpoint", None)
+        self._acct_kwargs["endpoint"] = self._acct_kwargs.pop("account_endpoint", None)
+        # In XcuteClient, "endpoint" is the xcute service, not the proxy
+        self._xcute_kwargs["proxy_endpoint"] = self._xcute_kwargs.pop("endpoint", None)
+        self._xcute_kwargs["endpoint"] = self._xcute_kwargs.pop("xcute_endpoint", None)
 
     @property
     def account(self):
@@ -374,6 +378,24 @@ class ObjectStorageApi(object):
                 **self._xcute_kwargs,
             )
         return self._xcute_customer_client
+
+    @property
+    def content(self):
+        """ "
+        Get an instance of ContentClient.
+
+        :rtype: `oio.content.client.ContentClient`
+        """
+        if self._content_client is None:
+            from oio.content.client import ContentClient
+
+            self._content_client = ContentClient(
+                {"namespace": self.namespace},
+                logger=self.logger,
+                conscience_client=self.conscience,
+                **self._init_kwargs,
+            )
+        return self._content_client
 
     # FIXME(FVE): this method should not exist
     # This high-level API should use lower-level APIs,
@@ -1231,7 +1253,7 @@ class ObjectStorageApi(object):
         :param obj: name of the object to touch
         :type obj: `str`
         """
-        self.container.content_touch(account, container, obj, version=version, **kwargs)
+        self.content.content_touch(account, container, obj, version=version, **kwargs)
 
     @patch_kwargs
     @ensure_headers
@@ -1246,7 +1268,7 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param obj: name of the object to drain
         """
-        self.container.content_drain(account, container, obj, version=version, **kwargs)
+        self.content.content_drain(account, container, obj, version=version, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
@@ -1283,7 +1305,7 @@ class ObjectStorageApi(object):
             - and the version id which has been deleted
               or the version id of the delete marker created
         """
-        return self.container.content_delete(
+        return self.content.content_delete(
             account,
             container,
             obj,
@@ -1306,7 +1328,7 @@ class ObjectStorageApi(object):
             a boolean telling if the object has been successfully deleted
         :rtype: `list` of `tuple`
         """
-        return self.container.content_delete_many(account, container, objs, **kwargs)
+        return self.content.content_delete_many(account, container, objs, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
@@ -1361,7 +1383,7 @@ class ObjectStorageApi(object):
                 content_id=meta["id"],
             )
 
-        return self.container.content_truncate(
+        return self.content.content_truncate(
             account, container, obj, version=version, size=size, **kwargs
         )
 
@@ -1406,7 +1428,7 @@ class ObjectStorageApi(object):
            * 'next_marker': a `str` to be used as `marker` to get the next
             page of results (in case the listing was truncated)
         """
-        hdrs, resp_body = self.container.content_list(
+        hdrs, resp_body = self.container.container_list_content(
             account,
             container,
             limit=limit,
@@ -1449,7 +1471,7 @@ class ObjectStorageApi(object):
                     and marker == obj["name"]
                 ):
                     # FIXME(ADU): We could determine this in meta2 service
-                    _, sub = self.container.content_list(
+                    _, sub = self.container.container_list_content(
                         account,
                         container,
                         prefix=obj["name"],
@@ -1516,7 +1538,7 @@ class ObjectStorageApi(object):
         :returns: a tuple with object metadata `dict` as first element
             and chunk `list` as second element
         """
-        obj_meta, chunks = self.container.content_locate(
+        obj_meta, chunks = self.content.content_locate(
             account, container, obj, properties=properties, version=version, **kwargs
         )
 
@@ -1605,7 +1627,7 @@ class ObjectStorageApi(object):
                 data["properties"] = {}
 
         try:
-            self.container.content_create(
+            self.content.content_create(
                 link_account,
                 link_container,
                 link_obj,
@@ -1768,7 +1790,6 @@ class ObjectStorageApi(object):
                     account=account,
                     reference=container,
                     path=obj,
-                    version=version,
                     **kwargs,
                 )
                 if kwargs.get("force_master"):
@@ -1832,11 +1853,7 @@ class ObjectStorageApi(object):
 
                 # Clear the cache for the next attempts (if there is one).
                 del_cached_object_metadata(
-                    account=account,
-                    reference=container,
-                    path=obj,
-                    version=version,
-                    **kwargs,
+                    account=account, reference=container, path=obj, **kwargs
                 )
                 # This exception does not occur on the first block, it was
                 # checked before. So the first block of data was already sent
@@ -1874,7 +1891,7 @@ class ObjectStorageApi(object):
              'mime_type': 'application/octet-stream',
              'name': 'Makefile'}
         """
-        return self.container.content_get_properties(account, container, obj, **kwargs)
+        return self.content.content_get_properties(account, container, obj, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
@@ -1892,7 +1909,7 @@ class ObjectStorageApi(object):
         warnings.warn(
             "You'd better use object_get_properties()", DeprecationWarning, stacklevel=6
         )
-        return self.container.content_get_properties(
+        return self.content.content_get_properties(
             account, container, obj, version=version, **kwargs
         )
 
@@ -1911,7 +1928,7 @@ class ObjectStorageApi(object):
         :param obj: name of the object to query
         :param properties: dictionary of properties
         """
-        return self.container.content_set_properties(
+        return self.content.content_set_properties(
             account,
             container,
             obj,
@@ -1935,7 +1952,7 @@ class ObjectStorageApi(object):
         :type properties: `list`
         :returns: True if the property has been deleted (or was missing)
         """
-        return self.container.content_del_properties(
+        return self.content.content_del_properties(
             account, container, obj, properties=properties, version=version, **kwargs
         )
 
@@ -1952,7 +1969,7 @@ class ObjectStorageApi(object):
         :param new_hash: new hash to use for the object
         :type new_hash: `str`
         """
-        props = self.container.content_get_properties(
+        props = self.content.content_get_properties(
             account, container, obj, version=version, **kwargs
         )
         old = {
@@ -2006,7 +2023,7 @@ class ObjectStorageApi(object):
     ):
         """Call content/prepare, initialize chunk uploaders."""
         chunk_prep = MetachunkPreparer(
-            self.container, account, container, obj_name, policy=policy, **kwargs
+            self.content, account, container, obj_name, policy=policy, **kwargs
         )
         obj_meta = chunk_prep.obj_meta
         obj_meta.update(sysmeta)
@@ -2181,7 +2198,7 @@ class ObjectStorageApi(object):
         }
         try:
             # FIXME: we may just pass **obj_meta
-            self.container.content_create(
+            self.content.content_create(
                 account,
                 container,
                 obj_name,
@@ -2422,7 +2439,7 @@ class ObjectStorageApi(object):
         :type policy: `str`
         :param version: version of the object to transition
         """
-        return self.container.content_request_transition(
+        return self.content.content_request_transition(
             account=account,
             reference=container,
             path=obj,

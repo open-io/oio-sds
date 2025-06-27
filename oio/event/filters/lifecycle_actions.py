@@ -43,7 +43,6 @@ from oio.common.utils import (
     read_storage_mappings,
     request_id,
 )
-from oio.container.client import ContainerClient
 from oio.event.evob import (
     Event,
     EventError,
@@ -176,18 +175,22 @@ class LifecycleActions(Filter):
     )
 
     def __init__(self, app, conf, logger=None):
+        self.api = None
         self.retry_delay = None
         self.limit_listing = None
         self.container_client = None
+        self.content_client = None
         self.metrics = None
         self.s3_access_logger = None
         self.s3_access_requester = None
         super().__init__(app, conf, logger=logger)
 
     def init(self):
+        self.api = self.app_env["api"]
         self.retry_delay = get_retry_delay(self.conf)
         self.limit_listing = int_value(self.conf.get("limit_listing"), 100)
-        self.container_client = ContainerClient(self.conf, logger=self.logger)
+        self.container_client = self.api.container
+        self.content_client = self.api.content
         self.metrics = LifecycleMetricTracker(self.conf)
         self.s3_access_logger = S3AccessLogger(self.conf)
         self.s3_access_requester = self.conf.get(
@@ -211,7 +214,7 @@ class LifecycleActions(Filter):
         version = None if add_delete_marker else context.version
         if add_delete_marker:
             # Get last version info
-            obj_meta = self.container_client.content_get_properties(
+            obj_meta = self.content_client.content_get_properties(
                 account=context.account,
                 reference=context.container,
                 path=context.path,
@@ -224,7 +227,7 @@ class LifecycleActions(Filter):
             if obj_meta["version"] != str(context.version):
                 raise RecentVersionExists()
 
-        self.container_client.content_delete(
+        self.content_client.content_delete(
             context.account,
             context.container,
             context.path,
@@ -261,7 +264,7 @@ class LifecycleActions(Filter):
         skip = target_storage_class in self.storage_classes_skip_move.get(
             current_storage_class, []
         )
-        self.container_client.content_request_transition(
+        self.content_client.content_request_transition(
             account=context.account,
             reference=context.container,
             path=context.path,
@@ -274,7 +277,7 @@ class LifecycleActions(Filter):
     def _process_abort_mpu(self, context: LifecycleActionContext):
         marker = None
         while True:
-            headers, content_list = self.container_client.content_list(
+            headers, content_list = self.container_client.container_list_content(
                 account=context.account,
                 reference=context.container,
                 limit=self.limit_listing,
@@ -295,7 +298,7 @@ class LifecycleActions(Filter):
                     continue
             if not paths:
                 break
-            self.container_client.content_delete_many(
+            self.content_client.content_delete_many(
                 account=context.account,
                 reference=context.container,
                 paths=paths,
@@ -305,7 +308,7 @@ class LifecycleActions(Filter):
             marker = headers.get("x-oio-list-marker")
             if not truncated:
                 break
-        self.container_client.content_delete(
+        self.content_client.content_delete(
             context.account,
             context.container,
             context.path,
@@ -319,7 +322,7 @@ class LifecycleActions(Filter):
 
         marker = None
         while True:
-            headers, content_list = self.container_client.content_list(
+            headers, content_list = self.container_client.container_list_content(
                 account=context.account,
                 reference=segment_name,
                 limit=self.limit_listing,
@@ -427,7 +430,7 @@ class LifecycleActions(Filter):
         action_type = None
         try:
             # Check if given object version still exists
-            obj_meta = self.container_client.content_get_properties(
+            obj_meta = self.content_client.content_get_properties(
                 account=context.account,
                 reference=context.container,
                 path=context.path,
@@ -545,7 +548,7 @@ class LifecycleActions(Filter):
         elif action in ("AbortIncompleteMultipartUpload",):
             action = LifecycleAction.ABORT_MPU
         else:
-            raise ValueError("Unsopported action  %s for stats ", action)
+            raise ValueError(f"Unsupported action {action} for stats ")
         self._metrics.increment_counter(
             run_id,
             account,

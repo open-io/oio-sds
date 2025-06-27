@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,77 +14,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
-import warnings
 from functools import wraps
-from urllib.parse import unquote
+import warnings
 
 from oio.common import exceptions
 from oio.common.cache import (
     del_cached_container_metadata,
-    del_cached_object_metadata,
     get_cached_container_metadata,
-    get_cached_object_metadata,
     set_cached_container_metadata,
-    set_cached_object_metadata,
 )
 from oio.common.client import ProxyClient
-from oio.common.constants import (
-    DELETEMARKER_HEADER,
-    HEADER_PREFIX,
-    SHARD_HEXID_HEADER,
-    VERSIONID_HEADER,
-)
-from oio.common.decorators import ensure_headers
+from oio.content.client import ContentClient
 from oio.common.easy_value import boolean_value
-from oio.common.exceptions import OioNetworkException
-from oio.common.green import eventlet
 from oio.common.json import json
-from oio.conscience.client import ConscienceClient
-
-CONTENT_HEADER_PREFIX = "x-oio-content-meta-"
-SYSMETA_KEYS = (
-    "chunk-method",
-    "ctime",
-    "mtime",
-    "deleted",
-    "hash",
-    "hash-method",
-    "id",
-    "length",
-    "mime-type",
-    "name",
-    "policy",
-    "target-policy",
-    "size",
-    "version",
-)
-
-
-def extract_content_headers_meta(headers):
-    resp_headers = {"properties": {}}
-    for key in headers:
-        if key.lower().startswith(CONTENT_HEADER_PREFIX):
-            short_key = key[len(CONTENT_HEADER_PREFIX) :]
-            # FIXME(FVE): this will fail when someone creates a property with
-            # same name as one of our system metadata.
-            # content_prepare() and content_get_properties() are safe but
-            # content_locate() protocol has to send properties in the body
-            # instead of the response headers.
-            if short_key.startswith("x-") or short_key not in SYSMETA_KEYS:
-                resp_headers["properties"][short_key] = unquote(headers[key])
-            else:
-                short_key = short_key.replace("-", "_")
-                resp_headers[short_key] = unquote(headers[key])
-        # Extract other headers which are not content metadata
-        # but deserve to be propagated.
-        if key.lower() == SHARD_HEXID_HEADER.lower():
-            short_key = key[len(HEADER_PREFIX) :].lower().replace("-", "_")
-            resp_headers[short_key] = unquote(headers[key])
-    chunk_size = headers.get("x-oio-ns-chunk-size")
-    if chunk_size:
-        resp_headers["chunk_size"] = int(chunk_size)
-    return resp_headers
 
 
 def extract_reference_params(func):
@@ -127,19 +69,19 @@ class ContainerClient(ProxyClient):
     Intermediate level class to manage containers.
     """
 
-    def __init__(self, conf, refresh_rawx_scores_delay=2.0, **kwargs):
+    def __init__(self, conf, content_client=None, **kwargs):
         super(ContainerClient, self).__init__(
             conf, request_prefix="/container", **kwargs
         )
+        self._content_client = content_client
 
-        # to refresh the rawx scores from cache
-        kwargs.pop("pool_manager", None)
-        self.conscience_client = ConscienceClient(
-            self.conf, pool_manager=self.pool_manager, **kwargs
-        )
-        self.rawx_scores = {}
-        self._refresh_rawx_scores_delay = refresh_rawx_scores_delay
-        self._last_refresh_rawx_scores = 0.0
+    @property
+    def _content(self):
+        if not self._content_client:
+            self._content_client = ContentClient(
+                self.conf, logger=self.logger, pool_manager=self.pool_manager
+            )
+        return self._content_client
 
     def _make_uri(self, target):
         """
@@ -165,12 +107,15 @@ class ContainerClient(ProxyClient):
         bypass_governance=None,
         dryrun=None,
         slo_manifest=None,
-        **kwargs,
+        params=None,
+        **_kwargs,
     ):
+        params = {**params} if params else {}
         if cid:
-            params = {"cid": cid}
+            params["cid"] = cid
         else:
-            params = {"acct": account, "ref": reference}
+            params["acct"] = account
+            params["ref"] = reference
         if path:
             params.update({"path": path})
         if content:
@@ -184,73 +129,6 @@ class ContainerClient(ProxyClient):
         if slo_manifest:
             params.update({"slo_manifest": slo_manifest})
         return params
-
-    def _get_rawx_scores(self):
-        rawx_services = self.conscience_client.all_services("rawx")
-        rawx_scores = dict()
-        for rawx_service in rawx_services:
-            # The score is only used to locate chunks (read)
-            score = rawx_service.get("scores", {}).get(
-                "score.get", rawx_service["score"]
-            )
-            if not rawx_service.get("tags", {}).get("tag.up"):
-                # The oioproxy service assigns a score of -1 on the chunk location
-                # where the rawx service is down
-                score = -1
-            rawx_scores[rawx_service["id"]] = score
-        return rawx_scores
-
-    def __refresh_rawx_scores(self, is_async=False):
-        try:
-            self.rawx_scores = self._get_rawx_scores()
-        except OioNetworkException as exc:
-            self.logger.warn("Failed to refresh rawx service scores: %s", exc)
-            if is_async:
-                # The refresh time has already updated,
-                # force refresh scores next time
-                self._last_refresh_rawx_scores = 0.0
-        except Exception:
-            self.logger.exception("Failed to refresh rawx service scores")
-            if is_async:
-                # The refresh time has already updated,
-                # force refresh scores next time
-                self._last_refresh_rawx_scores = 0.0
-
-    def _refresh_rawx_scores(self, now=None, **kwargs):
-        """Refresh rawx service scores."""
-        if not self.rawx_scores and self._last_refresh_rawx_scores == 0.0:
-            # It's the first request, wait the response
-            self.__refresh_rawx_scores()
-        else:
-            # Refresh asynchronously so as not to slow down the current request
-            eventlet.spawn_n(self.__refresh_rawx_scores, is_async=True)
-        # Always update the refresh time to avoid multiple requests
-        # while waiting for the response
-        if not now:
-            now = time.time()
-        self._last_refresh_rawx_scores = now
-
-    def _maybe_refresh_rawx_scores(self, **kwargs):
-        """Refresh rawx service scores if delay has been reached."""
-        if self._refresh_rawx_scores_delay >= 0.0 or not self.rawx_scores:
-            now = time.time()
-            if now - self._last_refresh_rawx_scores > self._refresh_rawx_scores_delay:
-                self._refresh_rawx_scores(now, **kwargs)
-
-    def _add_replication_info(self, data, **kwargs):
-        """Add replication destinations field to data structure."""
-        if data is None:
-            data = {}
-        dests = kwargs.get("replication_destinations")
-        if dests:
-            data["replication_destinations"] = dests
-        replication_replicator_id = kwargs.get("replication_replicator_id")
-        if replication_replicator_id:
-            data["replication_replicator_id"] = replication_replicator_id
-        replication_role_project_id = kwargs.get("replication_role_project_id")
-        if replication_role_project_id:
-            data["replication_role_project_id"] = replication_role_project_id
-        return data
 
     def container_create(
         self, account, reference, properties=None, system=None, region=None, **kwargs
@@ -273,7 +151,7 @@ class ContainerClient(ProxyClient):
         :returns: True if the container has been created,
                   False if it already exists
         """
-        params = self._make_params(account, reference)
+        params = self._make_params(account=account, reference=reference)
         data = json.dumps({"properties": properties or {}, "system": system or {}})
         resp, body = self._request(
             "POST", "/create", params=params, data=data, region=region, **kwargs
@@ -304,7 +182,7 @@ class ContainerClient(ProxyClient):
         """
         results = list()
         try:
-            params = self._make_params(account)
+            params = self._make_params(account=account)
             unformatted_data = list()
             for container in containers:
                 unformatted_data.append(
@@ -363,7 +241,7 @@ class ContainerClient(ProxyClient):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         if force:
             params["force"] = True
 
@@ -394,7 +272,7 @@ class ContainerClient(ProxyClient):
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         if limit:
             params.update({"limit": limit})
 
@@ -426,7 +304,7 @@ class ContainerClient(ProxyClient):
             user properties.
         :deprecated: use `container_get_properties` instead
         """
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         _resp, body = self._request("GET", "/show", params=params, **kwargs)
         return body
 
@@ -457,7 +335,7 @@ class ContainerClient(ProxyClient):
         :param dst_reference: name of the snapshot
         :type dst_reference: `str`
         """
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         data = json.dumps({"account": dst_account, "container": dst_reference})
         resp, _ = self._request("POST", "/snapshot", params=params, data=data, **kwargs)
         return resp
@@ -474,7 +352,7 @@ class ContainerClient(ProxyClient):
             and reference
         """
         uri = self._make_uri("admin/enable")
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         params.update({"type": "meta2"})
 
         del_cached_container_metadata(
@@ -496,7 +374,7 @@ class ContainerClient(ProxyClient):
             and reference
         """
         uri = self._make_uri("admin/freeze")
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         params.update({"type": "meta2"})
 
         del_cached_container_metadata(
@@ -566,7 +444,7 @@ class ContainerClient(ProxyClient):
         propagate_to_shards=False,
         **kwargs,
     ):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         if clear:
             params["flush"] = 1
         if propagate_to_shards:
@@ -583,9 +461,11 @@ class ContainerClient(ProxyClient):
         return body
 
     def container_del_properties(
-        self, account=None, reference=None, properties=[], cid=None, **kwargs
+        self, account=None, reference=None, properties=None, cid=None, **kwargs
     ):
-        params = self._make_params(account, reference, cid=cid)
+        if properties is None:
+            properties = []
+        params = self._make_params(account=account, reference=reference, cid=cid)
         data = json.dumps(properties)
 
         del_cached_container_metadata(
@@ -600,19 +480,19 @@ class ContainerClient(ProxyClient):
     def container_touch(
         self, account=None, reference=None, cid=None, recompute=False, **kwargs
     ):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         if recompute:
             params["recompute"] = True
         self._request("POST", "/touch", params=params, **kwargs)
 
     def container_dedup(self, account=None, reference=None, cid=None, **kwargs):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         self._request("POST", "/dedup", params=params, **kwargs)
 
     def container_purge(
         self, account=None, reference=None, cid=None, maxvers=None, **kwargs
     ):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         if maxvers is not None:
             params["maxvers"] = maxvers
         self._request("POST", "/purge", params=params, **kwargs)
@@ -620,7 +500,9 @@ class ContainerClient(ProxyClient):
     def container_raw_insert(
         self, bean, account=None, reference=None, cid=None, **kwargs
     ):
-        params = self._make_params(account, reference, cid=cid, **kwargs)
+        params = self._make_params(
+            account=account, reference=reference, cid=cid, **kwargs
+        )
         if not isinstance(bean, list):
             bean = (bean,)
         data = json.dumps(bean)
@@ -633,7 +515,9 @@ class ContainerClient(ProxyClient):
     def container_raw_update(
         self, old, new, account=None, reference=None, cid=None, **kwargs
     ):
-        params = self._make_params(account, reference, cid=cid, **kwargs)
+        params = self._make_params(
+            account=account, reference=reference, cid=cid, **kwargs
+        )
         data = json.dumps({"old": old, "new": new})
         if kwargs.pop("frozen", None):
             params["frozen"] = 1
@@ -650,12 +534,14 @@ class ContainerClient(ProxyClient):
             telling which type of bean it is.
         :type data: `list` of `dict` items
         """
-        params = self._make_params(account, reference, cid=cid, **kwargs)
+        params = self._make_params(
+            account=account, reference=reference, cid=cid, **kwargs
+        )
         data = json.dumps(data)
         self._request("POST", "/raw_delete", data=data, params=params, **kwargs)
 
     def container_flush(self, account=None, reference=None, cid=None, **kwargs):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         resp, _ = self._request("POST", "/flush", params=params, **kwargs)
         return {"truncated": boolean_value(resp.headers.get("x-oio-truncated"), False)}
 
@@ -678,17 +564,28 @@ class ContainerClient(ProxyClient):
         :type cid: `str`
 
         """
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account=account, reference=reference, cid=cid)
         data = {}
         if suffix:
             data["suffix"] = suffix
         data = json.dumps(data)
-        resp, _ = self._request("POST", "/checkpoint", params=params, data=data)
+        resp, _ = self._request(
+            "POST", "/checkpoint", params=params, data=data, **kwargs
+        )
 
         return resp
 
+    def content_list(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Container.container_list_content
+        """
+        self._deprecated_warning(
+            "Container.content_list", "Content.container_list_content"
+        )
+        return self.container_list_content(*args, **kwargs)
+
     @extract_reference_params
-    def content_list(
+    def container_list_content(
         self,
         account=None,
         reference=None,
@@ -739,585 +636,120 @@ class ContainerClient(ProxyClient):
         resp, body = self._request("GET", "/list", params=params, **kwargs)
         return resp.headers, body
 
-    @ensure_headers
-    def content_create(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        size=None,
-        checksum=None,
-        data=None,
-        cid=None,
-        content_id=None,
-        stgpol=None,
-        version=None,
-        mime_type=None,
-        chunk_method=None,
-        headers=None,
-        append=False,
-        change_policy=False,
-        force=False,
-        **kwargs,
-    ):
+    def _deprecated_warning(self, old_func, new_func):
+        warnings.simplefilter("once")
+        warnings.warn(
+            f"'{old_func}' function is deprecated. Prefer '{new_func}'",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+
+    def content_create(self, *args, **kwargs):
         """
-        Create a new object. This method does not upload any data, it just
-        registers object metadata in the database.
-
-        :param size: size of the object
-        :type size: `int`
-        :param checksum: checksum of the object (may be None when appending)
-        :type checksum: hexadecimal `str`
-        :param data: metadata of the object (list of chunks and
-        dict of properties)
-        :type data: `dict`
-        :param cid: container id that can be used in place of `account`
-            and `reference`
-        :type cid: hexadecimal `str`
-        :param content_id: the ID to set on the object, or the ID of the
-        existing object when appending
-        :param stgpol: name of the storage policy for the object
-        :param version: version of the object
-        :type version: `int`
-        :param mime_type: MIME type to set on the object
-        :param chunk_method:
-        :param headers: extra headers to send to the proxy
-        :param append: append to an existing object instead of creating it
-        :type append: `bool`
-        :param change_policy: change policy of an existing object
-        :type change_policy: `bool`
-        :param restore_drained: restore a drained object (keeping its metadata)
-        :type restore_drained: `bool`
+        This method is depecrated. Prefer Content.content_create
         """
-        uri = self._make_uri("content/create")
-        params = self._make_params(account, reference, path, cid=cid)
-        if append:
-            params["append"] = "1"
-        if change_policy:
-            params["change_policy"] = "1"
-        if kwargs.get("restore_drained"):
-            params["restore_drained"] = "1"
-        # TODO(FVE): implement 'force' parameter
-        if not isinstance(data, dict):
-            warnings.simplefilter("once")
-            warnings.warn(
-                "'data' parameter should be a dict, not a list",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-        if kwargs.get("meta_pos") is not None:
-            data = data["chunks"]
-            # TODO(FVE): change "id" into "content", and other occurrences
-            params["id"] = content_id
-            uri = self._make_uri("content/update")
+        self._deprecated_warning("Container.content_create", "Content.content_create")
+        return self._content.content_create(*args, **kwargs)
 
-        data = self._add_replication_info(data, **kwargs)
-        data = json.dumps(data)
-
-        hdrs = {"x-oio-content-meta-length": str(size)}
-        hdrs.update(headers)
-        if checksum:
-            hdrs["x-oio-content-meta-hash"] = checksum
-        if content_id is not None:
-            hdrs["x-oio-content-meta-id"] = content_id
-        if stgpol is not None:
-            hdrs["x-oio-content-meta-policy"] = stgpol
-        if version is not None:
-            hdrs["x-oio-content-meta-version"] = str(version)
-        if mime_type is not None:
-            hdrs["x-oio-content-meta-mime-type"] = mime_type
-        if chunk_method is not None:
-            hdrs["x-oio-content-meta-chunk-method"] = chunk_method
-
-        del_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            **kwargs,
-        )
-
-        resp, body = self._direct_request(
-            "POST", uri, data=data, params=params, headers=hdrs, **kwargs
-        )
-        return resp, body
-
-    def content_drain(
-        self, account=None, reference=None, path=None, cid=None, version=None, **kwargs
-    ):
-        uri = self._make_uri("content/drain")
-        params = self._make_params(account, reference, path, cid=cid, version=version)
-
-        del_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            **kwargs,
-        )
-
-        resp, _ = self._direct_request("POST", uri, params=params, **kwargs)
-        return resp.status == 204
-
-    def content_delete(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        cid=None,
-        version=None,
-        bypass_governance=None,
-        create_delete_marker=False,
-        dryrun=None,
-        slo_manifest=None,
-        **kwargs,
-    ):
+    def content_drain(self, *args, **kwargs):
         """
-        Delete one object.
-
-        :returns: True if a delete marker has been created, False otherwise,
-            and the version id which has been deleted or the version id of the
-            delete marker which has been created
-        :rtype: tuple
+        This method is depecrated. Prefer Content.content_drain
         """
-        uri = self._make_uri("content/delete")
-        params = self._make_params(
-            account,
-            reference,
-            path,
-            cid=cid,
-            version=version,
-            bypass_governance=bypass_governance,
-            dryrun=dryrun,
-            slo_manifest=slo_manifest,
-        )
-        if create_delete_marker:
-            params["delete_marker"] = create_delete_marker
-        del_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            **kwargs,
-        )
+        self._deprecated_warning("Container.content_drain", "Content.content_drain")
+        return self._content.content_drain(*args, **kwargs)
 
-        data = self._add_replication_info({}, **kwargs)
-        data = json.dumps(data)
-        resp, _ = self._direct_request("POST", uri, params=params, data=data, **kwargs)
-        delete_marker = boolean_value(resp.headers.get(DELETEMARKER_HEADER))
-        version_id = resp.headers.get(VERSIONID_HEADER)
-        return delete_marker, version_id
-
-    def content_delete_many(
-        self, account=None, reference=None, paths=None, cid=None, **kwargs
-    ):
+    def content_delete(self, *args, **kwargs):
         """
-        Delete several objects.
-
-        :param paths: an iterable of object paths (should not be a generator)
-        :returns: a list of tuples with the path of the content and
-            a boolean telling if the content has been deleted
-        :rtype: `list` of `tuple`
+        This method is depecrated. Prefer Content.content_delete
         """
-        uri = self._make_uri("content/delete_many")
-        params = self._make_params(account, reference, cid=cid)
-        unformatted_data = []
-        for obj in paths:
-            if isinstance(obj, tuple):
-                unformatted_data.append({"name": obj[0], "version": obj[1]})
-            else:
-                unformatted_data.append({"name": obj})
-        data = json.dumps({"contents": unformatted_data})
-        results = []
+        self._deprecated_warning("Container.content_delete", "Content.content_delete")
+        return self._content.content_delete(*args, **kwargs)
 
-        for path in paths:
-            del_cached_object_metadata(
-                account=account, reference=reference, path=path, cid=cid, **kwargs
-            )
-
-        try:
-            _, resp_body = self._direct_request(
-                "POST", uri, data=data, params=params, **kwargs
-            )
-            for obj in resp_body["contents"]:
-                results.append((obj["name"], obj["status"] == 204))
-            return results
-        except exceptions.TooLarge:
-            pivot = len(paths) // 2
-            head = paths[:pivot]
-            tail = paths[pivot:]
-            if head:
-                results += self.content_delete_many(
-                    account, reference, head, cid=cid, **kwargs
-                )
-            if tail:
-                results += self.content_delete_many(
-                    account, reference, tail, cid=cid, **kwargs
-                )
-            return results
-        except Exception:
-            raise
-
-    @extract_reference_params
-    def content_locate(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        cid=None,
-        content=None,
-        version=None,
-        properties=True,
-        params=None,
-        **kwargs,
-    ):
+    def content_delete_many(self, *args, **kwargs):
         """
-        Get a description of the content along with the list of its chunks.
-
-        :param cid: container id that can be used in place of `account`
-            and `reference`
-        :type cid: hexadecimal `str`
-        :param content: content id that can be used in place of `path`
-        :type content: hexadecimal `str`
-        :param properties: should the request return object properties
-            along with content description
-        :type properties: `bool`
-        :returns: a tuple with content metadata `dict` as first element
-            and chunk `list` as second element
+        This method is depecrated. Prefer Content.content_delete_many
         """
-        content_meta, chunks = get_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            properties=properties,
-            **kwargs,
+        self._deprecated_warning(
+            "Container.content_delete_many", "Content.content_delete_many"
         )
-        if content_meta is not None and chunks is not None:
-            self._maybe_refresh_rawx_scores(**kwargs)
-            for chunk in chunks:
-                # If the rawx is not in the dict, consider it down
-                chunk["score"] = self.rawx_scores.get(chunk["url"].split("/")[2], -1)
-            return content_meta, chunks
+        return self._content.content_delete_many(*args, **kwargs)
 
-        uri = self._make_uri("content/locate")
-        params["properties"] = properties
-        try:
-            resp, chunks = self._direct_request("GET", uri, params=params, **kwargs)
-            content_meta = extract_content_headers_meta(resp.headers)
-        except exceptions.OioNetworkException as exc:
-            # TODO(FVE): this special behavior can be removed when
-            # the 'content/locate' protocol is changed to include
-            # object properties in the response body instead of headers.
-            if properties and "got more than " in str(exc):
-                params["properties"] = False
-                _resp, chunks = self._direct_request(
-                    "GET", uri, params=params, **kwargs
-                )
-                content_meta = self.content_get_properties(
-                    account,
-                    reference,
-                    path,
-                    cid=cid,
-                    content=content,
-                    version=version,
-                    **kwargs,
-                )
-            else:
-                raise
-
-        set_cached_object_metadata(
-            content_meta,
-            chunks,
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            properties=properties,
-            **kwargs,
-        )
-
-        return content_meta, chunks
-
-    @extract_reference_params
-    def content_prepare(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        position=0,
-        size=None,
-        cid=None,
-        stgpol=None,
-        content_id=None,
-        version=None,
-        params=None,
-        **kwargs,
-    ):
+    def content_locate(self, *args, **kwargs):
         """
-        Prepare an upload: get URLs of chunks on available rawx.
-
-        :param position: position a the metachunk that must be prepared
-        :param stgpol: name of the storage policy of the object being uploaded
-        :param version: version of the object being uploaded. This is required
-            only on the second and later calls to this method to get coherent
-            results.
-        :keyword autocreate: create container if it doesn't exist
+        This method is depecrated. Prefer Content.content_locate
         """
-        uri = self._make_uri("content/prepare")
-        data = {"size": size, "position": position}
-        if stgpol:
-            data["policy"] = stgpol
-        data = json.dumps(data)
-        try:
-            resp, body = self._direct_request(
-                "POST", uri + "2", data=data, params=params, **kwargs
-            )
-            chunks = body["chunks"]
-            obj_meta = extract_content_headers_meta(resp.headers)
-            obj_meta["properties"] = body.get("properties", {})
-        except exceptions.NotFound:
-            # Proxy does not support v2 request (oio < 4.3)
-            resp, chunks = self._direct_request(
-                "POST", uri, data=data, params=params, **kwargs
-            )
-            obj_meta = extract_content_headers_meta(resp.headers)
-        return obj_meta, chunks
+        self._deprecated_warning("Container.content_locate", "Content.content_locate")
+        return self._content.content_locate(*args, **kwargs)
 
-    @extract_reference_params
-    def content_get_properties(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        properties=None,
-        cid=None,
-        content=None,
-        version=None,
-        params=None,
-        **kwargs,
-    ):
+    def content_prepare(self, *args, **kwargs):
         """
-        Get a description of the content along with its user properties.
+        This method is depecrated. Prefer Content.content_prepare
         """
-        obj_meta, _ = get_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            properties=True,
-            **kwargs,
-        )
-        if obj_meta is not None:
-            return obj_meta
+        self._deprecated_warning("Container.content_prepare", "Content.content_prepare")
+        return self._content.content_prepare(*args, **kwargs)
 
-        uri = self._make_uri("content/get_properties")
-        data = json.dumps(properties) if properties else None
-        resp, body = self._direct_request(
-            "POST", uri, data=data, params=params, **kwargs
-        )
-        obj_meta = extract_content_headers_meta(resp.headers)
-        obj_meta.update(body)
-
-        set_cached_object_metadata(
-            obj_meta,
-            None,
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            properties=True,
-            **kwargs,
-        )
-
-        return obj_meta
-
-    def content_set_properties(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        properties={},
-        cid=None,
-        version=None,
-        clear=False,
-        **kwargs,
-    ):
+    def content_get_properties(self, *args, **kwargs):
         """
-        Set properties on an object.
-
-        :param properties: dictionary of properties
+        This method is depecrated. Prefer Content.content_get_properties
         """
-        uri = self._make_uri("content/set_properties")
-        params = self._make_params(account, reference, path, cid=cid, version=version)
-        if clear:
-            params["flush"] = 1
-
-        data = self._add_replication_info(properties, **kwargs)
-        data = json.dumps(data)
-
-        del_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            **kwargs,
+        self._deprecated_warning(
+            "Container.content_get_properties", "Content.content_get_properties"
         )
+        return self._content.content_get_properties(*args, **kwargs)
 
-        _resp, _body = self._direct_request(
-            "POST", uri, data=data, params=params, **kwargs
-        )
-
-    def content_del_properties(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        properties=None,
-        cid=None,
-        version=None,
-        **kwargs,
-    ):
+    def content_set_properties(self, *args, **kwargs):
         """
-        Delete some properties from an object.
-
-        :param properties: list of property keys to delete
-        :type properties: `list`
-        :returns: True is the property has been deleted
+        This method is depecrated. Prefer Content.content_set_properties
         """
-        if properties is None:
-            properties = []
-
-        uri = self._make_uri("content/del_properties")
-        params = self._make_params(account, reference, path, cid=cid, version=version)
-        # Build a list in case the parameter is a view (not serializable).
-
-        data = self._add_replication_info({}, **kwargs)
-        if data:
-            data["properties"] = [x for x in properties]
-        else:
-            # legacy proxy call
-            data = [x for x in properties]
-
-        data = json.dumps(data)
-
-        del_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            **kwargs,
+        self._deprecated_warning(
+            "Container.content_set_properties", "Content.content_set_properties"
         )
+        return self._content.content_set_properties(*args, **kwargs)
 
-        resp, _body = self._direct_request(
-            "POST", uri, data=data, params=params, **kwargs
+    def content_del_properties(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Content.content_del_properties
+        """
+        self._deprecated_warning(
+            "Container.content_del_properties", "Content.content_del_properties"
         )
-        return resp.status == 204
+        return self._content.content_del_properties(*args, **kwargs)
 
-    def content_touch(
-        self, account=None, reference=None, path=None, cid=None, version=None, **kwargs
-    ):
-        uri = self._make_uri("content/touch")
-        params = self._make_params(account, reference, path, cid=cid, version=version)
-        self._direct_request("POST", uri, params=params, **kwargs)
+    def content_touch(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Content.content_touch
+        """
+        self._deprecated_warning("Container.content_touch", "Content.content_touch")
+        return self._content.content_touch(*args, **kwargs)
 
-    @extract_reference_params
-    def content_spare(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        version=None,
-        data=None,
-        cid=None,
-        stgpol=None,
-        position=None,
-        params=None,
-        **kwargs,
-    ):
-        uri = self._make_uri("content/spare")
-        if None in (stgpol, position):
-            raise ValueError("stgpol and position cannot be None")
-        params["stgpol"] = stgpol
-        params["position"] = position
-        data = json.dumps(data)
-        _resp, body = self._direct_request(
-            "POST", uri, data=data, params=params, **kwargs
+    def content_spare(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Content.content_spare
+        """
+        self._deprecated_warning("Container.content_spare", "Content.content_spare")
+        return self._content.content_spare(*args, **kwargs)
+
+    def content_truncate(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Content.content_truncate
+        """
+        self._deprecated_warning(
+            "Container.content_truncate", "Content.content_truncate"
         )
-        return body
+        return self._content.content_truncate(*args, **kwargs)
 
-    def content_truncate(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        cid=None,
-        version=None,
-        size=0,
-        **kwargs,
-    ):
-        uri = self._make_uri("content/truncate")
-        params = self._make_params(account, reference, path, cid=cid, version=version)
-        params["size"] = size
+    def content_purge(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Content.content_purge
+        """
+        self._deprecated_warning("Container.content_purge", "Content.content_purge")
+        return self._content.content_purge(*args, **kwargs)
 
-        del_cached_object_metadata(
-            account=account,
-            reference=reference,
-            path=path,
-            cid=cid,
-            version=version,
-            **kwargs,
+    def content_request_transition(self, *args, **kwargs):
+        """
+        This method is depecrated. Prefer Content.content_request_transition
+        """
+        self._deprecated_warning(
+            "Container.content_request_transition", "Content.content_request_transition"
         )
-
-        _resp, body = self._direct_request("POST", uri, params=params, **kwargs)
-        return body
-
-    def content_purge(
-        self, account=None, reference=None, path=None, cid=None, maxvers=None, **kwargs
-    ):
-        uri = self._make_uri("content/purge")
-        params = self._make_params(account, reference, path, cid=cid)
-        if maxvers is not None:
-            params["maxvers"] = maxvers
-
-        del_cached_object_metadata(
-            account=account, reference=reference, path=path, cid=cid, **kwargs
-        )
-
-        self._direct_request("POST", uri, params=params, **kwargs)
-
-    def content_request_transition(
-        self,
-        account=None,
-        reference=None,
-        path=None,
-        cid=None,
-        version=None,
-        policy=None,
-        **kwargs,
-    ):
-        uri = self._make_uri("content/transition")
-        params = self._make_params(account, reference, path, cid=cid, version=version)
-        del_cached_object_metadata(
-            account=account, reference=reference, path=path, cid=cid, **kwargs
-        )
-        self._direct_request(
-            "POST",
-            uri,
-            params=params,
-            json={
-                "policy": policy,
-                "skip_data_move": kwargs.pop("skip_data_move", False),
-                "internal_transition": kwargs.pop("internal_transition", False),
-            },
-            **kwargs,
-        )
+        return self._content.content_request_transition(*args, **kwargs)

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,6 @@ from oio.common.exceptions import (
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import cid_from_name
-from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from tests.functional.content.test_content import hash_data, hash_stream, random_data
@@ -46,10 +45,16 @@ class TestPlainContent(BaseTestCase):
         self.chunk_size = self.conf["chunk_size"]
         self.gridconf = {"namespace": self.ns}
         self.content_factory = ContentFactory(
-            self.gridconf, logger=self.logger, watchdog=self.watchdog
+            self.gridconf,
+            logger=self.logger,
+            watchdog=self.watchdog,
+            blob_client=self.storage.blob_client,
+            content_client=self.storage.content,
+            container_client=self.storage.container,
         )
-        self.container_client = ContainerClient(self.gridconf, logger=self.logger)
-        self.blob_client = self.content_factory.blob_client
+        self.container_client = self.storage.container
+        self.content_client = self.storage.content
+        self.blob_client = self.storage.blob_client
         self.container_name = "TestPlainContent-%f" % time.time()
         self.container_client.container_create(
             account=self.account, reference=self.container_name
@@ -69,7 +74,7 @@ class TestPlainContent(BaseTestCase):
 
         content.create(BytesIO(data))
 
-        meta, chunks = self.container_client.content_locate(
+        meta, chunks = self.content_client.content_locate(
             cid=self.container_id, content=content.content_id
         )
         self.assertEqual(meta["hash"], hash_data(data, algorithm="md5"))
@@ -347,13 +352,13 @@ class TestPlainContent(BaseTestCase):
         for stgpol in (self.stgpol, self.stgpol_twocopies, self.stgpol_threecopies):
             data = random_data(self.chunk_size)
             content, _ = self._new_content(stgpol, data)
-            _meta, chunks = self.container_client.content_locate(
+            _meta, chunks = self.content_client.content_locate(
                 cid=self.container_id, content=content.content_id
             )
             for _ in range(2):
                 spare_data = {"notin": chunks, "broken": []}
                 try:
-                    self.container_client.content_spare(
+                    self.content_client.content_spare(
                         cid=self.container_id,
                         content=content.content_id,
                         data=spare_data,

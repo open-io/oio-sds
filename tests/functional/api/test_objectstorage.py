@@ -1092,7 +1092,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # pylint: disable=no-member
         name = "create-conflict-" + random_str(6)
         # Simulate a conflict error
-        self.api.container.content_create = Mock(side_effect=exc.Conflict(409))
+        self.api.content.content_create = Mock(side_effect=exc.Conflict(409))
         self.api._blob_client = Mock(wraps=self.api.blob_client)
         # Ensure the error is passed to the upper level
         self.assertRaises(
@@ -1104,7 +1104,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             data=name,
         )
         # Ensure that the chunk deletion has been called with proper args
-        create_kwargs = self.api.container.content_create.call_args[1]
+        create_kwargs = self.api.content.content_create.call_args[1]
         chunks = create_kwargs["data"]["chunks"]
         self.api.blob_client.chunk_delete_many.assert_not_called()
         # Ensure the chunks have actually been kept
@@ -1123,8 +1123,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # pylint: disable=no-member
         name = "create-deadline-" + random_str(6)
         # Simulate a deadline during commit
-        self.api.container.content_create = Mock(
-            wraps=partial(self.api.container.content_create, deadline=0.0)
+        self.api.content.content_create = Mock(
+            wraps=partial(self.api.content.content_create, deadline=0.0)
         )
         self.api._blob_client = Mock(wraps=self.api.blob_client)
         # Ensure the error is passed to the upper level
@@ -1137,7 +1137,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             data=name,
         )
         # Ensure that the chunk deletion has been called with proper args
-        create_kwargs = self.api.container.content_create.call_args[1]
+        create_kwargs = self.api.content.content_create.call_args[1]
         chunks = create_kwargs["data"]["chunks"]
         self.api.blob_client.chunk_delete_many.assert_not_called()
         # Ensure the chunks have actually been kept
@@ -1167,8 +1167,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 return res
 
         # Simulate a deadline during prepare
-        self.api.container.content_prepare = Mock(
-            side_effect=_Preparer(self.api.container.content_prepare)
+        self.api.content.content_prepare = Mock(
+            side_effect=_Preparer(self.api.content.content_prepare)
         )
         self.api._blob_client = Mock(wraps=self.api.blob_client)
         # Ensure the error is passed to the upper level
@@ -1843,6 +1843,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.account, name, data=b"2" * 128, obj_name=name, append=True
         )
         self.assertEqual(size, 128)
+
+        _, data = self.api.object_fetch(self.account, name, name)
+        data = b"".join(data)
 
         self.api.object_truncate(self.account, name, name, size=128)
         _, data = self.api.object_fetch(self.account, name, name)
@@ -3975,6 +3978,10 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.created.append((self.container, self.path, obj_meta["version"]))
         self.assertEqual(0, len(self.cache))
 
+        self.api.content._direct_request = Mock(
+            side_effect=self.api.content._direct_request
+        )
+
         self.api.container._direct_request = Mock(
             side_effect=self.api.container._direct_request
         )
@@ -3989,21 +3996,21 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         )
         self.assertIsNotNone(expected_obj_meta)
         expected_obj_meta = expected_obj_meta.copy()
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         obj_meta = self.api.object_get_properties(
             self.account, self.container, self.path
         )
         self.assertDictEqual(expected_obj_meta, obj_meta)
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         properties = {"test1": "1", "test2": "2"}
         self.api.object_set_properties(
             self.account, self.container, self.path, properties
         )
-        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(2, self.api.content._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
         expected_obj_meta["properties"] = properties
@@ -4011,20 +4018,20 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.account, self.container, self.path
         )
         self.assertDictEqual(expected_obj_meta, obj_meta)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         obj_meta = self.api.object_get_properties(
             self.account, self.container, self.path
         )
         self.assertDictEqual(expected_obj_meta, obj_meta)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         self.api.object_del_properties(
             self.account, self.container, self.path, list(properties.keys())
         )
-        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(4, self.api.content._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
         expected_obj_meta["properties"] = dict()
@@ -4032,14 +4039,14 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.account, self.container, self.path
         )
         self.assertDictEqual(expected_obj_meta, obj_meta)
-        self.assertEqual(5, self.api.container._direct_request.call_count)
+        self.assertEqual(5, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         obj_meta = self.api.object_get_properties(
             self.account, self.container, self.path
         )
         self.assertDictEqual(expected_obj_meta, obj_meta)
-        self.assertEqual(5, self.api.container._direct_request.call_count)
+        self.assertEqual(5, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
     def test_object_locate(self):
@@ -4047,7 +4054,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.api.object_set_properties(
             self.account, self.container, self.path, properties
         )
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
         # First locate without properties not in cache
@@ -4060,7 +4067,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         expected_chunks = copy.deepcopy(expected_chunks)
         for expected_chunk in expected_chunks:
             self.assertGreaterEqual(expected_chunk.pop("score"), 0)
-        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(2, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # Locate without properties in cache
@@ -4071,7 +4078,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
-        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(2, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # Locate with properties not in cache
@@ -4083,7 +4090,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # Locate with properties in cache
@@ -4094,7 +4101,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # Locate without properties in cache
@@ -4106,7 +4113,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # Get properties in cache (use properties of location cache)
@@ -4115,7 +4122,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.account, self.container, self.path
         )
         self.assertDictEqual(expected_obj_meta, obj_meta)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
     def test_object_locate_with_down_rawx(self):
@@ -4129,7 +4136,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         expected_chunks = copy.deepcopy(expected_chunks)
         for expected_chunk in expected_chunks:
             self.assertGreaterEqual(expected_chunk.pop("score"), 0)
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # Locate with all UP services in cache
@@ -4140,7 +4147,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.assertGreaterEqual(chunk.pop("score"), 0)
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         # With a DOWN service
@@ -4173,7 +4180,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
                     del chunk["score"]
                 self.assertDictEqual(expected_obj_meta, obj_meta)
                 self.assertListEqual(expected_chunks, chunks)
-                self.assertEqual(1, self.api.container._direct_request.call_count)
+                self.assertEqual(1, self.api.content._direct_request.call_count)
                 self.assertEqual(1, len(self.cache))
                 if down_chunk_score == -1:
                     break
@@ -4203,7 +4210,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         for chunk in stream:
             data += chunk
         self.assertEqual(b"cache", data)
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         expected_cache = copy.deepcopy(self.cache)
         cached_meta, cached_chunks = get_cached_object_metadata(
@@ -4224,7 +4231,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         for chunk in stream:
             data += chunk
         self.assertEqual(b"cache", data)
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         self.assertDictEqual(expected_cache, self.cache)
 
@@ -4233,7 +4240,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.api.object_delete(
             self.account, self.container, self.path, cache=None, reqid=reqid
         )
-        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(2, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         self.assertDictEqual(expected_cache, self.cache)
         # Wait until all the original chunks are deleted
@@ -4251,7 +4258,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.container,
             self.path,
         )
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
     def test_object_fetch_dirty_cache(self):
@@ -4264,7 +4271,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         for chunk in stream:
             data += chunk
         self.assertEqual(b"cache", data)
-        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         expected_cache = copy.deepcopy(self.cache)
         cached_meta, cached_chunks = get_cached_object_metadata(
@@ -4287,7 +4294,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             cache=None,
             reqid=reqid,
         )
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         self.assertDictEqual(expected_cache, self.cache)
         # Wait until all the original chunks are deleted
@@ -4304,13 +4311,13 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             self.account, self.container, self.path
         )
         self.assertNotEqual(expected_obj_meta, expected_obj_meta2)
-        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(4, self.api.content._direct_request.call_count)
         data = b""
         for chunk in stream:
             data += chunk
         self.assertEqual(b"overwritten", data)
         self.assertNotEqual(expected_obj_meta, expected_obj_meta2)
-        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(4, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         self.assertNotEqual(expected_cache, self.cache)
         expected_cache = copy.deepcopy(self.cache)
@@ -4324,7 +4331,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         for chunk in stream:
             data += chunk
         self.assertEqual(b"overwritten", data)
-        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(4, self.api.content._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         self.assertDictEqual(expected_cache, self.cache)
 

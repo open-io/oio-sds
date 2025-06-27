@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,7 @@ from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
+from oio.content.client import ContentClient
 from oio.content.ec import ECContent
 from oio.content.plain import PlainContent
 
@@ -29,12 +30,21 @@ class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
 
     def __init__(
-        self, conf, container_client=None, blob_client=None, logger=None, **kwargs
+        self,
+        conf,
+        container_client=None,
+        blob_client=None,
+        content_client=None,
+        logger=None,
+        **kwargs,
     ):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.container_client = container_client or ContainerClient(
             conf, logger=self.logger, **kwargs
+        )
+        self.content_client = content_client or ContentClient(
+            conf, logger=self.logger, pool_manager=self.container_client.pool_manager
         )
         self.blob_client = blob_client or BlobClient(conf, logger=self.logger, **kwargs)
 
@@ -73,8 +83,9 @@ class ContentFactory(object):
             storage_method,
             account,
             container_name,
-            container_client=self.container_client,
-            blob_client=self.blob_client,
+            self.blob_client,
+            self.container_client,
+            self.content_client,
             logger=self.logger,
         )
 
@@ -84,7 +95,7 @@ class ContentFactory(object):
         # Deprecated, prefer using get_by_path_and_version.
         # Using path and versions allows to resolve objects in sharded containers.
         try:
-            meta, chunks = self.container_client.content_locate(
+            meta, chunks = self.content_client.content_locate(
                 cid=container_id, content=content_id, **kwargs
             )
         except NotFound:
@@ -110,7 +121,7 @@ class ContentFactory(object):
         **kwargs,
     ):
         try:
-            meta, chunks = self.container_client.content_locate(
+            meta, chunks = self.content_client.content_locate(
                 cid=container_id,
                 content=content_id,
                 path=path,
@@ -142,7 +153,7 @@ class ContentFactory(object):
         container_name=None,
         **kwargs,
     ):
-        meta, chunks = self.container_client.content_prepare(
+        meta, chunks = self.content_client.content_prepare(
             cid=container_id, path=path, size=size, stgpol=policy, **kwargs
         )
 
@@ -169,8 +180,9 @@ class ContentFactory(object):
             storage_method,
             account,
             container_name,
-            container_client=self.container_client,
-            blob_client=self.blob_client,
+            self.blob_client,
+            self.container_client,
+            self.content_client,
             logger=self.logger,
         )
 
@@ -178,7 +190,7 @@ class ContentFactory(object):
         if not policy:
             policy = origin.policy
         metadata = origin.metadata.copy()
-        new_metadata, chunks = self.container_client.content_prepare(
+        new_metadata, chunks = self.content_client.content_prepare(
             cid=origin.container_id,
             path=metadata["name"],
             size=metadata["length"],
@@ -197,6 +209,7 @@ class ContentFactory(object):
         storage_method = STORAGE_METHODS.load(metadata["chunk_method"])
 
         cls = ECContent if storage_method.ec else PlainContent
+
         return cls(
             self.conf,
             origin.container_id,
@@ -205,7 +218,8 @@ class ContentFactory(object):
             storage_method,
             origin.account,
             origin.container_name,
-            container_client=self.container_client,
-            blob_client=self.blob_client,
+            self.blob_client,
+            self.container_client,
+            self.content_client,
             logger=self.logger,
         )
