@@ -755,7 +755,7 @@ class ShowBucket(ShowOne):
         if parsed_args.formatter == "table":
             from oio.common.easy_value import convert_size, convert_timestamp
 
-            data["bytes"] = convert_size(data["bytes"])
+            data["bytes"] = convert_size(data["bytes"], unit="iB")
             if "ctime" in data:
                 data["ctime"] = convert_timestamp(data.get("ctime", 0.0))
             data["mtime"] = convert_timestamp(data.get("mtime", 0.0))
