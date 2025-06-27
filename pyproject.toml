@@ -16,7 +16,6 @@ dependencies = [
   "gevent>=22.10.2",
   "importlib_resources",
   "jsonschema>=4.17.3",
-  "lxml>=4.0.0",
   "pika~=1.3.2",
   "PyECLib~=1.6.4",
   "PyYAML~=6.0.0",
