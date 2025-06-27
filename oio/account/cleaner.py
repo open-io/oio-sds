@@ -43,8 +43,8 @@ class AccountServiceCleaner(object):
         self.success = True
         self.deleted_containers = 0
         self.deleted_buckets = 0
-        self.excess_volume_per_bucket = Counter()
-        self.excess_volume = 0
+        self.excess_volume_per_bucket = {}
+        self.buckets_excess_volume = Counter()
 
     def get_accounts(self, sharding_accounts=False, reqid=None):
         if not self.account:
@@ -135,6 +135,9 @@ class AccountServiceCleaner(object):
                         container,
                         now - mtime,
                     )
+            except NotFound:
+                # The container has just been deleted
+                pass
             except Exception as exc:
                 self.success = False
                 self.logger.error(
@@ -331,18 +334,33 @@ class AccountServiceCleaner(object):
             # If in doubt, assume account is not the owner
             return False
 
+    def _add_bucket_excess_volume(self, account, bucket, bytes_details):
+        for storage_policy, size in bytes_details.items():
+            excess_volume = self.excess_volume_per_bucket.setdefault(
+                (account, bucket), Counter()
+            )
+            excess_volume["total"] += size
+            excess_volume[storage_policy] += size
+            self.buckets_excess_volume["total"] += size
+            self.buckets_excess_volume[storage_policy] += size
+
     def delete_bucket(self, account, bucket, size=None, reqid=None):
         """
         Delete the bucket.
         """
         try:
+            if size:
+                meta = self.api.bucket.bucket_show(
+                    bucket, account, details=True, reqid=reqid
+                )
+                bytes_details = meta["bytes-details"]
+            else:
+                bytes_details = {}
             if not self.dry_run:
                 self.api.bucket.bucket_delete(bucket, account, reqid=reqid)
             self.logger.info("Delete bucket %s/%s reqid=%s", account, bucket, reqid)
             self.deleted_buckets += 1
-            if size:
-                self.excess_volume_per_bucket[(account, bucket)] += size
-                self.excess_volume += size
+            self._add_bucket_excess_volume(account, bucket, bytes_details)
         except Exception as exc:
             self.success = False
             self.logger.error(
@@ -362,6 +380,11 @@ class AccountServiceCleaner(object):
         the bucket name is released.
         """
         try:
+            if size:
+                meta = self.api.account.container_show(account, container, reqid=reqid)
+                bytes_details = meta["bytes-details"]
+            else:
+                bytes_details = {}
             if not self.dry_run:
                 self.api.account.container_delete(
                     account, container, dtime, reqid=reqid
@@ -390,9 +413,7 @@ class AccountServiceCleaner(object):
             account = account[len(SHARDING_ACCOUNT_PREFIX) :]
         bucket_exists, bucket_size = self.bucket_exists(account, bucket, reqid=reqid)
         if bucket_exists:
-            if size:
-                self.excess_volume_per_bucket[(account, bucket)] += size
-                self.excess_volume += size
+            self._add_bucket_excess_volume(account, bucket, bytes_details)
             return
         if not self.is_owner(account, bucket, reqid=reqid):
             return
@@ -463,13 +484,23 @@ class AccountServiceCleaner(object):
             verb = "is"
         else:
             verb = "was"
-        for (account, bucket), excess_volume in self.excess_volume_per_bucket.items():
+        for (
+            account,
+            bucket,
+        ), excess_volume_details in self.excess_volume_per_bucket.items():
             self.logger.warning(
-                "Bucket %s/%s %s oversized by %d bytes",
+                "Bucket %s/%s %s oversized by %d bytes (%s)",
                 account,
                 bucket,
                 verb,
-                excess_volume,
+                excess_volume_details["total"],
+                ", ".join(
+                    (
+                        f"{k}={v}"
+                        for k, v in sorted(excess_volume_details.items())
+                        if k != "total"
+                    )
+                ),
             )
 
         return self.success

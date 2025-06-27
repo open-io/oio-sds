@@ -84,19 +84,34 @@ class AccountServiceClean(ShowOne):
                 self.error_code = 2
             elif cleaner.deleted_buckets > 0:
                 self.error_code = 3
+        buckets_excess_volume = cleaner.buckets_excess_volume["total"]
+        buckets_excess_volume_details = {
+            k: v
+            for k, v in sorted(cleaner.buckets_excess_volume.items())
+            if k != "total"
+        }
+        if parsed_args.formatter == "table":
+            from oio.common.easy_value import convert_size
+
+            buckets_excess_volume = convert_size(buckets_excess_volume, unit="iB")
+            buckets_excess_volume_details = "\n".join(
+                (f"{k}={v}" for k, v in buckets_excess_volume_details.items())
+            )
         return (
             (
                 "dry-run",
                 "success",
                 "deleted-containers",
                 "deleted-buckets",
-                "excess-volume",
+                "buckets-excess-volume",
+                "buckets-excess-volume-details",
             ),
             (
                 parsed_args.dry_run,
                 cleaner.success,
                 cleaner.deleted_containers,
                 cleaner.deleted_buckets,
-                cleaner.excess_volume,
+                buckets_excess_volume,
+                buckets_excess_volume_details,
             ),
         )
