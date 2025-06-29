@@ -1131,9 +1131,7 @@ class ContainerSharding(ProxyClient):
                 **kwargs,
             )
         except Exception as exc:
-            self.logger.warning(
-                "Failed to vacuum container (CID=%s): %s", shard["cid"], exc
-            )
+            self.logger.warning("Failed to vacuum container (CID=%s): %s", cid, exc)
 
     @ensure_request_id
     def clean_container(
