@@ -1,0 +1,251 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2025 OVH SAS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import argparse
+
+from oio.api.object_storage import ObjectStorageApi
+from oio.cli import get_logger_from_args, make_logger_args_parser
+from oio.common.exceptions import NoSuchAccount, NoSuchContainer, NotFound, OioException
+from oio.common.utils import depaginate, request_id
+
+SEPARATOR = "/"
+
+
+class OioObjectChangePolicy:
+    """
+    Find all objects using the policy to change,
+    then rewrite each object with the new policy.
+    """
+
+    def __init__(self, namespace, logger, object_policy, new_policy):
+        self.api = ObjectStorageApi(namespace, logger=logger)
+        self.logger = logger
+        self.object_policy = object_policy
+        self.new_policy = new_policy
+        self.region = self.api.bucket.region.upper()
+        self._account_marker = None
+        self._container_marker = None
+        self._main_request_id = self._request_id
+
+    @property
+    def _request_id(self):
+        return request_id("oio-object-change-policy")
+
+    @property
+    def progress(self):
+        """Format the current progression marker"""
+        return f"{self._account_marker or ''}{SEPARATOR}{self._container_marker or ''}"
+
+    def _custom_container_list(
+        self,
+        account,
+        limit=None,
+        marker=None,
+        end_marker=None,
+        prefix=None,
+        region=None,
+        **kwargs,
+    ):
+        res = self.api.account.container_list(
+            account,
+            limit=limit,
+            marker=marker,
+            end_marker=end_marker,
+            prefix=prefix,
+            region=region,
+            **kwargs,
+        )
+        need_to_parse_buckets = False
+        # Bucket list returns only the bucket located
+        # on the local region
+        total_bytes_by_policy = res["regions"][self.region]["bytes-details"].get(
+            self.object_policy
+        )
+        if total_bytes_by_policy and total_bytes_by_policy > 0:
+            need_to_parse_buckets = True
+        if not need_to_parse_buckets:
+            self.logger.info(
+                f"The buckets of account={account}, "
+                f"region={self.region} do not have objects with "
+                f"the specified policy: {self.object_policy}"
+            )
+            return {"listing": [], "truncated": False}
+        return res
+
+    def _get_containers(self, marker=(None, None)):
+        account_marker, container_marker = marker
+        accounts = depaginate(
+            self.api.account.account_list,
+            listing_key=lambda x: x["listing"],
+            item_key=lambda x: x["id"],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
+            marker=account_marker,
+            reqid=self._main_request_id,
+        )
+        for account in accounts:
+            self.logger.info(
+                "Listing containers for account %s",
+                account,
+            )
+
+            containers = depaginate(
+                self._custom_container_list,
+                listing_key=lambda x: x["listing"],
+                marker_key=lambda x: x["next_marker"],
+                truncated_key=lambda x: x["truncated"],
+                account=account,
+                marker=container_marker,
+                reqid=self._main_request_id,
+                region=self.region,
+            )
+            container_marker = None
+
+            for container in containers:
+                yield account, container[0]
+
+    def _change_policy(self, account, container, obj_prop):
+        """Change the policy of the specified object
+
+        :param account: account name
+        :type account: str
+        :param container: container name
+        :type container: str
+        :param obj_prop: object properties
+        :type obj_prop: dict
+        """
+        obj_name = obj_prop["name"]
+        obj_version = obj_prop["version"]
+        try:
+            # Initiate policy transition to prepare for
+            # the effective policy change by transition event agent
+            self.api.object_request_transition(
+                account=account,
+                container=container,
+                obj=obj_name,
+                policy=self.new_policy,
+                version=obj_version,
+                reqid=self._main_request_id,
+            )
+        except OioException as exc:
+            self.logger.error(
+                "Unable to change policy for object: %s, in "
+                "container=%s, account=%s, reason: %s",
+                obj_name,
+                container,
+                account,
+                exc,
+            )
+
+    def process(self, marker=(None, None)):
+        """Change object policy if needed"""
+        for account, container in self._get_containers(marker=marker):
+            self.logger.debug(
+                "Fetching container info for account=%s container=%s",
+                account,
+                container,
+            )
+            reqid = self._main_request_id
+            try:
+                obj_list = depaginate(
+                    self.api.object_list,
+                    listing_key=lambda x: x["objects"],
+                    marker_key=lambda x: x.get("next_marker"),
+                    version_marker_key=lambda x: x.get("next_version_marker"),
+                    truncated_key=lambda x: x["truncated"],
+                    account=account,
+                    container=container,
+                    properties=False,
+                    versions=True,
+                    reqid=reqid,
+                )
+                for obj in obj_list:
+                    if obj.get("policy", None) != self.object_policy:
+                        # Object does not have the specified policy
+                        continue
+                    self._change_policy(account, container, obj_prop=obj)
+            except (NoSuchAccount, NoSuchContainer, NotFound) as exc:
+                self.logger.error(
+                    "Unable to process container account=%s, container=%s, reason: %s",
+                    account,
+                    container,
+                    exc,
+                )
+                continue
+            finally:
+                self._container_marker = container
+                self._account_marker = account
+
+
+def make_arg_parser():
+    log_parser = make_logger_args_parser()
+    descr = OioObjectChangePolicy.__doc__
+
+    parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
+    parser.add_argument("namespace", help="Namespace")
+    parser.add_argument(
+        "--object-policy",
+        help='Only objects with specified policy will be selected (e.g: "STD-E93")',
+    )
+    parser.add_argument(
+        "--new-policy",
+        help='Policy to use when rewriting objects (e.g: "STD-R3")',
+    )
+    parser.add_argument("--marker", help="Marker", default="")
+
+    return parser
+
+
+def main():
+    args = make_arg_parser().parse_args()
+    logger = get_logger_from_args(args)
+
+    if not args.object_policy:
+        logger.error("Missing the policy to use when filtering objects")
+        return
+    if not args.new_policy:
+        logger.error("Missing the policy to use when rewriting objects")
+        return
+
+    marker = (None, None)
+    if args.marker:
+        parts = args.marker.split(SEPARATOR, 1)
+        if len(parts) != 2:
+            logger.error(
+                f"Marker wrong format, expected format: account{SEPARATOR}container"
+            )
+            return
+        account_marker = parts[0] if parts[0] else None
+        container_marker = parts[1] if parts[1] else None
+        marker = (account_marker, container_marker)
+
+    change_policy = OioObjectChangePolicy(
+        args.namespace, logger, args.object_policy, args.new_policy
+    )
+    try:
+        change_policy.process(marker=marker)
+    except KeyboardInterrupt:
+        logger.info("Exiting...")
+        print(f"Next marker: {change_policy.progress}")
+    except Exception as exc:
+        logger.critical("Failure during process %s", exc)
+        print(f"Next marker: {change_policy.progress}")
+
+
+if __name__ == "__main__":
+    main()
