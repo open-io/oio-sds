@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,7 +24,6 @@ from oio.common.constants import CHUNK_QUARANTINE_FOLDER_NAME, CHUNK_SUFFIX_CORR
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import find_mount_point
-from oio.conscience.client import ConscienceClient
 from oio.crawler.common.base import Filter, RawxService, RawxUpMixin
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
@@ -41,6 +40,7 @@ class Checksum(Filter, RawxUpMixin):
         self.recovered_chunk = 0
         self.errors = 0
         self.unrecoverable_content = 0
+        self.api = self.app_env["api"]
 
         self.conscience_cache = int_value(self.conf.get("conscience_cache"), 30)
         self.max_read_size = int_value(self.conf.get("max_read_size"), 256 * 1024)
@@ -61,7 +61,7 @@ class Checksum(Filter, RawxUpMixin):
         )
         self._rawx_service = RawxService(status=False, last_time=0)
 
-        self.conscience_client = ConscienceClient(self.conf, logger=self.logger)
+        self.conscience_client = self.api.conscience
 
     def error(self, chunk, container_id, msg):
         self.logger.error(
@@ -128,7 +128,12 @@ class Checksum(Filter, RawxUpMixin):
             self.errors += 1
             if isinstance(err, exc.UnrecoverableContent):
                 self.unrecoverable_content += 1
-                if self._check_rawx_up():
+                self._rawx_service = self._check_rawx_up(
+                    self.conscience_client,
+                    self._rawx_service,
+                    conscience_cache=self.conscience_cache,
+                )
+                if self._rawx_service.status:
                     error_msg = "%(err)s, action required!" % {"err": str(err)}
                     self.error(chunk, container_id, error_msg)
             else:

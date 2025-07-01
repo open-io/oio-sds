@@ -211,7 +211,12 @@ class RdirWorkerForRawx(RawxUpMixin, RdirWorker):
             self.errors += 1
             if isinstance(err, exc.UnrecoverableContent):
                 self.unrecoverable_content += 1
-                if self._check_rawx_up():
+                self._rawx_service = self._check_rawx_up(
+                    self.conscience_client,
+                    self._rawx_service,
+                    conscience_cache=self.conscience_cache,
+                )
+                if self._rawx_service.status:
                     error = f"{err}, action required"
                     self.error(container_id, chunk_id, error, reqid=reqid)
             elif isinstance(err, exc.OrphanChunk):

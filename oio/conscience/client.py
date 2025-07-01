@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,99 +24,131 @@ from oio.common.json import json
 from oio.content.quality import get_distance
 
 
-class LbClient(ProxyClient):
-    """Simple load balancer client"""
-
-    def __init__(self, conf, **kwargs):
-        super().__init__(conf, request_prefix="/lb", **kwargs)
-
-    def next_instances(self, pool, size=None, **kwargs):
-        """
-        Get the next service instances from the specified pool.
-
-        :keyword size: number of services to get
-        :type size: `int`
-        """
-        params = {"type": pool}
-        if size is not None:
-            params["size"] = size
-        resp, body = self._request("GET", "/choose", params=params, **kwargs)
-        if resp.status == 200:
-            return body
-        raise OioException(f"ERROR while getting next instances from pool {pool}")
-
-    def next_instance(self, pool, **kwargs):
-        """Get the next service instance from the specified pool"""
-        kwargs.pop("size", None)
-        return self.next_instances(pool, size=1, **kwargs)[0]
-
-    def poll(self, pool, **kwargs):
-        """
-        Get a set of services from a predefined pool.
-
-        :keyword avoid: service IDs that must be avoided
-        :type avoid: `list`
-        :keyword known: service IDs that are already known
-        :type known: `list`
-        """
-        params = {"pool": pool}
-        resp, obody = self._request(
-            "POST", "/poll", params=params, data=json.dumps(kwargs)
-        )
-        if resp.status == 200:
-            return obody
-        raise OioException(f"Failed to poll {pool}: {resp.text}")
-
-    def create_pool(self, pool, targets, force=False, options=None, **kwargs):
-        """
-        Create a service pool on the local proxy.
-
-        :param pool: a name for the pool
-        :type pool: `str`
-        :param targets: a list of tuples like (1, "rawx-usa", "rawx", ...)
-        :param force: if the pool already exists, overwrite it
-        :param options: options for the pool
-        :type options: `dict`
-        :exception Conflict: if a pool with same name already exists
-        """
-        stargets = ";".join(",".join(str(y) for y in x) for x in targets)
-        ibody = {"targets": stargets, "options": options}
-        _, _ = self._request(
-            "POST",
-            "/create_pool",
-            params={"name": pool, "force": str(force)},
-            data=json.dumps(ibody),
-            **kwargs,
-        )
-
-
 class ConscienceClient(ProxyClient):
     """Conscience client. Some calls are actually redirected to LbClient."""
 
+    class LbClient(ProxyClient):
+        """Simple load balancer client"""
+
+        def __init__(self, conf, **kwargs):
+            super().__init__(conf, request_prefix="/lb", **kwargs)
+
+        def next_instances(self, pool, size=None, **kwargs):
+            """
+            Get the next service instances from the specified pool.
+
+            :keyword size: number of services to get
+            :type size: `int`
+            """
+            params = {"type": pool}
+            if size is not None:
+                params["size"] = size
+            resp, body = self._request("GET", "/choose", params=params, **kwargs)
+            if resp.status == 200:
+                return body
+            raise OioException(f"ERROR while getting next instances from pool {pool}")
+
+        def next_instance(self, pool, **kwargs):
+            """Get the next service instance from the specified pool"""
+            kwargs.pop("size", None)
+            return self.next_instances(pool, size=1, **kwargs)[0]
+
+        def poll(self, pool, **kwargs):
+            """
+            Get a set of services from a predefined pool.
+
+            :keyword avoid: service IDs that must be avoided
+            :type avoid: `list`
+            :keyword known: service IDs that are already known
+            :type known: `list`
+            """
+            params = {"pool": pool}
+            resp, body = self._request(
+                "POST", "/poll", params=params, data=json.dumps(kwargs)
+            )
+            if resp.status == 200:
+                return body
+            raise OioException(f"Failed to poll {pool}: {resp.text}")
+
+        def create_pool(self, pool, targets, force=False, options=None, **kwargs):
+            """
+            Create a service pool on the local proxy.
+
+            :param pool: a name for the pool
+            :type pool: `str`
+            :param targets: a list of tuples like (1, "rawx-usa", "rawx", ...)
+            :param force: if the pool already exists, overwrite it
+            :param options: options for the pool
+            :type options: `dict`
+            :exception Conflict: if a pool with same name already exists
+            """
+            stargets = ";".join(",".join(str(y) for y in x) for x in targets)
+            ibody = {"targets": stargets, "options": options}
+            _, _ = self._request(
+                "POST",
+                "/create_pool",
+                params={"name": pool, "force": str(force)},
+                data=json.dumps(ibody),
+                **kwargs,
+            )
+
+    class LocalClient(ProxyClient):
+        """Local client"""
+
+        def __init__(self, conf, **kwargs):
+            super().__init__(conf, request_prefix="local/", **kwargs)
+
+        def list_services(self):
+            resp, body = self._request("GET", "list")
+            if resp.status == 200:
+                return body
+            raise OioException(f"failed to get list of local services: {resp.text}")
+
     def __init__(self, conf, service_id_max_age=60, **kwargs):
         super().__init__(conf, request_prefix="/conscience", **kwargs)
-        self._lb_kwargs = dict(kwargs)
-        self._lb_kwargs.pop("pool_manager", None)
+        # Sub clients
+        self._child_client_kwargs = dict(kwargs)
+        self._child_client_kwargs.pop("pool_manager", None)
+        self._child_client_kwargs.pop("logger", None)
+
         self._lb = None
+        self._local = None
         self._service_id_max_age = service_id_max_age
         self._service_ids = {}
 
-    def _request(self, method, url, **kwargs):
+    def _request(self, method, url, endpoint=None, retriable=False, **kwargs):
         params = kwargs.setdefault("params", {})
         # Forward the request to this particular Conscience, do not use cache
         cs_addr = kwargs.get("cs")
         if cs_addr:
             params["cs"] = cs_addr
-        return super()._request(method, url, **kwargs)
+        return super()._request(
+            method, url, endpoint=endpoint, retriable=retriable, **kwargs
+        )
 
     @property
     def lb(self):
         """Get an instance of LbClient."""
         if self._lb is None:
-            self._lb = LbClient(
-                self.conf, pool_manager=self.pool_manager, **self._lb_kwargs
+            self._lb = self.LbClient(
+                self.conf,
+                pool_manager=self.pool_manager,
+                logger=self.logger,
+                **self._child_client_kwargs,
             )
         return self._lb
+
+    @property
+    def local(self):
+        """Get an instance of local client."""
+        if self._local is None:
+            self._local = self.LocalClient(
+                self.conf,
+                pool_manager=self.pool_manager,
+                logger=self.logger,
+                **self._child_client_kwargs,
+            )
+        return self._local
 
     def next_instances(self, pool, **kwargs):
         """
@@ -192,11 +224,7 @@ class ConscienceClient(ProxyClient):
         return {s["id"]: s for s in all_services}
 
     def local_services(self):
-        url = self.endpoint.replace("conscience", "local/list")
-        resp, body = self._direct_request("GET", url)
-        if resp.status == 200:
-            return body
-        raise OioException(f"failed to get list of local services: {resp.text}")
+        return self.local.list_services()
 
     def service_types(self, **kwargs):
         """
@@ -226,14 +254,14 @@ class ConscienceClient(ProxyClient):
 
     def register(self, service_definitions, **kwargs):
         data = json.dumps(service_definitions)
-        resp, body = self._request("POST", "/register", data=data, **kwargs)
+        _resp, _body = self._request("POST", "/register", data=data, **kwargs)
 
     def deregister(self, service_definitions, **kwargs):
         data = json.dumps(service_definitions)
-        resp, body = self._request("POST", "/deregister", data=data, **kwargs)
+        _resp, _body = self._request("POST", "/deregister", data=data, **kwargs)
 
     def info(self):
-        resp, body = self._request("GET", "/info")
+        _resp, body = self._request("GET", "/info")
         return body
 
     def lock_score(self, srv_or_list, **kwargs):
@@ -261,7 +289,7 @@ class ConscienceClient(ProxyClient):
         self._request("POST", "/unlock", data=json.dumps(srv_or_list), **kwargs)
 
     def flush(self, srv_type):
-        resp, body = self._request("POST", "/flush", params={"type": srv_type})
+        _resp, _body = self._request("POST", "/flush", params={"type": srv_type})
 
     def resolve(self, srv_type, service_id, **kwargs):
         resp, body = self._request(

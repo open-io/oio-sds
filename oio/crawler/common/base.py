@@ -334,16 +334,19 @@ class ChunkSymlinkFilter(Filter):
 class RawxUpMixin:
     """Mixin class providing _check_rawx_up"""
 
-    def _check_rawx_up(self):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _check_rawx_up(self, conscience_client, rawx_service, conscience_cache=30):
         now = time.time()
-        status, last_time = self._rawx_service
+        status, last_time = rawx_service
         # If the conscience has been requested in the last X seconds, return
-        if now < last_time + self.conscience_cache:
+        if now < last_time + conscience_cache:
             return status
 
         status = True
         try:
-            data = self.conscience_client.all_services("rawx")
+            data = conscience_client.all_services("rawx")
             # Check that all rawx are UP
             # If one is down, the chunk may be still rebuildable in the future
             for srv in data:
@@ -359,5 +362,4 @@ class RawxUpMixin:
         except exc.OioException:
             status = False
 
-        self._rawx_service = RawxService(status, now)
-        return status
+        return RawxService(status, now)
