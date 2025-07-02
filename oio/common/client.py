@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -42,6 +42,7 @@ class ProxyClient(HttpApi):
         self,
         conf,
         request_prefix="",
+        api_version="v3.0",
         no_ns_in_url=False,
         endpoint=None,
         request_attempts=REQUEST_ATTEMPTS,
@@ -75,29 +76,37 @@ class ProxyClient(HttpApi):
             endpoint = ns_conf.get("proxy")
 
         # Historically, the endpoint did not contain any scheme
-        self.proxy_scheme = "http"
+        proxy_scheme = "http"
         split_endpoint = endpoint.split("://", 1)
         if len(split_endpoint) > 1:
-            self.proxy_scheme = split_endpoint[0]
-        self.proxy_netloc = split_endpoint[-1]
+            proxy_scheme = split_endpoint[0]
+        endpoint = split_endpoint[-1].strip("/")
+        self.proxy_netloc = f"{proxy_scheme}://{endpoint}"
+        self.api_version = api_version
 
-        ep_parts = []
-        ep_parts.append(self.proxy_scheme + ":/")
-        ep_parts.append(self.proxy_netloc)
-        ep_parts.append("v3.0")
+        super(ProxyClient, self).__init__(service_type="proxy", **kwargs)
+
+        pathname_prefix_parts = []
+        if api_version:
+            pathname_prefix_parts.append(api_version.strip("/"))
         if not no_ns_in_url:
-            ep_parts.append(self.ns)
+            pathname_prefix_parts.append(self.ns)
         if request_prefix:
-            ep_parts.append(request_prefix.lstrip("/"))
+            pathname_prefix_parts.append(request_prefix.strip("/"))
+        self._proxy_pathname_prefix = "/".join(pathname_prefix_parts)
+
+        self.endpoint = self.proxy_netloc
 
         if not isinstance(request_attempts, int):
             request_attempts = int(request_attempts)
         assert request_attempts > 0
         self._request_attempts = request_attempts
 
-        super(ProxyClient, self).__init__(
-            endpoint="/".join(ep_parts), service_type="proxy", **kwargs
-        )
+    def _request(self, method, url, endpoint=None, **kwargs):
+        if not endpoint:
+            endpoint = self.endpoint
+        url = "/".join((endpoint, self._proxy_pathname_prefix, url.strip("/")))
+        return self._direct_request(method, url, **kwargs)
 
     def _direct_request(
         self, method, url, headers=None, request_attempts=None, **kwargs

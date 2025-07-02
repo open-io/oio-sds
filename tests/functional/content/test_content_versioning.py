@@ -778,7 +778,7 @@ class TestContentVersioning(BaseTestCase):
         obj_count = 401
         reqid = request_id("test-obj-list-")
         self.admin.proxy_set_live_config(
-            config={
+            {
                 # Prevent TCP read timeout between oio-proxy and meta2
                 "gridd.timeout.margin": 2000,  # 2ms
                 # Accelerate delete marker creation

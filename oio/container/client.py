@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from functools import wraps
 import warnings
+from functools import wraps
 
 from oio.common import exceptions
 from oio.common.cache import (
@@ -24,9 +24,10 @@ from oio.common.cache import (
     set_cached_container_metadata,
 )
 from oio.common.client import ProxyClient
-from oio.content.client import ContentClient
 from oio.common.easy_value import boolean_value
 from oio.common.json import json
+from oio.content.client import ContentClient
+from oio.directory.admin import AdminClient
 
 
 def extract_reference_params(func):
@@ -69,10 +70,11 @@ class ContainerClient(ProxyClient):
     Intermediate level class to manage containers.
     """
 
-    def __init__(self, conf, content_client=None, **kwargs):
+    def __init__(self, conf, content_client=None, admin_client=None, **kwargs):
         super(ContainerClient, self).__init__(
             conf, request_prefix="/container", **kwargs
         )
+        self._admin_client = admin_client
         self._content_client = content_client
 
     @property
@@ -83,18 +85,23 @@ class ContainerClient(ProxyClient):
             )
         return self._content_client
 
+    @property
+    def admin(self):
+        if self._admin_client is None:
+            self._admin_client = AdminClient(
+                self.conf, logger=self.logger, pool_manager=self.pool_manager
+            )
+        return self._admin_client
+
     def _make_uri(self, target):
         """
         Build URIs for request that don't use the same prefix as the one
         set in this class' constructor.
         """
-        uri = "%s://%s/v3.0/%s/%s" % (
-            self.proxy_scheme,
-            self.proxy_netloc,
-            self.ns,
-            target,
+
+        return "/".join(
+            (p for p in (self.endpoint, self.api_version, self.ns, target) if p)
         )
-        return uri
 
     def _make_params(
         self,

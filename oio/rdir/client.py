@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2025 OVH SAS
+# Copyright (C) 2020-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -621,9 +621,7 @@ class RdirClient(HttpApi):
         )
         self.logger = logger or self.directory.logger
         self.oioproxy_kwargs = kwargs.copy()
-        self.oioproxy_kwargs["endpoint"] = (
-            self.directory.proxy_scheme + "://" + self.directory.proxy_netloc
-        )
+        self.oioproxy_kwargs["endpoint"] = self.directory.endpoint
         self.oioproxy_kwargs["pool_manager"] = self.directory.pool_manager
         self.admin = AdminClient(self.conf, logger=self.logger, **self.oioproxy_kwargs)
         self.ns = conf["namespace"]

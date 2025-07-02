@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -74,29 +74,182 @@ def loc_params(func):
     return _wrapped
 
 
+class ForwarderClient(ProxyClient):
+    """Low level forward client."""
+
+    def __init__(
+        self,
+        conf,
+        endpoint=None,
+        logger=None,
+        **kwargs,
+    ):
+        super().__init__(
+            conf,
+            "forward",
+            endpoint=endpoint,
+            logger=logger,
+            no_ns_in_url=True,
+            **kwargs,
+        )
+
+    def __forward_to_service(self, service_id, method, action, params=None, **kwargs):
+        if params is None:
+            params = {}
+        return self._request(
+            method, action, **kwargs, params={**params, "id": service_id}
+        )
+
+    def forward_get_config(self, service_id, **kwargs):
+        """
+        Get all configuration parameters from the specified service.
+
+        :param service_id: id of the service
+        :type service_id: str
+
+        :returns: the service configuration parameters
+        """
+        _resp, body = self.__forward_to_service(service_id, "GET", "config", **kwargs)
+        return body
+
+    def forward_set_config(self, service_id, config, **kwargs):
+        """
+        Set configuration parameters for the specified service.
+
+        :param service_id: id of the service
+        :type service_id: str
+        :param config: configuration parameters
+        :type config: dict
+
+        :returns: the service configuration parameters
+        """
+        if config is None:
+            raise ValueError("Missing value for 'config'")
+        _resp, body = self.__forward_to_service(
+            service_id, "POST", "config", json=config, **kwargs
+        )
+        return body
+
+    def forward_flush_cache(self, service_id, **kwargs):
+        """
+        Flush the resolver cache for the specified service.
+
+        :param service_id: id of the service
+        :type service_id: str
+
+        """
+        _ = self.__forward_to_service(service_id, "POST", "flush", **kwargs)
+
+    def forward_get_info(self, service_id, **kwargs):
+        """
+        Get all information from the specified service.
+
+        :param service_id: id of the service
+        :type service_id: str
+
+        :returns: a dictionary with all information keys the
+            service recognizes, and their current value.
+        :rtype: `dict`
+        """
+        _resp, body = self.__forward_to_service(service_id, "GET", "info", **kwargs)
+        return body
+
+    def forward_get_stats(self, service_id, **kwargs):
+        """
+        Get request statistics from the specified service.
+
+        :returns: a dictionary with all information keys the
+            service recognizes, and their current value.
+        :rtype: `dict`
+        """
+        _resp, body = self.__forward_to_service(service_id, "GET", "info", **kwargs)
+        return body
+
+    def forward_balance_masters(
+        self, service_id, max_ops, inactivity, rejoin, **kwargs
+    ):
+        """
+        Balance elections to get an acceptable slave/master ratio.
+
+        :param service_id: id of the service that should balance its elections.
+        :type service_id: str
+        :param max_ops: maximum number of balancing operations.
+        :type max_ops: int
+        :param inactivity: avoid expiring election whose last activity is
+                           younger than the specified value.
+        :type inactivity: int
+        :param rejoin: indicate if service can rejoin the election later.
+        :type rejoin: bool
+        """
+        return self.__forward_to_service(
+            service_id,
+            "POST",
+            "balance-masters",
+            **kwargs,
+            params={
+                "inactivity": int(inactivity),
+                "max": int(max_ops),
+                "id": service_id,
+                "rejoin": rejoin,
+            },
+        )
+
+    def forward_release_memory(self, service_id, **kwargs):
+        """
+        Ask the service to release memory (malloc_trim).
+        """
+        _ = self.__forward_to_service(service_id, "POST", "lean-glib", **kwargs)
+
+    def forward_reload_load_balancer(self, service_id, **kwargs):
+        """
+        Force the service to reload its internal load balancer.
+        """
+        _ = self.__forward_to_service(service_id, "POST", "reload", **kwargs)
+
+
 class AdminClient(ProxyClient):
     """Low level database administration client."""
 
-    def __init__(self, conf, conscience_client=None, **kwargs):
-        super(AdminClient, self).__init__(conf, request_prefix="/admin", **kwargs)
+    class CacheClient(ProxyClient):
+        def __init__(self, conf, logger=None, **kwargs):
+            super().__init__(
+                conf,
+                request_prefix="/cache",
+                no_ns_in_url=True,
+                logger=logger,
+                **kwargs,
+            )
+
+        def cache_flush(self, high=True, low=True, **kwargs):
+            if high:
+                _ = self._request("POST", "flush/high", **kwargs)
+            if low:
+                _ = self._request("POST", "flush/low", **kwargs)
+
+        def cache_status(self, **kwargs):
+            _resp, body = self._request("GET", "status", **kwargs)
+            return body
+
+    def __init__(self, conf, conscience_client=None, logger=None, **kwargs):
+        super(AdminClient, self).__init__(
+            conf, request_prefix="/admin", logger=logger, **kwargs
+        )
         kwargs.pop("pool_manager", None)
-        kwargs["endpoint"] = self.proxy_scheme + "://" + self.proxy_netloc
+        kwargs["endpoint"] = self.endpoint
         self._kwargs = kwargs
         self._cache_client = None
         self._conscience_client = conscience_client
-        self._forwarder = None
+        self._forwarder_client = None
+        self._proxy_client = None
 
     @property
     def cache_client(self):
-        """
-        Instantiate a client object for '/cache/*' proxy routes.
-        """
+        """Get an instance of CacheClient (with a shared connection pool)."""
         if self._cache_client is None:
-            self._cache_client = ProxyClient(
+            self._cache_client = AdminClient.CacheClient(
                 self.conf,
-                request_prefix="/cache",
                 pool_manager=self.pool_manager,
-                no_ns_in_url=True,
+                logger=self.logger,
                 **self._kwargs,
             )
         return self._cache_client
@@ -108,24 +261,37 @@ class AdminClient(ProxyClient):
             self._conscience_client = ConscienceClient(
                 self.conf,
                 pool_manager=self.pool_manager,
+                logger=self.logger,
                 **self._kwargs,
             )
         return self._conscience_client
+
+    @property
+    def proxy(self):
+        """Get an instance of ProxyClient (with a shared connection pool)."""
+        if self._proxy_client is None:
+            self._proxy_client = ProxyClient(
+                self.conf,
+                pool_manager=self.pool_manager,
+                no_ns_in_url=True,
+                logger=self.logger,
+                **self._kwargs,
+            )
+        return self._proxy_client
 
     @property
     def forwarder(self):
         """
         Instantiate a client object for '/forward/*' proxy routes.
         """
-        if self._forwarder is None:
-            self._forwarder = ProxyClient(
+        if self._forwarder_client is None:
+            self._forwarder_client = ForwarderClient(
                 self.conf,
-                request_prefix="/forward",
                 pool_manager=self.pool_manager,
-                no_ns_in_url=True,
+                logger=self.logger,
                 **self._kwargs,
             )
-        return self._forwarder
+        return self._forwarder_client
 
     @loc_params
     def election_debug(self, params, **kwargs):
@@ -303,13 +469,9 @@ class AdminClient(ProxyClient):
     # Proxy's cache and config actions ################################
 
     def _proxy_endpoint(self, proxy_netloc=None):
-        if proxy_netloc and proxy_netloc != self.cache_client.proxy_netloc:
-            endpoint = self.cache_client.endpoint.replace(
-                self.cache_client.proxy_netloc, proxy_netloc
-            )
-            return self.conscience.resolve_url("oioproxy", endpoint)
-        else:
-            return self.cache_client.endpoint
+        if proxy_netloc and proxy_netloc != self.cache_client.endpoint_netloc:
+            return self.conscience.resolve_url("oioproxy", proxy_netloc)
+        return None
 
     def proxy_flush_cache(
         self, high=True, low=True, proxy_netloc=None, service_type=None, **kwargs
@@ -323,14 +485,7 @@ class AdminClient(ProxyClient):
             from the "low" cache
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        if high:
-            url = endpoint + "/flush/high"
-            self.cache_client._direct_request("POST", url, **kwargs)
-        if low:
-            if service_type:
-                kwargs.setdefault("params", {})["type"] = service_type
-            url = endpoint + "/flush/low"
-            self.cache_client._direct_request("POST", url, **kwargs)
+        self.cache_client.cache_flush(high=high, low=low, endpoint=endpoint, **kwargs)
 
     def proxy_get_cache_status(self, proxy_netloc=None, **kwargs):
         """
@@ -338,9 +493,7 @@ class AdminClient(ProxyClient):
         cache, including the current number of entries.
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        url = endpoint + "/status"
-        _resp, body = self.cache_client._direct_request("GET", url, **kwargs)
-        return body
+        return self.cache_client.cache_status(endpoint=endpoint, **kwargs)
 
     def proxy_get_live_config(self, proxy_netloc=None, **kwargs):
         """
@@ -350,27 +503,27 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        url = self.conscience.resolve_url(
-            "oioproxy",
-            f"http://{proxy_netloc or self.proxy_netloc}/v3.0/config",
-        )
-        _resp, body = self._direct_request("GET", url, **kwargs)
+        endpoint = self._proxy_endpoint(proxy_netloc)
+        _resp, body = self.proxy._request("GET", "config", endpoint=endpoint, **kwargs)
         return body
 
-    def proxy_set_live_config(self, proxy_netloc=None, config=None, **kwargs):
+    def proxy_set_live_config(self, config, proxy_netloc=None, **kwargs):
         """
         Set configuration parameters on the specified proxy service.
         """
         if config is None:
             raise ValueError("Missing value for 'config'")
-        url = self.conscience.resolve_url(
-            "oioproxy",
-            f"http://{proxy_netloc or self.proxy_netloc}/v3.0/config",
+
+        endpoint = self._proxy_endpoint(proxy_netloc)
+        _resp, body = self.proxy._request(
+            "POST", "config", endpoint=endpoint, json=config, **kwargs
         )
-        _resp, body = self._direct_request("POST", url, json=config, **kwargs)
         return body
 
     def _service_get_info(self, svc_type, svc_id, **kwargs):
+        # TODO: We should not invoke _direct_request with an arbitrary url here be
+        # use the service dedicated client. This change is quite impacting as we should
+        # set up service client provider somehow.
         url = self.conscience.resolve_service_id(svc_type, svc_id, **kwargs)
         _resp, body = self._direct_request("GET", f"http://{url}/info", **kwargs)
         data = body.decode("utf-8")
@@ -384,16 +537,9 @@ class AdminClient(ProxyClient):
 
     # Forwarded actions ###############################################
 
-    def _forward_service_action(self, svc_id, action, method="POST", **kwargs):
-        """Execute service-specific actions."""
-        _resp, body = self.forwarder._request(
-            method, action, params={"id": svc_id}, **kwargs
-        )
-        return body
-
     def service_flush_cache(self, svc_id, **kwargs):
         """Flush the resolver cache of an sqliterepo-based service."""
-        self._forward_service_action(svc_id, "/flush", **kwargs)
+        self.forwarder.forward_flush_cache(svc_id, **kwargs)
 
     def service_get_live_config(self, svc_id, **kwargs):
         """
@@ -404,7 +550,7 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        return self._forward_service_action(svc_id, "/config", method="GET", **kwargs)
+        return self.forwarder.forward_get_config(svc_id, **kwargs)
 
     def service_set_live_config(self, svc_id, config, **kwargs):
         """
@@ -413,7 +559,7 @@ class AdminClient(ProxyClient):
         Notice that some parameters may not be taken into account,
         and no parameter will survive a service restart.
         """
-        return self._forward_service_action(svc_id, "/config", json=config, **kwargs)
+        return self.forwarder.forward_set_config(svc_id, config, **kwargs)
 
     def service_get_info(self, svc_id, svc_type=None, **kwargs):
         """
@@ -424,9 +570,11 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        if svc_type is None or svc_type in ("meta0", "meta1", "meta2"):
+        if svc_type in (None, "meta0", "meta1", "meta2"):
             # Use ASN1 protocol
-            return self._forward_service_action(svc_id, "/info", method="GET", **kwargs)
+            return self.forwarder.forward_get_info(
+                svc_id, "/info", method="GET", **kwargs
+            )
 
         return self._service_get_info(svc_type, svc_id, **kwargs)
 
@@ -439,7 +587,7 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        res = self._forward_service_action(svc_id, "/stats", method="GET", **kwargs)
+        res = self.forwarder.forward_get_stats(svc_id, "/stats", method="GET", **kwargs)
         return {
             counter[1]: int(counter[2])
             for counter in (
@@ -459,26 +607,20 @@ class AdminClient(ProxyClient):
         :param inactivity: avoid expiring election whose last activity is
                            younger than the specified value.
         """
-        params = {
-            "inactivity": int(inactivity),
-            "max": int(max_ops),
-            "id": svc_id,
-            "rejoin": rejoin,
-        }
-        _resp, body = self.forwarder._request(
-            "POST", "/balance-masters", params=params, **kwargs
+        resp, body = self.forwarder.forward_balance_masters(
+            svc_id, max_ops, inactivity, rejoin, **kwargs
         )
-        return _resp.status, body
+        return resp.status, body
 
     def service_release_memory(self, svc_id, **kwargs):
         """
         Ask the service to release memory (malloc_trim).
         Works on all services using ASN.1 protocol.
         """
-        self._forward_service_action(svc_id, "/lean-glib", **kwargs)
+        self.forwarder.forward_release_memory(svc_id, **kwargs)
 
     def service_reload_lb(self, svc_id, **kwargs):
         """
         Force the service to reload its internal load balancer.
         """
-        self._forward_service_action(svc_id, "/reload", **kwargs)
+        self.forwarder.forward_reload_load_balancer(svc_id, **kwargs)

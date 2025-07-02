@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,7 +51,7 @@ class TestMeta2Database(BaseTestCase):
             config = {x: str(not y) for x, y in self.__class__.down_cache_opts.items()}
         else:
             config = {x: str(y) for x, y in self.__class__.down_cache_opts.items()}
-        self.admin.proxy_set_live_config(config=config)
+        self.admin.proxy_set_live_config(config)
 
     def _get_peers(self):
         linked_services = self.api.directory.list(self.account, self.reference)

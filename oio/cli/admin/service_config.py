@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -148,7 +149,7 @@ class ProxySetConfig(ProxyCommandMixin, SetConfigCommand):
 
     def _take_action(self, parsed_args):
         results = self.app.client_manager.admin.proxy_set_live_config(
-            parsed_args.service, parsed_args.params
+            parsed_args.params, proxy_netloc=parsed_args.service
         )
         return results.items()
 
