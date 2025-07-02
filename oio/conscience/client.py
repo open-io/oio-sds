@@ -43,7 +43,9 @@ class ConscienceClient(ProxyClient):
             params = {"type": pool}
             if size is not None:
                 params["size"] = size
-            resp, body = self._request("GET", "/choose", params=params, **kwargs)
+            resp, body = self._request(
+                "GET", "/choose", params=params, retriable=True, **kwargs
+            )
             if resp.status == 200:
                 return body
             raise OioException(f"ERROR while getting next instances from pool {pool}")
@@ -64,7 +66,7 @@ class ConscienceClient(ProxyClient):
             """
             params = {"pool": pool}
             resp, body = self._request(
-                "POST", "/poll", params=params, data=json.dumps(kwargs)
+                "POST", "/poll", params=params, data=json.dumps(kwargs), retriable=True
             )
             if resp.status == 200:
                 return body
@@ -98,8 +100,8 @@ class ConscienceClient(ProxyClient):
         def __init__(self, conf, **kwargs):
             super().__init__(conf, request_prefix="local/", **kwargs)
 
-        def list_services(self):
-            resp, body = self._request("GET", "list")
+        def list_services(self, **kwargs):
+            resp, body = self._request("GET", "list", retriable=True, **kwargs)
             if resp.status == 200:
                 return body
             raise OioException(f"failed to get list of local services: {resp.text}")
@@ -200,7 +202,9 @@ class ConscienceClient(ProxyClient):
             params["full"] = "1"
         if cs:
             params["cs"] = cs
-        resp, body = self._request("GET", "/list", params=params, **kwargs)
+        resp, body = self._request(
+            "GET", "/list", params=params, retriable=True, **kwargs
+        )
         if resp.status != 200:
             raise OioException(
                 f"failed to get list of {service_type} services: {resp.text}"
@@ -231,7 +235,9 @@ class ConscienceClient(ProxyClient):
         Get the list of service types known by Conscience.
         """
         params = {"what": "types"}
-        resp, body = self._request("GET", "/info", params=params, **kwargs)
+        resp, body = self._request(
+            "GET", "/info", params=params, retriable=True, **kwargs
+        )
         if resp.status == 200:
             return body
         raise OioException(f"ERROR while getting services types: {resp.text}")
@@ -261,7 +267,7 @@ class ConscienceClient(ProxyClient):
         _resp, _body = self._request("POST", "/deregister", data=data, **kwargs)
 
     def info(self):
-        _resp, body = self._request("GET", "/info")
+        _resp, body = self._request("GET", "/info", retriable=True)
         return body
 
     def lock_score(self, srv_or_list, **kwargs):
@@ -296,6 +302,7 @@ class ConscienceClient(ProxyClient):
             "GET",
             "/resolve",
             params={"type": srv_type, "service_id": service_id},
+            retriable=True,
             **kwargs,
         )
         if resp.status == 200:

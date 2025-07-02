@@ -109,7 +109,9 @@ class ForwarderClient(ProxyClient):
 
         :returns: the service configuration parameters
         """
-        _resp, body = self.__forward_to_service(service_id, "GET", "config", **kwargs)
+        _resp, body = self.__forward_to_service(
+            service_id, "GET", "config", retriable=True, **kwargs
+        )
         return body
 
     def forward_set_config(self, service_id, config, **kwargs):
@@ -140,7 +142,7 @@ class ForwarderClient(ProxyClient):
         """
         _ = self.__forward_to_service(service_id, "POST", "flush", **kwargs)
 
-    def forward_get_info(self, service_id, **kwargs):
+    def forward_get_info(self, service_id, retriable=True, **kwargs):
         """
         Get all information from the specified service.
 
@@ -162,7 +164,9 @@ class ForwarderClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        _resp, body = self.__forward_to_service(service_id, "GET", "info", **kwargs)
+        _resp, body = self.__forward_to_service(
+            service_id, "GET", "stats", retriable=True, **kwargs
+        )
         return body
 
     def forward_balance_masters(
@@ -227,7 +231,7 @@ class AdminClient(ProxyClient):
                 _ = self._request("POST", "flush/low", **kwargs)
 
         def cache_status(self, **kwargs):
-            _resp, body = self._request("GET", "status", **kwargs)
+            _resp, body = self._request("GET", "status", retriable=True, **kwargs)
             return body
 
     def __init__(self, conf, conscience_client=None, logger=None, **kwargs):
@@ -401,7 +405,7 @@ class AdminClient(ProxyClient):
         sqliterepo base.
         """
         _resp, body = self._request(
-            "POST", "/get_properties", params=params, data="", **kwargs
+            "POST", "/get_properties", params=params, data="", retriable=True, **kwargs
         )
         return body
 
@@ -493,7 +497,9 @@ class AdminClient(ProxyClient):
         cache, including the current number of entries.
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        return self.cache_client.cache_status(endpoint=endpoint, **kwargs)
+        return self.cache_client.cache_status(
+            endpoint=endpoint, retriable=True, **kwargs
+        )
 
     def proxy_get_live_config(self, proxy_netloc=None, **kwargs):
         """
@@ -504,7 +510,9 @@ class AdminClient(ProxyClient):
         :rtype: `dict`
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        _resp, body = self.proxy._request("GET", "config", endpoint=endpoint, **kwargs)
+        _resp, body = self.proxy._request(
+            "GET", "config", endpoint=endpoint, retriable=True, **kwargs
+        )
         return body
 
     def proxy_set_live_config(self, config, proxy_netloc=None, **kwargs):
@@ -525,7 +533,9 @@ class AdminClient(ProxyClient):
         # use the service dedicated client. This change is quite impacting as we should
         # set up service client provider somehow.
         url = self.conscience.resolve_service_id(svc_type, svc_id, **kwargs)
-        _resp, body = self._direct_request("GET", f"http://{url}/info", **kwargs)
+        _resp, body = self._direct_request(
+            "GET", f"http://{url}/info", retriable=True, **kwargs
+        )
         data = body.decode("utf-8")
         info = {}
         for line in data.split("\n"):
@@ -587,7 +597,7 @@ class AdminClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        res = self.forwarder.forward_get_stats(svc_id, "/stats", method="GET", **kwargs)
+        res = self.forwarder.forward_get_stats(svc_id, method="GET", **kwargs)
         return {
             counter[1]: int(counter[2])
             for counter in (

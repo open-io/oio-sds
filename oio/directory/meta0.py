@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -177,8 +177,8 @@ class Meta0Client(ProxyClient):
 
     def list(self, **kwargs):
         """Get the meta0 prefix mapping"""
-        _, obody = self._request("GET", "/meta0_list", **kwargs)
-        return obody
+        _, body = self._request("GET", "/meta0_list", retriable=True, **kwargs)
+        return body
 
 
 class Meta0PrefixMapping(MetaMapping):
@@ -212,7 +212,7 @@ class Meta0PrefixMapping(MetaMapping):
     def reset(self):
         super(Meta0PrefixMapping, self).reset()
 
-        for svc_id, svc in self.services.items():
+        for _svc_id, svc in self.services.items():
             location = self.get_loc(svc)
             location_parts = location.rsplit(".", self.min_dist - 1)
             location = ".".join([location_parts[0]] + ["*"] * len(location_parts[1:]))
@@ -228,7 +228,7 @@ class Meta0PrefixMapping(MetaMapping):
         """
         available_svcs_by_location = {}
 
-        for svc_id, svc in self.services.items():
+        for _svc_id, svc in self.services.items():
             if self.get_score(svc) <= 0:
                 continue
             location = svc["location"]

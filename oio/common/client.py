@@ -28,7 +28,7 @@ from oio.common.exceptions import (
 from oio.common.green import sleep
 from oio.common.logger import get_logger
 
-REQUEST_ATTEMPTS = 1
+REQUEST_ATTEMPTS = 3
 
 
 class ProxyClient(HttpApi):
@@ -102,19 +102,27 @@ class ProxyClient(HttpApi):
         assert request_attempts > 0
         self._request_attempts = request_attempts
 
-    def _request(self, method, url, endpoint=None, **kwargs):
+    def _request(self, method, url, endpoint=None, retriable=False, **kwargs):
         if not endpoint:
             endpoint = self.endpoint
         url = "/".join((endpoint, self._proxy_pathname_prefix, url.strip("/")))
-        return self._direct_request(method, url, **kwargs)
+        return self._direct_request(method, url, retriable=retriable, **kwargs)
 
     def _direct_request(
-        self, method, url, headers=None, request_attempts=None, **kwargs
+        self,
+        method,
+        url,
+        headers=None,
+        request_attempts=None,
+        retriable=False,
+        **kwargs,
     ):
         if not request_attempts:
             request_attempts = self._request_attempts
         if request_attempts <= 0:
             raise OioException(f"Negative request attempts: {request_attempts}")
+        if not retriable:
+            request_attempts = 1
         if kwargs.get("autocreate"):
             headers = headers or {}
             headers[HEADER_PREFIX + "action-mode"] = "autocreate"

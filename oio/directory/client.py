@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -68,7 +68,7 @@ class DirectoryClient(ProxyClient):
     def has(self, account=None, reference=None, cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         try:
-            self._request("GET", "/has", params=params, **kwargs)
+            self._request("GET", "/has", params=params, retriable=True, **kwargs)
         except exceptions.NotFound:
             return False
         return True
@@ -90,7 +90,9 @@ class DirectoryClient(ProxyClient):
         )
         if service_id:
             params["service_id"] = service_id
-        _resp, body = self._request("GET", "/show", params=params, **kwargs)
+        _resp, body = self._request(
+            "GET", "/show", params=params, retriable=True, **kwargs
+        )
         return body
 
     def delete(self, account=None, reference=None, cid=None, **kwargs):
@@ -115,7 +117,12 @@ class DirectoryClient(ProxyClient):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps(properties or list())
         _resp, body = self._request(
-            "POST", "/get_properties", data=data, params=params, **kwargs
+            "POST",
+            "/get_properties",
+            data=data,
+            params=params,
+            retriable=True,
+            **kwargs,
         )
         return body
 

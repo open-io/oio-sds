@@ -602,7 +602,12 @@ class ContainerSharding(ProxyClient):
         params = self._make_params(cid=shard["cid"], **kwargs)
         params["strategy"] = strategy
         resp, body = self._request(
-            "GET", "/find", params=params, json=strategy_params, **kwargs
+            "GET",
+            "/find",
+            params=params,
+            json=strategy_params,
+            retriable=True,
+            **kwargs,
         )
         if resp.status != 200:
             raise exceptions.from_response(resp, body)
@@ -1250,7 +1255,9 @@ class ContainerSharding(ProxyClient):
         )
         params.update({"max": limit, "marker": marker})
         try:
-            resp, body = self._request("GET", "/show", params=params, **kwargs)
+            resp, body = self._request(
+                "GET", "/show", params=params, retriable=True, **kwargs
+            )
         except NotFound as exc:
             if root_cid:
                 err_msg = f"Root container cid={root_cid} not found."
@@ -1312,7 +1319,7 @@ class ContainerSharding(ProxyClient):
             "upper": upper,
         }
         resp, body = self._request(
-            "GET", "/get_range", params=params, json=bounds, **kwargs
+            "GET", "/get_range", params=params, json=bounds, retriable=True, **kwargs
         )
         if resp.status != 200:
             raise exceptions.from_response(resp, body)

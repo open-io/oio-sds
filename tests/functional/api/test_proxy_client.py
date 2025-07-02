@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2018 OpenIO SAS
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,10 +35,22 @@ class TestProxyClient(BaseTestCase):
                 urllib3.HTTPResponse(status=200, body="OK"),
             ]
         )
-        resp, body = self.proxy_client._direct_request("GET", "test")
+        resp, body = self.proxy_client._direct_request("GET", "test", retriable=True)
         self.assertEqual(resp.status, 200)
         self.assertEqual(body, "OK")
         self.assertEqual(self.proxy_client.pool_manager.request.call_count, 2)
+
+    def test_connect_error_no_retry(self):
+        self.proxy_client.pool_manager.request = Mock(
+            side_effect=[
+                OioNetworkException("test"),
+                urllib3.HTTPResponse(status=200, body="OK"),
+            ]
+        )
+        self.assertRaises(
+            OioNetworkException, self.proxy_client._direct_request, "GET", "test"
+        )
+        self.assertEqual(self.proxy_client.pool_manager.request.call_count, 1)
 
     def test_error_503(self):
         self.proxy_client.pool_manager.request = Mock(

@@ -312,7 +312,9 @@ class ContainerClient(ProxyClient):
         :deprecated: use `container_get_properties` instead
         """
         params = self._make_params(account=account, reference=reference, cid=cid)
-        _resp, body = self._request("GET", "/show", params=params, **kwargs)
+        _resp, body = self._request(
+            "GET", "/show", params=params, retriable=True, **kwargs
+        )
         return body
 
     def container_snapshot(
@@ -431,7 +433,12 @@ class ContainerClient(ProxyClient):
             properties = list()
         data = json.dumps(properties)
         _resp, container_meta = self._request(
-            "POST", "/get_properties", data=data, params=params, **kwargs
+            "POST",
+            "/get_properties",
+            data=data,
+            params=params,
+            retriable=True,
+            **kwargs,
         )
 
         set_cached_container_metadata(
@@ -640,7 +647,9 @@ class ContainerClient(ProxyClient):
             params["local"] = 1
         if mpu_marker_only:
             params["mpu_marker_only"] = 1
-        resp, body = self._request("GET", "/list", params=params, **kwargs)
+        resp, body = self._request(
+            "GET", "/list", params=params, retriable=True, **kwargs
+        )
         return resp.headers, body
 
     def container_lifecycle_views(

@@ -428,7 +428,9 @@ class ContentClient(RawxScoreMixin, ProxyClient):
         )
         params["properties"] = properties
         try:
-            resp, chunks = self._request("GET", "locate", params=params, **kwargs)
+            resp, chunks = self._request(
+                "GET", "locate", params=params, retriable=True, **kwargs
+            )
             content_meta = _extract_content_headers_meta(resp.headers)
         except exceptions.OioNetworkException as exc:
             # TODO(FVE): this special behavior can be removed when
@@ -436,7 +438,9 @@ class ContentClient(RawxScoreMixin, ProxyClient):
             # object properties in the response body instead of headers.
             if properties and "got more than " in str(exc):
                 params["properties"] = False
-                _resp, chunks = self._request("GET", "locate", params=params, **kwargs)
+                _resp, chunks = self._request(
+                    "GET", "locate", params=params, retriable=True, **kwargs
+                )
                 content_meta = self.content_get_properties(
                     account,
                     reference,
@@ -553,7 +557,7 @@ class ContentClient(RawxScoreMixin, ProxyClient):
         )
         data = json.dumps(properties) if properties else None
         resp, body = self._request(
-            "POST", "get_properties", data=data, params=params, **kwargs
+            "POST", "get_properties", data=data, params=params, retriable=True, **kwargs
         )
         obj_meta = _extract_content_headers_meta(resp.headers)
         obj_meta.update(body)
@@ -718,7 +722,9 @@ class ContentClient(RawxScoreMixin, ProxyClient):
         params["stgpol"] = stgpol
         params["position"] = position
         data = json.dumps(data)
-        _resp, body = self._request("POST", "spare", data=data, params=params, **kwargs)
+        _resp, body = self._request(
+            "POST", "spare", data=data, params=params, retriable=True, **kwargs
+        )
         return body
 
     def content_truncate(
