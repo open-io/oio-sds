@@ -73,6 +73,7 @@ class ContainerClientTest(unittest.TestCase):
                 "test",
                 size=1,
                 data={},
+                retriable=True,
                 request_attempts=3,
             )
 
@@ -88,6 +89,7 @@ class ContainerClientTest(unittest.TestCase):
                 "test",
                 size=1,
                 data={},
+                retriable=True,
                 request_attempts=3,
             )
 
@@ -103,6 +105,7 @@ class ContainerClientTest(unittest.TestCase):
                 "test",
                 size=1,
                 data={},
+                retriable=True,
                 request_attempts=3,
             )
 

@@ -13,11 +13,17 @@
 # License along with this library.
 
 
+from mock import ANY, call
 from mock import MagicMock as Mock
 
 from oio.common.client import ProxyClient
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON
-from oio.common.exceptions import OioException, OioNetworkException, ServiceBusy
+from oio.common.exceptions import (
+    OioConnectionException,
+    OioException,
+    OioNetworkException,
+    ServiceBusy,
+)
 from oio.common.http_urllib3 import urllib3
 from oio.common.json import json
 from tests.utils import BaseTestCase
@@ -51,6 +57,71 @@ class TestProxyClient(BaseTestCase):
             OioNetworkException, self.proxy_client._direct_request, "GET", "test"
         )
         self.assertEqual(self.proxy_client.pool_manager.request.call_count, 1)
+
+    def test_connect_error_fallback(self):
+        endpoints = [
+            "http://127.0.0.1:6000",
+            "http://127.0.0.2:6000",
+            "http://127.0.0.3:6000",
+        ]
+
+        proxy_client = ProxyClient(
+            {"namespace": self.ns},
+            endpoint=";".join(endpoints),
+        )
+        proxy_client.pool_manager.request = Mock(
+            side_effect=[
+                OioConnectionException("test"),
+                OioConnectionException("test"),
+                urllib3.HTTPResponse(status=200, body="OK"),
+            ]
+        )
+        resp, body = proxy_client._request("GET", "test", retriable=False)
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(body, "OK")
+
+        for e in endpoints:
+            self.assertIn(
+                call(
+                    "GET",
+                    f"{e}/v3.0/{self.ns}/test",
+                    timeout=ANY,
+                    headers=ANY,
+                    body=None,
+                ),
+                proxy_client.pool_manager.request.call_args_list,
+            )
+
+    def test_connect_error_fallback_explicit_endpoint(self):
+        endpoints = [
+            "http://127.0.0.1:6000",
+            "http://127.0.0.2:6000",
+            "http://127.0.0.3:6000",
+        ]
+        proxy_client = ProxyClient(
+            {"namespace": self.ns},
+            endpoint=";".join(endpoints),
+        )
+        proxy_client.pool_manager.request = Mock(
+            side_effect=[
+                OioConnectionException("test"),
+            ]
+        )
+        self.assertRaises(
+            OioConnectionException,
+            proxy_client._request,
+            "GET",
+            "test",
+            endpoint="http://127.0.0.4:6000",
+            retriable=False,
+        )
+        proxy_client.pool_manager.request.assert_called_once_with(
+            "GET",
+            f"http://127.0.0.4:6000/v3.0/{self.ns}/test",
+            timeout=ANY,
+            headers=ANY,
+            body=None,
+        )
 
     def test_error_503(self):
         self.proxy_client.pool_manager.request = Mock(

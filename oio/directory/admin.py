@@ -153,7 +153,9 @@ class ForwarderClient(ProxyClient):
             service recognizes, and their current value.
         :rtype: `dict`
         """
-        _resp, body = self.__forward_to_service(service_id, "GET", "info", **kwargs)
+        _resp, body = self.__forward_to_service(
+            service_id, "GET", "info", retriable=retriable, **kwargs
+        )
         return body
 
     def forward_get_stats(self, service_id, **kwargs):
@@ -489,7 +491,9 @@ class AdminClient(ProxyClient):
             from the "low" cache
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        self.cache_client.cache_flush(high=high, low=low, endpoint=endpoint, **kwargs)
+        self.cache_client.cache_flush(
+            high=high, low=low, endpoint=endpoint, service_type=service_type, **kwargs
+        )
 
     def proxy_get_cache_status(self, proxy_netloc=None, **kwargs):
         """
@@ -497,9 +501,7 @@ class AdminClient(ProxyClient):
         cache, including the current number of entries.
         """
         endpoint = self._proxy_endpoint(proxy_netloc)
-        return self.cache_client.cache_status(
-            endpoint=endpoint, retriable=True, **kwargs
-        )
+        return self.cache_client.cache_status(endpoint=endpoint, **kwargs)
 
     def proxy_get_live_config(self, proxy_netloc=None, **kwargs):
         """

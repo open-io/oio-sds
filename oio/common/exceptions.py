@@ -279,6 +279,12 @@ class OioNetworkException(OioException):
     pass
 
 
+class OioConnectionException(OioNetworkException):
+    """Host connection exception (host is down for instance)."""
+
+    pass
+
+
 class EventletUrllibBug(OioNetworkException):
     """
     Suspected bug in eventlet when returning the result of select.select()

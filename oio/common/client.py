@@ -22,6 +22,7 @@ from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.common.constants import HEADER_PREFIX
 from oio.common.exceptions import (
     Conflict,
+    OioConnectionException,
     OioException,
     OioNetworkException,
 )
@@ -66,6 +67,7 @@ class ProxyClient(HttpApi):
         self.ns = conf.get("namespace")
         self.conf = conf
         self.logger = logger or get_logger(conf)
+        super(ProxyClient, self).__init__(service_type="proxy", **kwargs)
 
         # Look for an endpoint in the application configuration
         if not endpoint:
@@ -75,17 +77,17 @@ class ProxyClient(HttpApi):
             ns_conf = load_namespace_conf(self.ns)
             endpoint = ns_conf.get("proxy")
 
-        # Historically, the endpoint did not contain any scheme
-        proxy_scheme = "http"
-        split_endpoint = endpoint.split("://", 1)
-        if len(split_endpoint) > 1:
-            proxy_scheme = split_endpoint[0]
-        endpoint = split_endpoint[-1].strip("/")
-        self.proxy_netloc = f"{proxy_scheme}://{endpoint}"
+        self._endpoints = []
+        for e in endpoint.split(";"):
+            # Historically, the endpoint did not contain any scheme
+            proxy_scheme = "http"
+            split_endpoint = e.split("://", 1)
+            if len(split_endpoint) > 1:
+                proxy_scheme = split_endpoint[0]
+            e = split_endpoint[-1].strip("/")
+            self._endpoints.append(f"{proxy_scheme}://{e}")
+
         self.api_version = api_version
-
-        super(ProxyClient, self).__init__(service_type="proxy", **kwargs)
-
         pathname_prefix_parts = []
         if api_version:
             pathname_prefix_parts.append(api_version.strip("/"))
@@ -95,18 +97,34 @@ class ProxyClient(HttpApi):
             pathname_prefix_parts.append(request_prefix.strip("/"))
         self._proxy_pathname_prefix = "/".join(pathname_prefix_parts)
 
-        self.endpoint = self.proxy_netloc
-
         if not isinstance(request_attempts, int):
             request_attempts = int(request_attempts)
         assert request_attempts > 0
         self._request_attempts = request_attempts
 
+    def __endpoints_with_fallback(self, endpoint=None):
+        endpoints = [endpoint] if endpoint else self._endpoints
+        if endpoints:
+            for e in endpoints[:-1]:
+                yield False, e
+            yield True, endpoints[-1]
+
     def _request(self, method, url, endpoint=None, retriable=False, **kwargs):
-        if not endpoint:
-            endpoint = self.endpoint
-        url = "/".join((endpoint, self._proxy_pathname_prefix, url.strip("/")))
-        return self._direct_request(method, url, retriable=retriable, **kwargs)
+        for is_last, endpoint in self.__endpoints_with_fallback(endpoint=endpoint):
+            try:
+                full_url = "/".join(
+                    (endpoint, self._proxy_pathname_prefix, url.strip("/"))
+                )
+                return self._direct_request(
+                    method,
+                    full_url,
+                    retriable=retriable,
+                    fail_fast=not is_last,
+                    **kwargs,
+                )
+            except OioConnectionException:
+                if is_last:
+                    raise
 
     def _direct_request(
         self,
@@ -115,6 +133,7 @@ class ProxyClient(HttpApi):
         headers=None,
         request_attempts=None,
         retriable=False,
+        fail_fast=False,
         **kwargs,
     ):
         if not request_attempts:
@@ -135,6 +154,8 @@ class ProxyClient(HttpApi):
             try:
                 return super()._direct_request(method, url, headers=headers, **kwargs)
             except OioNetworkException as exc:
+                if isinstance(exc, OioConnectionException) and fail_fast:
+                    raise
                 if i >= request_attempts - 1:
                     raise
                 # Note that the request ID is already part of str(exc)

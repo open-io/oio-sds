@@ -23,6 +23,7 @@ from urllib3 import exceptions as urllibexc
 
 from oio.common.exceptions import (
     EventletUrllibBug,
+    OioConnectionException,
     OioException,
     OioNetworkException,
     OioProtocolError,
@@ -182,7 +183,7 @@ def oio_exception_from_httperror(exc, reqid=None, url=None):
     extra = ", ".join(f"{k}={v}" for k, v in extra_dict.items())
     if isinstance(exc, urllibexc.MaxRetryError):
         if isinstance(exc.reason, urllibexc.NewConnectionError):
-            reraise(OioNetworkException, exc.reason, extra)
+            reraise(OioConnectionException, exc.reason, extra)
         if isinstance(exc.reason, urllibexc.TimeoutError):
             reraise(OioTimeout, exc.reason, extra)
         reraise(OioNetworkException, exc, extra)

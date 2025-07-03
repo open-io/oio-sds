@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -38,7 +39,9 @@ class DirectoryTest(unittest.TestCase):
         uri = "%s/reference/show" % self.uri_base
         params = {"acct": self.account, "ref": self.name}
         api.list(self.account, self.name)
-        api._direct_request.assert_called_once_with("GET", uri, params=params)
+        api._direct_request.assert_called_once_with(
+            "GET", uri, params=params, retriable=True, fail_fast=False
+        )
 
     def test_create(self):
         api = self.api
@@ -50,7 +53,9 @@ class DirectoryTest(unittest.TestCase):
         params = {"acct": self.account, "ref": self.name}
 
         data = json.dumps({"properties": {}})
-        api._direct_request.assert_called_with("POST", uri, params=params, data=data)
+        api._direct_request.assert_called_with(
+            "POST", uri, params=params, data=data, retriable=False, fail_fast=False
+        )
 
     def test_create_already_exists(self):
         api = self.api
@@ -63,7 +68,7 @@ class DirectoryTest(unittest.TestCase):
 
         data = json.dumps({"properties": {}})
         api._direct_request.assert_called_once_with(
-            "POST", uri, params=params, data=data
+            "POST", uri, params=params, data=data, retriable=False, fail_fast=False
         )
 
     def test_create_metadata(self):
@@ -88,7 +93,7 @@ class DirectoryTest(unittest.TestCase):
 
         data = json.dumps({"properties": metadata})
         api._direct_request.assert_called_once_with(
-            "POST", uri, params=params, data=data
+            "POST", uri, params=params, data=data, retriable=False, fail_fast=False
         )
 
     def test_create_error(self):
@@ -108,7 +113,9 @@ class DirectoryTest(unittest.TestCase):
         api.destroy(self.account, self.name)
         uri = "%s/reference/destroy" % self.uri_base
         params = {"acct": self.account, "ref": self.name}
-        api._direct_request.assert_called_once_with("POST", uri, params=params)
+        api._direct_request.assert_called_once_with(
+            "POST", uri, params=params, retriable=False, fail_fast=False
+        )
 
     def test_list_type(self):
         api = self.api
@@ -119,10 +126,16 @@ class DirectoryTest(unittest.TestCase):
         ]
 
         api._direct_request = Mock(return_value=(resp, resp_body))
-        srv = api.list(self.account, self.name, service_type=service_type)
+        srv = api.list(
+            self.account,
+            self.name,
+            service_type=service_type,
+        )
         uri = "%s/reference/show" % self.uri_base
         params = {"acct": self.account, "ref": self.name, "type": service_type}
-        api._direct_request.assert_called_once_with("GET", uri, params=params)
+        api._direct_request.assert_called_once_with(
+            "GET", uri, params=params, retriable=True, fail_fast=False
+        )
         self.assertEqual(srv, resp_body)
 
     def test_unlink(self):
@@ -133,7 +146,13 @@ class DirectoryTest(unittest.TestCase):
         api.unlink(self.account, self.name, service_type)
         uri = "%s/reference/unlink" % self.uri_base
         params = {"acct": self.account, "ref": self.name, "type": service_type}
-        api._direct_request.assert_called_once_with("POST", uri, params=params)
+        api._direct_request.assert_called_once_with(
+            "POST",
+            uri,
+            params=params,
+            retriable=False,
+            fail_fast=False,
+        )
 
     def test_link(self):
         api = self.api
@@ -144,7 +163,12 @@ class DirectoryTest(unittest.TestCase):
         uri = "%s/reference/link" % self.uri_base
         params = {"acct": self.account, "ref": self.name, "type": service_type}
         api._direct_request.assert_called_once_with(
-            "POST", uri, params=params, autocreate=False
+            "POST",
+            uri,
+            params=params,
+            autocreate=False,
+            retriable=False,
+            fail_fast=False,
         )
 
     def test_renew(self):
@@ -155,7 +179,13 @@ class DirectoryTest(unittest.TestCase):
         api.renew(self.account, self.name, service_type)
         uri = "%s/reference/renew" % self.uri_base
         params = {"acct": self.account, "ref": self.name, "type": service_type}
-        api._direct_request.assert_called_once_with("POST", uri, params=params)
+        api._direct_request.assert_called_once_with(
+            "POST",
+            uri,
+            params=params,
+            retriable=False,
+            fail_fast=False,
+        )
 
     def test_force(self):
         api = self.api
@@ -168,7 +198,13 @@ class DirectoryTest(unittest.TestCase):
         params = {"acct": self.account, "ref": self.name, "type": service_type}
         data = json.dumps(services)
         api._direct_request.assert_called_once_with(
-            "POST", uri, data=data, params=params, autocreate=False
+            "POST",
+            uri,
+            data=data,
+            params=params,
+            autocreate=False,
+            retriable=False,
+            fail_fast=False,
         )
 
     def test_get_properties(self):
@@ -181,7 +217,12 @@ class DirectoryTest(unittest.TestCase):
         params = {"acct": self.account, "ref": self.name}
         data = json.dumps(properties)
         api._direct_request.assert_called_once_with(
-            "POST", uri, data=data, params=params
+            "POST",
+            uri,
+            data=data,
+            params=params,
+            retriable=True,
+            fail_fast=False,
         )
 
     def test_set_properties(self):
@@ -194,7 +235,12 @@ class DirectoryTest(unittest.TestCase):
         params = {"acct": self.account, "ref": self.name}
         data = json.dumps({"properties": properties})
         api._direct_request.assert_called_once_with(
-            "POST", uri, data=data, params=params
+            "POST",
+            uri,
+            data=data,
+            params=params,
+            retriable=False,
+            fail_fast=False,
         )
 
     def test_delete_properties(self):
@@ -207,5 +253,10 @@ class DirectoryTest(unittest.TestCase):
         params = {"acct": self.account, "ref": self.name}
         data = json.dumps(properties)
         api._direct_request.assert_called_once_with(
-            "POST", uri, data=data, params=params
+            "POST",
+            uri,
+            data=data,
+            params=params,
+            retriable=False,
+            fail_fast=False,
         )

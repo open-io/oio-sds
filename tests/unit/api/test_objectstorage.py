@@ -128,7 +128,11 @@ class ObjectStorageTest(unittest.TestCase):
         }
         uri = "http://%s/v1.0/account/containers" % fake_endpoint
         self.api.account._direct_request.assert_called_once_with(
-            "GET", uri, params=params, autocreate=True, **self.common_kwargs
+            "GET",
+            uri,
+            params=params,
+            autocreate=True,
+            **self.common_kwargs,
         )
         self.assertEqual(len(containers), 1)
 
@@ -171,7 +175,14 @@ class ObjectStorageTest(unittest.TestCase):
             "version": version,
         }
         api.container._direct_request.assert_called_once_with(
-            "GET", uri, params=params, autocreate=True, path=ANY, **self.common_kwargs
+            "GET",
+            uri,
+            params=params,
+            autocreate=True,
+            path=ANY,
+            retriable=True,
+            fail_fast=False,
+            **self.common_kwargs,
         )
         self.assertEqual(len(listing["objects"]), 2)
 
@@ -186,7 +197,13 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/show" % self.uri_base
         params = {"acct": self.account, "ref": name}
         api.container._direct_request.assert_called_once_with(
-            "GET", uri, params=params, autocreate=True, **self.common_kwargs
+            "GET",
+            uri,
+            params=params,
+            autocreate=True,
+            retriable=True,
+            fail_fast=False,
+            **self.common_kwargs,
         )
         self.assertEqual(info, {})
 
@@ -221,6 +238,8 @@ class ObjectStorageTest(unittest.TestCase):
             data=data,
             autocreate=True,
             region=None,
+            retriable=False,
+            fail_fast=False,
             **self.common_kwargs,
         )
 
@@ -247,7 +266,13 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/destroy" % self.uri_base
         params = {"acct": self.account, "ref": name}
         api.container._direct_request.assert_called_once_with(
-            "POST", uri, params=params, autocreate=True, **self.common_kwargs
+            "POST",
+            uri,
+            params=params,
+            autocreate=True,
+            retriable=False,
+            fail_fast=False,
+            **self.common_kwargs,
         )
 
     def test_container_delete_not_empty(self):
@@ -276,7 +301,14 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/set_properties" % self.uri_base
         params = {"acct": self.account, "ref": name}
         api.container._direct_request.assert_called_once_with(
-            "POST", uri, data=data, params=params, autocreate=True, **self.common_kwargs
+            "POST",
+            uri,
+            data=data,
+            params=params,
+            autocreate=True,
+            retriable=False,
+            fail_fast=False,
+            **self.common_kwargs,
         )
 
     def test_object_show(self):
@@ -302,7 +334,14 @@ class ObjectStorageTest(unittest.TestCase):
             "path": name,
         }
         api.content._direct_request.assert_called_once_with(
-            "POST", uri, params=params, data=None, autocreate=True, **self.common_kwargs
+            "POST",
+            uri,
+            params=params,
+            data=None,
+            autocreate=True,
+            retriable=True,
+            fail_fast=False,
+            **self.common_kwargs,
         )
         self.assertIsNotNone(obj)
 
@@ -473,7 +512,14 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/content/set_properties" % self.uri_base
         params = {"acct": self.account, "ref": self.container, "path": name}
         api.content._direct_request.assert_called_once_with(
-            "POST", uri, data=data, params=params, autocreate=True, **self.common_kwargs
+            "POST",
+            uri,
+            data=data,
+            params=params,
+            autocreate=True,
+            retriable=False,
+            fail_fast=False,
+            **self.common_kwargs,
         )
 
     def test_object_del_properties(self):
@@ -495,6 +541,8 @@ class ObjectStorageTest(unittest.TestCase):
             data=json.dumps(["a"]),
             params=params,
             autocreate=True,
+            retriable=False,
+            fail_fast=False,
             **self.common_kwargs,
         )
 
@@ -510,7 +558,14 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/content/delete" % self.uri_base
         params = {"acct": self.account, "ref": self.container, "path": name}
         api.content._direct_request.assert_called_once_with(
-            "POST", uri, params=params, data="{}", autocreate=True, **self.common_kwargs
+            "POST",
+            uri,
+            params=params,
+            data="{}",
+            autocreate=True,
+            retriable=False,
+            fail_fast=False,
+            **self.common_kwargs,
         )
 
     def test_object_delete_not_found(self):
@@ -538,7 +593,13 @@ class ObjectStorageTest(unittest.TestCase):
             "version": "31",
         }
         self.api.content._direct_request.assert_called_once_with(
-            "POST", uri, params=params, autocreate=True, **self.common_kwargs
+            "POST",
+            uri,
+            params=params,
+            autocreate=True,
+            retriable=False,
+            fail_fast=False,
+            **self.common_kwargs,
         )
 
     def test_sort_chunks(self):
