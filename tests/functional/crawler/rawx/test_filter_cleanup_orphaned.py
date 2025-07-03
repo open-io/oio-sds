@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,7 @@ from shutil import copy, copystat, move
 
 from oio.common.exceptions import ConfigurationException
 from oio.common.utils import request_id
+from oio.crawler.common.base import ORPHANS_DIR
 from oio.crawler.rawx.filters.cleanup_orphaned import CleanupOrphaned
 from oio.event.evob import EventTypes
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
@@ -125,7 +126,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
         chunk_path = join(volume_path, chunk_id[:3], chunk_id)
         orphan_chunk_symlink = join(
             volume_path,
-            CleanupOrphaned.ORPHANS_DIR,
+            ORPHANS_DIR,
             chunk_id[:3],
             chunk_id + ".0.168666150" + str(random.randint(0, 5)),
         )
@@ -135,7 +136,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             makedirs(orphan_chunk_folder)
         os.symlink(chunk_path, orphan_chunk_symlink)
         self.assertTrue(islink(orphan_chunk_symlink))
-        orphan_chunk_dir = CleanupOrphaned.ORPHANS_DIR
+        orphan_chunk_dir = ORPHANS_DIR
         app = FilterApp
         app.app_env["volume_path"] = volume_path
         app.app_env["volume_id"] = volume_id
@@ -377,7 +378,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             chunk_path = join(volume_path, chunk_id[:3], chunk_id)
             orphan_chunk_symlink = join(
                 volume_path,
-                CleanupOrphaned.ORPHANS_DIR,
+                ORPHANS_DIR,
                 chunk_id[:3],
                 chunk_id + ".0.168666150" + str(i),
             )
@@ -403,7 +404,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             app.app_env["volume_path"] = volume_path
             app.app_env["volume_id"] = volume_id
             app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = CleanupOrphaned.ORPHANS_DIR
+            app.app_env["working_dir"] = ORPHANS_DIR
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, orphan_chunk_symlink)
             cleanuporphaned = CleanupOrphaned(
@@ -447,7 +448,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             volume_id,
         ) in misplaced_chunks:
             orphan_chunk_symlink = chunk_symlink_path.replace(
-                CleanupOrphaned.NON_OPTIMAL_DIR, CleanupOrphaned.ORPHANS_DIR
+                CleanupOrphaned.NON_OPTIMAL_DIR, ORPHANS_DIR
             )
             orphan_chunk_folder = orphan_chunk_symlink.rsplit("/", 1)[0]
             if not isdir(orphan_chunk_folder):
@@ -461,7 +462,7 @@ class TestFilterCleanupOrphaned(BaseTestCase):
             app.app_env["volume_path"] = volume_path
             app.app_env["volume_id"] = volume_id
             app.app_env["watchdog"] = self.watchdog
-            app.app_env["working_dir"] = CleanupOrphaned.ORPHANS_DIR
+            app.app_env["working_dir"] = ORPHANS_DIR
             app.app_env["api"] = self.api
             chunk_env = create_chunk_env(chunk_id, chunk_path, orphan_chunk_symlink)
             cleanuporphaned = CleanupOrphaned(

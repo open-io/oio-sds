@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@ from shutil import move
 from oio.common import exceptions as exc
 from oio.common.easy_value import int_value
 from oio.common.utils import request_id
-from oio.crawler.common.base import ChunkSymlinkFilter
+from oio.crawler.common.base import ORPHANS_DIR, ChunkSymlinkFilter
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     PlacementImproverCrawlerError,
@@ -160,7 +160,7 @@ class Changelocation(ChunkSymlinkFilter):
                             chunk_id,
                             str(chunk_exc),
                         )
-                        orphan_chunk_symlink_path = self.ORPHANS_DIR.join(
+                        orphan_chunk_symlink_path = ORPHANS_DIR.join(
                             chunkwrapper.chunk_symlink_path.rsplit(
                                 self.NON_OPTIMAL_DIR, 1
                             )
@@ -242,7 +242,7 @@ class Changelocation(ChunkSymlinkFilter):
                     self.failed_post += failed_post
                     return self.app(env, cb)
                 else:
-                    # An error occured when moving the chunk, we need to set
+                    # An error occurred when moving the chunk, we need to set
                     # a time after which we will retry.
                     new_symlink_path = self._get_new_symlink_path(
                         chunk_id,
@@ -263,7 +263,7 @@ class Changelocation(ChunkSymlinkFilter):
                 ),
             )
             return resp(env, cb)
-        # Delete the symbolic link refering the chunk as misplaced
+        # Delete the symbolic link referring the chunk as misplaced
         # This action is called only when the chunk has been moved
         self._post_process(chunkwrapper)
         return self.app(env, cb)

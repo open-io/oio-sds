@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ from shutil import copy, copystat
 from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.exceptions import Conflict
 from oio.common.utils import request_id
+from oio.crawler.common.base import ORPHANS_DIR
 from oio.crawler.rawx.filters.changelocation import Changelocation
 from oio.event.evob import EventTypes
 from tests.functional.crawler.rawx.utils import FilterApp, create_chunk_env
@@ -206,7 +207,7 @@ class TestFilterChangelocation(BaseTestCase):
         symlink_folder = dirname(chunk_symlink_path)
         if is_orphan:
             symlink_folder = symlink_folder.replace(
-                Changelocation.NON_OPTIMAL_DIR, Changelocation.ORPHANS_DIR
+                Changelocation.NON_OPTIMAL_DIR, ORPHANS_DIR
             )
         files = listdir(symlink_folder)
         for file in files:

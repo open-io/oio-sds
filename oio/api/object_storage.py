@@ -308,7 +308,6 @@ class ObjectStorageApi(object):
         if self._rdir_client is None:
             from oio.rdir.client import RdirClient
 
-            # FIXME(FVE): share DirectoryClient
             self._rdir_client = RdirClient(
                 {"namespace": self.namespace},
                 directory=self.directory,

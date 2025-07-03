@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,7 @@ from oio.common import exceptions as exc
 from oio.common.easy_value import int_value
 from oio.common.fullpath import decode_fullpath
 from oio.common.utils import request_id
-from oio.crawler.common.base import ChunkSymlinkFilter
+from oio.crawler.common.base import ORPHANS_DIR, ChunkSymlinkFilter
 from oio.crawler.rawx.chunk_wrapper import (
     ChunkWrapper,
     CleanupOrphanedCrawlerError,
@@ -136,7 +136,7 @@ class CleanupOrphaned(ChunkSymlinkFilter):
         :rtype: dict
         """
         non_optimal_symlink_path = self.NON_OPTIMAL_DIR.join(
-            chunkwrapper.chunk_symlink_path.rsplit(self.ORPHANS_DIR, 1)
+            chunkwrapper.chunk_symlink_path.rsplit(ORPHANS_DIR, 1)
         )
         non_optimal_chunk_folder = non_optimal_symlink_path.rsplit("/", 1)[0]
         if not isdir(non_optimal_chunk_folder):

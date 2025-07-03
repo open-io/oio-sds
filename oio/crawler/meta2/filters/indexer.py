@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,12 +13,17 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
+import os.path
+import shutil
+
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, M2_PROP_CONTAINER_NAME
-from oio.common.easy_value import boolean_value
+from oio.common.easy_value import boolean_value, float_value
 from oio.common.exceptions import NotFound, OioException
 from oio.common.green import time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import request_id
+from oio.crawler.common.base import ORPHANS_DIR
 from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError, Meta2DBNotFound
 from oio.rdir.client import RdirClient
@@ -32,6 +37,7 @@ class Indexer(Meta2Filter):
     NAME = "Indexer"
     CHECK_ORPHAN = True
     REMOVE_ORPHAN = False
+    DELETE_DELAY = 86400.0  # 1 day
 
     def init(self):
         self.check_orphan = boolean_value(
@@ -42,9 +48,23 @@ class Indexer(Meta2Filter):
             self.conf.get("remove_orphan"),
             self.REMOVE_ORPHAN,
         )
+        self.orphans_dir = os.path.join(self.app_env["volume_path"], ORPHANS_DIR)
+        self.delete_delay = float_value(
+            self.conf.get("delete_delay"),
+            self.DELETE_DELAY,
+        )
 
-        if self.remove_orphan and not self.check_orphan:
-            self.logger.warning("'check_orphan' is disabled, so ignore 'remove_orphan'")
+        if self.remove_orphan:
+            if not self.check_orphan:
+                self.logger.warning(
+                    "'check_orphan' is disabled, ignoring 'remove_orphan'",
+                )
+            else:
+                os.makedirs(self.orphans_dir, exist_ok=True)
+                self.logger.info(
+                    "Orphan databases will be moved to %s",
+                    self.orphans_dir,
+                )
 
         self.namespace = self.app_env["api"].namespace
         self.directory_client = self.app_env["api"].directory
@@ -72,7 +92,18 @@ class Indexer(Meta2Filter):
             },
         )
 
-    def _is_orphan(self, meta2db, reqid, force_master=False):
+    def _modified_recently(self, meta2db: Meta2DB):
+        """
+        Tell if the database file has been modified recently
+        (and therefore should not be deleted).
+        """
+        try:
+            return (time.time() - meta2db.file_status["st_mtime"]) < self.delete_delay
+        except FileNotFoundError:
+            # NotFound -> deleted recently?
+            return True
+
+    def _is_orphan(self, meta2db: Meta2DB, reqid, force_master=False):
         try:
             data = self.directory_client.list(
                 cid=meta2db.cid, force_master=force_master, reqid=reqid
@@ -88,7 +119,22 @@ class Indexer(Meta2Filter):
             container = None
         return account, container, is_orphan
 
-    def _remove_orphan(self, meta2db, container_url, reqid):
+    def _move_to_orphan_dir(self, meta2db: Meta2DB, reqid):
+        """
+        Move the meta2 database to the "orphans" directory.
+
+        In case of error, log a message but do not raise an exception.
+        """
+        try:
+            shutil.move(meta2db.real_path, self.orphans_dir)
+        except OSError as err:
+            self._warning(
+                meta2db,
+                f"Failed to move {meta2db.real_path} to {self.orphans_dir}: {err}",
+                reqid,
+            )
+
+    def _remove_orphan(self, meta2db: Meta2DB, container_url, reqid):
         """
         Fail safe removal attempt.
         """
@@ -108,10 +154,10 @@ class Indexer(Meta2Filter):
         except OioException as exc:
             self._warning(
                 meta2db,
-                f"Unable to remove database from the volume index : {exc}",
+                f"Unable to remove database from the volume index: {exc}",
                 reqid,
             )
-        # TODO(adu): remove database (but we must be sure)
+        self._move_to_orphan_dir(meta2db, reqid)
         return True
 
     def _process(self, env, cb):
@@ -145,7 +191,7 @@ class Indexer(Meta2Filter):
                     reqid,
                 )
                 self.orphans += 1
-                if self.remove_orphan:
+                if self.remove_orphan and not self._modified_recently(meta2db):
                     if self._remove_orphan(meta2db, container_url, reqid):
                         return self.app(env, cb)
                 else:

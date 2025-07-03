@@ -28,6 +28,8 @@ from oio.content.quality import NB_LOCATION_LEVELS, count_local_items, format_lo
 
 RawxService = namedtuple("RawxService", ("status", "last_time"))
 
+ORPHANS_DIR = "orphans"
+
 
 class Filter(object):
     NAME = None
@@ -69,7 +71,6 @@ class Filter(object):
 class ChunkSymlinkFilter(Filter):
     NEW_ATTEMPT_DELAY = 900
     SERVICE_UPDATE_INTERVAL = 3600
-    ORPHANS_DIR = "orphans"
     NON_OPTIMAL_DIR = "non_optimal_placement"
 
     def __init__(self, app, conf, logger=None):

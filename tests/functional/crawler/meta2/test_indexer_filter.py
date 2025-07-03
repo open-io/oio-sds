@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os.path
 import random
 import time
 
@@ -35,13 +36,16 @@ class App(object):
         self.cb = cb
 
     def get_stats(self):
-        return dict()
+        return {}
 
     def reset_stats(self):
         pass
 
 
 class TestIndexer(BaseTestCase):
+    DELETE_DELAY: float | None = None
+    REMOVE_ORPHANS = False
+
     @classmethod
     def setUpClass(cls):
         super(TestIndexer, cls).setUpClass()
@@ -54,16 +58,21 @@ class TestIndexer(BaseTestCase):
         super(TestIndexer, cls).tearDownClass()
 
     def setUp(self):
-        super(TestIndexer, self).setUp()
+        super().setUp()
         self.cname = f"test_meta2_crawler_{time.time()}"
-        self.app_env = dict()
+        self.app_env = {}
         self.app_env["api"] = self.storage
         self.conf["check_orphan"] = True
-        self.conf["remove_orphan"] = False
+        self.conf["remove_orphan"] = self.__class__.REMOVE_ORPHANS
+        self.conf["delete_delay"] = self.__class__.DELETE_DELAY or Indexer.DELETE_DELAY
         self.app_env["statsd_client"] = get_statsd(
             conf={"statsd_prefix": "test-meta2-indexer"}
         )
-        self.indexer = Indexer(App(self.app_env), self.conf)
+        self.indexer = None
+
+    def _create_indexer(self, volume_path):
+        self.app_env["volume_path"] = volume_path
+        self.indexer = Indexer(App(self.app_env), self.conf, logger=self.logger)
 
     def tearDown(self):
         try:
@@ -83,12 +92,12 @@ class TestIndexer(BaseTestCase):
                 break
         else:
             self.fail("Unable to find the volume path")
-        meta2db = Meta2DB(self.app_env, dict())
+        meta2db = Meta2DB(self.app_env, {})
         meta2db.real_path = "/".join((volume_path, cid[:3], cid + ".1.meta2"))
         meta2db.volume_id = volume_id
         meta2db.cid = cid
         meta2db.seq = 1
-        return meta2db, [srv["host"] for srv in dir_data["srv"]]
+        return meta2db, [srv["host"] for srv in dir_data["srv"]], volume_path
 
     def test_index_existing_container(self):
         def _cb(status, _msg):
@@ -97,7 +106,8 @@ class TestIndexer(BaseTestCase):
         reqid = request_id()
         created = self.storage.container_create(self.account, self.cname, reqid=reqid)
         self.assertTrue(created)
-        meta2db, _ = self._get_meta2db(self.cname)
+        meta2db, _, volume_path = self._get_meta2db(self.cname)
+        self._create_indexer(volume_path)
         self.wait_for_kafka_event(
             fields={"account": self.account, "user": self.cname},
             types=(EventTypes.ACCOUNT_SERVICES,),
@@ -143,16 +153,33 @@ class TestIndexer(BaseTestCase):
                 mtime = max(mtime, rdir_info[0]["mtime"])
         self.assertGreater(mtime, ctime)
 
+    def _check_orphan_filter_stats(self, filter_stats, file_exists=True):
+        for key, value in filter_stats.items():
+            if key == "orphans":
+                self.assertEqual(value, 1)
+            elif key == "removed":
+                if (
+                    self.__class__.REMOVE_ORPHANS
+                    and self.indexer.delete_delay < 1.0
+                    and file_exists
+                ):
+                    expected = 1
+                else:
+                    expected = 0
+                self.assertEqual(value, expected, f"{key}={value}")
+            else:
+                self.assertEqual(value, 0, f"{key}={value}")
+
     def test_index_non_existing_container(self):
-        def _cb(status, _msg):
-            self.assertEqual(200, status)
+        def _cb(status, msg):
+            self.assertEqual(status, 200, msg)
 
         meta2_conf = random.choice(self.conf["services"]["meta2"])
         meta2_id = meta2_conf.get("service_id", meta2_conf["addr"])
         meta2_path = meta2_conf["path"]
 
         cid = cid_from_name(self.account, self.cname)
-        meta2db = Meta2DB(self.app_env, dict())
+        meta2db = Meta2DB(self.app_env, {})
         meta2db.real_path = "/".join((meta2_path, cid[:3], cid + ".1.meta2"))
         meta2db.volume_id = meta2_id
         meta2db.cid = cid
@@ -162,22 +189,19 @@ class TestIndexer(BaseTestCase):
             M2_PROP_CONTAINER_NAME: self.cname,
         }
 
+        self._create_indexer(meta2_path)
         self.indexer.process(meta2db.env, _cb)
         filter_stats = self.indexer.get_stats()[self.indexer.NAME]
-        for key, value in filter_stats.items():
-            if key == "orphans":
-                self.assertEqual(1, value)
-            else:
-                self.assertEqual(0, value)
+        self._check_orphan_filter_stats(filter_stats, file_exists=False)
 
     def test_index_with_orphan_database(self):
-        def _cb(status, _msg):
-            self.assertEqual(200, status)
+        def _cb(status, msg):
+            self.assertEqual(status, 200, msg)
 
         reqid = request_id()
         created = self.storage.container_create(self.account, self.cname, reqid=reqid)
         self.assertTrue(created)
-        meta2db, peers = self._get_meta2db(self.cname)
+        meta2db, peers, volume_path = self._get_meta2db(self.cname)
         orther_meta2 = [
             srv.get("service_id", srv["addr"])
             for srv in self.conf["services"]["meta2"]
@@ -185,6 +209,7 @@ class TestIndexer(BaseTestCase):
         ]
         if not orther_meta2:
             self.skipTest("No other meta2 available")
+        self._create_indexer(volume_path)
         meta2_id = random.choice(orther_meta2)
         self.wait_for_kafka_event(
             fields={"account": self.account, "user": self.cname},
@@ -213,11 +238,8 @@ class TestIndexer(BaseTestCase):
 
         self.indexer.process(meta2db.env, _cb)
         filter_stats = self.indexer.get_stats()[self.indexer.NAME]
-        for key, value in filter_stats.items():
-            if key == "orphans":
-                self.assertEqual(1, value)
-            else:
-                self.assertEqual(0, value)
+        self._check_orphan_filter_stats(filter_stats)
+
         mtime = 0
         for rdir_host in rdir_hosts:
             # Search all associated rdir in case some didn't get the information
@@ -231,3 +253,31 @@ class TestIndexer(BaseTestCase):
                 mtime = max(mtime, rdir_info[0]["mtime"])
         # No update
         self.assertEqual(mtime, ctime)
+
+        # Check orphans have been kept or removed (depending on configuration)
+        if self.__class__.REMOVE_ORPHANS and self.indexer.delete_delay < 1.0:
+            self.assertFalse(os.path.exists(meta2db.real_path))
+            orphan_path = os.path.join(
+                self.indexer.orphans_dir, os.path.basename(meta2db.real_path)
+            )
+            self.assertTrue(os.path.exists(orphan_path))
+        else:
+            self.assertTrue(os.path.exists(meta2db.real_path))
+
+
+class TestIndexerRemoveOrphans(TestIndexer):
+    """
+    Test "indexer" filter of oio-meta2-crawler with "remove_orphan" parameter set.
+    """
+
+    REMOVE_ORPHANS = True
+
+
+class TestIndexerRemoveOrphansShortDelay(TestIndexer):
+    """
+    Test "indexer" filter of oio-meta2-crawler with "remove_orphan" parameter set
+    and a really short delete_delay.
+    """
+
+    DELETE_DELAY = 0.1
+    REMOVE_ORPHANS = True

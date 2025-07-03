@@ -235,6 +235,7 @@ class CommonTestCase(unittest.TestCase):
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]
 
+        # FIXME(FVE): this prevents some logs to be collected by pytest
         cls._cls_logger = get_logger(cls._cls_conf, name="test")
 
         cls._consumers = []
@@ -279,7 +280,6 @@ class CommonTestCase(unittest.TestCase):
         self._beanstalkd0 = None
         self._conscience = None
         self._http_pool = None
-        self._logger = None
         self._rdir_client = None
         self._storage_api = None
         self._container_sharding = None
