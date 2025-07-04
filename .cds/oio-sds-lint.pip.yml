@@ -13,11 +13,10 @@ jobs:
           . .cds/versions
           export DEBIAN_FRONTEND=noninteractive
           eval $(worker key install --env-git proj-ssh-openio)
-          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/snapmirror-focal.list
-          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal-updates main" >> /etc/apt/sources.list.d/snapmirror-focal.list
-          apt update
-          # We don't need docker compose
-          apt install -y $(sed -e '/docker-compose-plugin/d' .cds/deps-ubuntu-focal.txt | tr '\n' ' ')
+          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu jammy main" >> /etc/apt/sources.list.d/snapmirror-jammy.list
+          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu jammy-updates main" >> /etc/apt/sources.list.d/snapmirror-jammy.list
+          apt-get update
+          apt-get install -y python3-virtualenv
           virtualenv -p /usr/bin/python3 $HOME/venv
           . $HOME/venv/bin/activate
           export PIP_INDEX_URL="https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/"
@@ -34,4 +33,4 @@ jobs:
           - ruff check "oio" "tests" "tools" "bin"
 
     requirements:
-      - model: ubuntu-focal
+      - model: ubuntu-jammy

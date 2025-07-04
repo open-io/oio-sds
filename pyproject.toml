@@ -10,7 +10,7 @@ dynamic = [
   "version",
 ]
 dependencies = [
-  "cliff~=3.10.1",
+  "cliff~=4.8.0",
   "cryptography>=2.0.2",
   "eventlet~=0.38.2",
   "gevent>=22.10.2",

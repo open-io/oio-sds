@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,10 +16,9 @@
 
 
 import glob
+import importlib.metadata
 import os
 import re
-
-import pkg_resources
 
 from oio.common.client import ProxyClient
 from oio.common.configuration import parse_config, validate_service_conf
@@ -35,8 +34,8 @@ from oio.conscience.client import ConscienceClient
 
 def load_modules(group_name):
     modules = {}
-    for entry_point in pkg_resources.iter_entry_points(group_name):
-        cls = entry_point.load(require=False)
+    for entry_point in importlib.metadata.entry_points(group=group_name):
+        cls = entry_point.load()
         modules[entry_point.name] = cls
     return modules
 
@@ -48,8 +47,8 @@ class ServiceWatcher(object):
 
         for k in ["host", "port", "type"]:
             if k not in service:
-                raise Exception('Missing field "%s" in service configuration' % k)
-        self.name = "%s|%s|%s" % (service["type"], service["host"], service["port"])
+                raise KeyError(f"Missing field {k!r} in service configuration")
+        self.name = f"{service['type']}|{service['host']}|{service['port']}"
 
         self.service = service
 
@@ -79,7 +78,7 @@ class ServiceWatcher(object):
         self.service_definition = {
             "ns": self.conf["namespace"],
             "type": self.service["type"],
-            "addr": "%s:%s" % (self.service["host"], self.service["port"]),
+            "addr": f"{self.service['host']}:{self.service['port']}",
             "score": 0,
             "tags": {},
         }
@@ -213,10 +212,9 @@ class ServiceWatcher(object):
         for check in service["checks"]:
             check["host"] = check.get("host") or service["host"]
             check["port"] = check.get("port") or service["port"]
-            check["name"] = check.get("name") or "%s|%s|%s" % (
-                check["type"],
-                check["host"],
-                check["port"],
+            check["name"] = (
+                check.get("name")
+                or f"{service['type']}|{service['host']}|{service['port']}"
             )
             check["rise"] = check.get("rise") or self.rise
             check["fall"] = check.get("fall") or self.fall
@@ -224,9 +222,9 @@ class ServiceWatcher(object):
             check["type"] = check.get("type") or "unknown"
             service_check_class = CHECKERS_MODULES.get(check["type"])
             if not service_check_class:
-                raise Exception(
-                    'Invalid check type "%s", valid types: %s'
-                    % (check["type"], ", ".join(CHECKERS_MODULES.keys()))
+                raise TypeError(
+                    f"Invalid check type {check['type']!r}, "
+                    f"valid types: {', '.join(CHECKERS_MODULES.keys())}"
                 )
             service_check = service_check_class(self, check, self.logger)
             self.service_checks.append(service_check)
@@ -240,9 +238,9 @@ class ServiceWatcher(object):
             stat.setdefault("path", "")
             service_stat_class = STATS_MODULES.get(stat["type"], None)
             if not service_stat_class:
-                raise Exception(
-                    'Invalid stat type "%s", valid types: %s'
-                    % (stat["type"], ", ".join(STATS_MODULES.keys()))
+                raise TypeError(
+                    f"Invalid stat type {stat['type']!r}, "
+                    f"valid types: {', '.join(STATS_MODULES.keys())}"
                 )
             service_stat = service_stat_class(self, stat, self.logger)
             self.service_stats.append(service_stat)
@@ -325,22 +323,20 @@ class ConscienceAgent(Daemon):
                     continue
                 if not isinstance(config, dict):
                     raise TypeError(
-                        "Expecting YAML dictionary for the config file %s", cfgfile
+                        f"Expecting YAML dictionary for the config file {cfgfile}"
                     )
                 self.conf["services"][name] = config
                 self.conf["services"][name]["cfgfile"] = cfgfile
 
     def check_for_conflicts(self):
-        per_sock = dict()
+        per_sock = {}
         for name, desc in self.conf["services"].items():
             hostport = ":".join((desc["host"], str(desc.get("port", 80))))
-            per_sock.setdefault(hostport, list()).append((name, desc))
+            per_sock.setdefault(hostport, []).append((name, desc))
 
         for hostport, services in per_sock.items():
             if len(services) > 1:
-                conflicting = [
-                    "%s (%s)" % (name, desc["type"]) for name, desc in services
-                ]
+                conflicting = [f"{name} ({desc['type']})" for name, desc in services]
                 self.logger.error(
                     "The following services are configured with the same "
                     "endpoint (%s): %s. Please fix the configuration. "

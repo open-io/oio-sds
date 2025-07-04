@@ -32,22 +32,8 @@ Basic object storage example:
 """
 
 import importlib
+import importlib.metadata
 import sys
-import warnings
-
-import pkg_resources
-
-# To be removed when Python 3.7 is no longer used
-warnings.filterwarnings(
-    "ignore",
-    category=UserWarning,
-    message=(
-        "Python 3\.7 is no longer supported by the Python core team "
-        "and support for it is deprecated in cryptography\. "
-        "A future release of cryptography will remove support "
-        "for Python 3\.7\."
-    ),
-)
 
 
 class ObjectStorageApi(object):
@@ -67,17 +53,7 @@ class ObjectStorageApi(object):
         return getattr(self.__class__.oio, name)
 
 
-try:
-    __version__ = __canonical_version__ = pkg_resources.get_provider(
-        pkg_resources.Requirement.parse("oio")
-    ).version
-except pkg_resources.DistributionNotFound:
-    import pbr.version
-
-    _version_info = pbr.version.VersionInfo("oio")
-    __version__ = _version_info.release_string()
-    __canonical_version__ = _version_info.version_string()
-
+__version__ = __canonical_version__ = importlib.metadata.version("oio")
 
 sys.modules[__name__] = ObjectStorageApi()
 __all__ = ["ObjectStorageApi"]

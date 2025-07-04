@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,8 +14,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from importlib.metadata import entry_points
+
 from cliff import commandmanager
-from pkg_resources import iter_entry_points
 
 
 class CommandManager(commandmanager.CommandManager):
@@ -36,7 +38,7 @@ class CommandManager(commandmanager.CommandManager):
     def get_command_names(self, group=None):
         group_list = []
         if group is not None:
-            for entry_point in iter_entry_points(group):
+            for entry_point in entry_points(group=group):
                 cmd_name = (
                     entry_point.name.replace("_", " ")
                     if self.convert_underscores
