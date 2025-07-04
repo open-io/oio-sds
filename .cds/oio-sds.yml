@@ -14,7 +14,7 @@ workflow:
       git.message: ""
       git.repository: "OPENIO/oio-sds"
       git.tag: ""
-      build_only: "false"
+      with_build: "false"
 
   tests-fast:
     pipeline: oio-sds-test-fast
@@ -24,7 +24,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-lint:
     pipeline: oio-sds-lint
@@ -33,7 +33,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-single:
     pipeline: oio-sds-test-functional
@@ -43,7 +43,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-cli:
     pipeline: oio-sds-test-functional
@@ -53,7 +53,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-ec:
     pipeline: oio-sds-test-functional
@@ -63,7 +63,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-fullrepli:
     pipeline: oio-sds-test-functional
@@ -73,7 +73,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-rebuilder:
     pipeline: oio-sds-test-functional
@@ -83,7 +83,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   tests-mover:
     pipeline: oio-sds-test-functional
@@ -93,7 +93,7 @@ workflow:
       - root
     conditions:
       script: |+
-        return cds_triggered_by_username ~= "cds.scheduler" and build_only ~= "true"
+        return cds_triggered_by_username ~= "cds.scheduler"
 
   coverage:
     pipeline: oio-sds-coverage
@@ -130,7 +130,7 @@ workflow:
       script: |+
         return (
           cds_triggered_by_username ~= "cds.scheduler"
-          and (cds_manual == "true" or git_branch == "master" or build_only == "true")
+          and (cds_manual == "true" or with_build == "true")
         )
 
   clean-artifacts:
