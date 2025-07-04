@@ -825,14 +825,16 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 {
 	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
 
-	/* version_id will be "(null)" if not passed in request. We will
-	 * rewrite the whole "tail" later when we have more information. */
-	args->rp->access_tail("hexid:%s\tversion_id:%s",
-			oio_url_get(args->url, OIOURL_HEXID),
-			oio_url_get(args->url, OIOURL_VERSION));
-
-	if (err)
+	void _fill_reply(struct req_args_s *_args) {
+		/* Populate the "tail" as late as possible to have as more info as possible */
+		_args->rp->access_tail("hexid:%s\tversion_id:%s",
+				oio_url_get(_args->url, OIOURL_HEXID),
+				oio_url_get(_args->url, OIOURL_VERSION));
+	}
+	if (err) {
+		_fill_reply(args);
 		return _reply_m2_error(args, err);
+	}
 
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
@@ -882,6 +884,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 				 * error should be NULL. If it is not, no harm, just a small
 				 * memory leak. */
 				EXTRA_ASSERT(chunk_err == NULL);
+				_fill_reply(args);
 				return _reply_notfound_error(args,
 						NEWERROR(CODE_CONTENT_DELETED, "Alias deleted"));
 			}
@@ -937,9 +940,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 	g_free(policy);
 	_bean_cleanl2 (beans);
 
-	args->rp->access_tail("hexid:%s\tversion_id:%s",
-			oio_url_get(args->url, OIOURL_HEXID),
-			oio_url_get(args->url, OIOURL_VERSION));
+	_fill_reply(args);
 	return _reply_success_json (args, gstr);
 }
 
