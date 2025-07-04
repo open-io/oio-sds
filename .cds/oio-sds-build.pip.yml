@@ -41,7 +41,7 @@ jobs:
             else
               PACKAGE=${PACKAGE}-$(date +%Y%m%d%H%M).git{{ .git.hash.short }}
             fi
-            if [ "{{ .git.branch }}" = "master" ]; then
+            if [[ "{{ .git.branch }}" == "master" || "{{ .git.tag }}" =~ ^[0-9]+\. ]]; then
               export OBSTO_BUILD="ovh${CDS_VERSION}"
             else
               export OBSTO_BUILD="ovhdev${CDS_VERSION}"
