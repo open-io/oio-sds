@@ -734,7 +734,6 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                         "auto.offset.reset": "earliest",
                     },
                 )
-
                 for event in reply_listener.fetch_events():
                     if not self.running:
                         break

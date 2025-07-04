@@ -14,6 +14,7 @@
 
 import json
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -370,7 +371,6 @@ class KafkaConsumer(KafkaClient):
         self._resolve_conf()
 
         self._connect(self.client_conf)
-
         if topics:
             self.ensure_topics_exist(topics)
             self._client.subscribe(topics)
@@ -392,7 +392,15 @@ class KafkaConsumer(KafkaClient):
                         missing_key = exc.args[0]
                         self._format_args[missing_key](f"{missing_key}")
 
+    @contextmanager
+    def events_fetching_disable(self):
+        topics = self._client.assignment()
+        self._client.pause(topics)
+        yield
+        self._client.resume(topics)
+
     def fetch_events(self):
+        """Retrieve events from broker."""
         while True:
             try:
                 yield self._client.poll(1.0)
@@ -402,6 +410,18 @@ class KafkaConsumer(KafkaClient):
                 if not error.retriable():
                     raise KafkaFatalException() from exc
                 yield None
+
+    def poll(self):
+        """
+        Poll the broker to keep the connection alive. No events are fetched.
+
+        Consumer should be paused to prevent event fetching. This method should be
+        called from an `events_fetching_disable` context.
+        ```
+        with self.events_fetching_disable():
+            self.poll()
+        ```"""
+        _ = self._client.poll(0)
 
     def _is_valid_offset(self):
         return self.consumer.assignment()[0].offset != OFFSET_INVALID
