@@ -528,7 +528,7 @@
 			{ "type": "monotonic", "name": "oio_client_timeout_margin",
 				"key": "gridd.timeout.margin",
 				"def": 500, "min": 0, "max": "60s",
-				"descr": "How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout." },
+				"descr": "How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout. This is also the minimal timeout we will set on requests to metadata services." },
 
 			{ "type": "float", "name": "oio_client_timeout_single",
 				"key": "gridd.timeout.single.common",

@@ -540,7 +540,7 @@ Used by `gcc`
 
 ### gridd.timeout.margin
 
-> How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout.
+> How much time (microseconds) to substract to the deadline before doing a subrequest. This is to ensure the remote deadline will occur before the local request timeout. This is also the minimal timeout we will set on requests to metadata services.
 
  * default: **500**
  * type: gint64

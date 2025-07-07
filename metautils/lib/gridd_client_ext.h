@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -83,12 +84,15 @@ GError * gridd_clients_error(struct gridd_client_s **clients);
 void gridd_clients_start(struct gridd_client_s **clients);
 
 // Poll for network events (using poll()), and call gridd_client_react()
-// if a non-error event occured.
+// if a non-error event occurred.
 GError * gridd_clients_step(struct gridd_client_s **clients);
 
 // Wraps gridd_clients_step() and gridd_clients_finished()
 GError * gridd_clients_loop(struct gridd_client_s **clients);
 
+/** Adjust the timeout so
+ * - it does not exceed the deadline (or just a little)
+ * - it is not less than oio_client_timeout_margin */
 gdouble oio_clamp_timeout(gdouble timeout, gint64 deadline);
 
 gint64 oio_clamp_deadline(gdouble timeout, gint64 deadline);

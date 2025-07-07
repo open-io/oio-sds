@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -735,10 +735,10 @@ _client_react_timeout(struct gridd_client_s *client)
 	_client_reset_cnx(client);
 	GError *err = NULL;
 	if (client->step == CONNECTING) {
-		err = NEWERROR(ERRCODE_CONN_TIMEOUT, "Connect timeout (%.3fs) to %s",
+		err = NEWERROR(ERRCODE_CONN_TIMEOUT, "Connect timeout (%.4fs) to %s",
 				client->delay_connect / (float) G_TIME_SPAN_SECOND, client->url);
 	} else {
-		err = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout (%.3fs) to %s",
+		err = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout (%.4fs) to %s",
 				client->delay_single / (float) G_TIME_SPAN_SECOND, client->url);
 	}
 	_client_replace_error(client, err);

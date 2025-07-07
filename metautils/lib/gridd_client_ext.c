@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,8 @@ License along with this library.
 #include <sys/types.h>
 
 #include "metautils.h"
+
+#include <metautils/lib/common_variables.h>
 
 struct gridd_client_s *
 gridd_client_create_idle(const gchar *target)
@@ -476,18 +478,21 @@ gdouble
 oio_clamp_timeout(gdouble timeout, gint64 deadline)
 {
 	if (oio_ext_is_allowed_to_do_long_timeout()) {
-		timeout = 3600;
+		timeout = 3600.0;
 	}
-	if (deadline <= 0)
-		return timeout;
+	if (deadline <= 0) {
+		return MAX(timeout,
+				oio_client_timeout_margin / (gdouble)G_TIME_SPAN_SECOND);
+	}
 
+	gdouble result = 0.000001;
 	const gint64 now = oio_ext_monotonic_time();
-	if (now > deadline)
-		return 0.000001;
-
-	const gint64 remaining = deadline - now;
-	const gdouble dl_to = ((gdouble)remaining) / (gdouble)G_TIME_SPAN_SECOND;
-	return MIN(timeout, dl_to);
+	if (now <= deadline) {
+		const gint64 remaining = deadline - now;
+		const gdouble dl_to = ((gdouble)remaining) / (gdouble)G_TIME_SPAN_SECOND;
+		result = MIN(timeout, dl_to);
+	}
+	return MAX(result, oio_client_timeout_margin / (gdouble)G_TIME_SPAN_SECOND);
 }
 
 gint64
