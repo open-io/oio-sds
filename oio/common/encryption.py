@@ -660,12 +660,17 @@ class Decrypter:
         put_keys["id"] = {}
         if key_id.get("ssec", False) or key_id.get("sses3", False):
             # The object is encrypted with ssec or sses3
-            # object_key = decode_secret(self.bucket_secret)
-            object_key = fetch_bucket_secret(
-                self.api.kms, self.account, self.container, secret_id=0
-            )
+            # If the key is provided, use it. Otherwise, fetch it from account.
+            if self.bucket_secret:
+                object_key = decode_secret(self.bucket_secret)
+            else:
+                object_key = fetch_bucket_secret(
+                    self.api.kms, self.account, self.container, secret_id=0
+                )
             put_keys["id"]["sses3"] = True
         else:
+            if not self.root_key:
+                raise Exception("No root key provided")
             # The object is encrypted with ROOT_KEY
             account_path = os.path.join(os.sep, self.account)
             path = os.path.join(account_path, self.container, self.obj)
@@ -673,11 +678,6 @@ class Decrypter:
             put_keys["id"]["sses3"] = False
 
         put_keys["object"] = object_key
-
-        account_path = os.path.join(os.sep, self.account)
-        path = os.path.join(account_path, self.container)
-        container_key = create_key(path, self.root_key)
-        put_keys["container"] = container_key
 
         body_key = None
         wrapped_body_key = crypto_meta.get("body_key")
