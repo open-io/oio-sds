@@ -145,7 +145,6 @@ class ECContent(Content):
         candidates = list(source_chunks.all())
         if read_all_available_sources:
             shuffle(candidates)  # Workaround bug with silently corrupt chunks
-            source_chunks = source_chunks + current_chunk
         spare_url, _quals = self._get_spare_chunk(
             candidates, broken_list, position=current_chunk.pos, reqid=reqid
         )
