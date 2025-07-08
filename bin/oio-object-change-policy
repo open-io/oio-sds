@@ -32,7 +32,17 @@ class OioObjectChangePolicy:
     then rewrite each object with the new policy.
     """
 
-    def __init__(self, namespace, logger, object_policy, new_policy):
+    def __init__(
+        self,
+        namespace,
+        logger,
+        object_policy,
+        new_policy,
+        accounts,
+        containers,
+        object_name,
+        version,
+    ):
         self.api = ObjectStorageApi(namespace, logger=logger)
         self.logger = logger
         self.object_policy = object_policy
@@ -41,6 +51,10 @@ class OioObjectChangePolicy:
         self._account_marker = None
         self._container_marker = None
         self._main_request_id = self._request_id
+        self._accounts = accounts
+        self._containers = containers
+        self._obj_name = object_name
+        self._version = version
 
     @property
     def _request_id(self):
@@ -71,50 +85,62 @@ class OioObjectChangePolicy:
             **kwargs,
         )
         need_to_parse_buckets = False
-        # Bucket list returns only the bucket located
-        # on the local region
-        total_bytes_by_policy = res["regions"][self.region]["bytes-details"].get(
-            self.object_policy
-        )
-        if total_bytes_by_policy and total_bytes_by_policy > 0:
-            need_to_parse_buckets = True
-        if not need_to_parse_buckets:
-            self.logger.info(
-                f"The buckets of account={account}, "
-                f"region={self.region} do not have objects with "
-                f"the specified policy: {self.object_policy}"
+        # Container list returns buckets located
+        # on local and other regions
+        if self.region not in res["regions"]:
+            self.logger.debug(
+                f"Account={account} does not have buckets "
+                f"on the specified region={self.region}"
             )
+        else:
+            total_bytes_by_policy = res["regions"][self.region]["bytes-details"].get(
+                self.object_policy, 0
+            )
+            if total_bytes_by_policy and total_bytes_by_policy > 0:
+                need_to_parse_buckets = True
+            else:
+                self.logger.debug(
+                    f"The buckets of account={account}, "
+                    f"region={self.region} do not have objects with "
+                    f"the specified policy: {self.object_policy}"
+                )
+        if not need_to_parse_buckets:
             return {"listing": [], "truncated": False}
         return res
 
     def _get_containers(self, marker=(None, None)):
-        account_marker, container_marker = marker
-        accounts = depaginate(
-            self.api.account.account_list,
-            listing_key=lambda x: x["listing"],
-            item_key=lambda x: x["id"],
-            marker_key=lambda x: x["next_marker"],
-            truncated_key=lambda x: x["truncated"],
-            marker=account_marker,
-            reqid=self._main_request_id,
-        )
-        for account in accounts:
-            self.logger.info(
-                "Listing containers for account %s",
-                account,
-            )
-
-            containers = depaginate(
-                self._custom_container_list,
+        accounts = self._accounts
+        account_marker = None
+        container_marker = None
+        if not accounts:
+            account_marker, container_marker = marker
+            accounts = depaginate(
+                self.api.account.account_list,
                 listing_key=lambda x: x["listing"],
+                item_key=lambda x: x["id"],
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
-                account=account,
-                marker=container_marker,
+                marker=account_marker,
                 reqid=self._main_request_id,
-                region=self.region,
             )
-            container_marker = None
+        for account in accounts:
+            containers = self._containers
+            if not containers:
+                self.logger.info(
+                    "Listing containers for account %s",
+                    account,
+                )
+                containers = depaginate(
+                    self._custom_container_list,
+                    listing_key=lambda x: x["listing"],
+                    marker_key=lambda x: x["next_marker"],
+                    truncated_key=lambda x: x["truncated"],
+                    account=account,
+                    marker=container_marker,
+                    reqid=self._main_request_id,
+                    region=self.region,
+                )
+                container_marker = None
 
             for container in containers:
                 yield account, container[0]
@@ -162,18 +188,32 @@ class OioObjectChangePolicy:
             )
             reqid = self._main_request_id
             try:
-                obj_list = depaginate(
-                    self.api.object_list,
-                    listing_key=lambda x: x["objects"],
-                    marker_key=lambda x: x.get("next_marker"),
-                    version_marker_key=lambda x: x.get("next_version_marker"),
-                    truncated_key=lambda x: x["truncated"],
-                    account=account,
-                    container=container,
-                    properties=False,
-                    versions=True,
-                    reqid=reqid,
-                )
+                if self._obj_name:
+                    obj_list = [
+                        {
+                            "name": self._obj_name,
+                            "version": self._version,
+                            "policy": self.object_policy,
+                        }
+                    ]
+                else:
+                    self.logger.info(
+                        "Listing objects in container %s, account %s",
+                        container,
+                        account,
+                    )
+                    obj_list = depaginate(
+                        self.api.object_list,
+                        listing_key=lambda x: x["objects"],
+                        marker_key=lambda x: x.get("next_marker"),
+                        version_marker_key=lambda x: x.get("next_version_marker"),
+                        truncated_key=lambda x: x["truncated"],
+                        account=account,
+                        container=container,
+                        properties=False,
+                        versions=True,
+                        reqid=reqid,
+                    )
                 for obj in obj_list:
                     if obj.get("policy", None) != self.object_policy:
                         # Object does not have the specified policy
@@ -200,13 +240,29 @@ def make_arg_parser():
     parser.add_argument("namespace", help="Namespace")
     parser.add_argument(
         "--object-policy",
+        required=True,
         help='Only objects with specified policy will be selected (e.g: "STD-E93")',
     )
     parser.add_argument(
         "--new-policy",
+        required=True,
         help='Policy to use when rewriting objects (e.g: "STD-R3")',
     )
     parser.add_argument("--marker", help="Marker", default="")
+    parser.add_argument(
+        "--accounts",
+        nargs="+",
+        metavar="<account_name>",
+        help="Account(s) name",
+    )
+    parser.add_argument(
+        "--buckets",
+        nargs="+",
+        metavar="<bucket_name>",
+        help="Bucket(s) name",
+    )
+    parser.add_argument("--key", help="Object name", default=None)
+    parser.add_argument("--version", help="Object version", default=None)
 
     return parser
 
@@ -214,13 +270,6 @@ def make_arg_parser():
 def main():
     args = make_arg_parser().parse_args()
     logger = get_logger_from_args(args)
-
-    if not args.object_policy:
-        logger.error("Missing the policy to use when filtering objects")
-        return
-    if not args.new_policy:
-        logger.error("Missing the policy to use when rewriting objects")
-        return
 
     marker = (None, None)
     if args.marker:
@@ -233,9 +282,38 @@ def main():
         account_marker = parts[0] if parts[0] else None
         container_marker = parts[1] if parts[1] else None
         marker = (account_marker, container_marker)
+    accounts = args.accounts
+    containers = args.buckets
+    if containers:
+        containers = [[container] for container in containers]
+        if not accounts or (accounts and len(accounts) != 1):
+            logger.error("Buckets requires one account name.")
+            return
+    object_name = args.key
+    if object_name:
+        if not containers or (containers and len(containers) != 1):
+            logger.error("Key requires one bucket name")
+            return
+    version = args.version
+    if version:
+        if not object_name:
+            logger.error("Version requires key")
+            return
+        try:
+            version = int(version)
+        except Exception as exc:
+            logger.error("Invalid version %s", exc)
+            return
 
     change_policy = OioObjectChangePolicy(
-        args.namespace, logger, args.object_policy, args.new_policy
+        args.namespace,
+        logger,
+        args.object_policy,
+        args.new_policy,
+        accounts=accounts,
+        containers=containers,
+        object_name=object_name,
+        version=version,
     )
     try:
         change_policy.process(marker=marker)
