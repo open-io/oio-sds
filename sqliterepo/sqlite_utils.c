@@ -303,7 +303,7 @@ sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delt
 }
 
 static void
-_cache_entry_increment_version(struct _cache_entry_s *entry, const int delta)
+_cache_entry_increment_version(struct _cache_entry_s *entry, const gint64 delta)
 {
 	/* Build the new version string in place, as explained the buffer
 	 * is large enough for the longest version string possible. So we can
@@ -327,7 +327,7 @@ _cache_entry_increment_version(struct _cache_entry_s *entry, const int delta)
 }
 
 void
-sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int delta)
+sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta)
 {
 	struct _cache_entry_s *prev = g_tree_lookup(sq3->admin, k);
 	if (prev) {
@@ -370,7 +370,7 @@ sqlx_admin_ensure_peers(struct sqlx_sqlite3_s *sq3, gchar **peers)
 }
 
 void
-sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta)
+sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const gint64 delta)
 {
 	gboolean runner(gchar *k0, struct _cache_entry_s *v, gpointer i UNUSED) {
 		if (!g_str_has_prefix(k0, "version:"))
@@ -593,10 +593,10 @@ hook_extract(gchar *k, struct _cache_entry_s *v, GTree *version)
 		return FALSE;
 
 	struct object_version_s ov;
-	ov.version = atoi(v->buffer);
-	ov.when = atoi(p+1);
+	ov.version = atoll(v->buffer);
+	ov.when = atoll(p + 1);
 	g_tree_insert(version,
-			hashstr_create(k+sizeof("version:")-1),
+			hashstr_create(k + sizeof("version:") - 1),
 			g_memdup(&ov, sizeof(ov)));
 	return FALSE;
 }

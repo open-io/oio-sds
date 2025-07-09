@@ -181,8 +181,8 @@ gchar** sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3);
 gchar** sqlx_admin_get_keyvalues(struct sqlx_sqlite3_s *sq3,
 		gboolean (*filter)(const gchar *k));
 
-void sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int d);
-void sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta);
+void sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 d);
+void sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const gint64 delta);
 
 void sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3);
 
