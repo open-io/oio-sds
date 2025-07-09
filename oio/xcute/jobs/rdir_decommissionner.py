@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -86,6 +86,11 @@ class RdirDecommissionTask(XcuteTask):
 class RdirDecommissionJob(XcuteRdirJob):
     JOB_TYPE = "rdir-decommission"
     TASK_CLASS = RdirDecommissionTask
+
+    # An rdir decommission generates few tasks
+    # (1 task per managed service), and these tasks are long
+    DEFAULT_TASKS_PER_SECOND = 1
+    MAX_TASKS_BATCH_SIZE = 1
 
     ALLOWED_SERVICE_TYPES = ["rawx", "meta2"]
     DEFAULT_DRY_RUN = False

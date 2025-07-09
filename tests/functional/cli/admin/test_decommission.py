@@ -310,6 +310,7 @@ class ServiceDecommissionTest(CliTestCase):
             decoded = json.loads(res)
             status = decoded["job.status"]
             if status == "FINISHED":
+                self.assertEqual(0, decoded["errors.total"])
                 break
             time.sleep(1)
         else:
