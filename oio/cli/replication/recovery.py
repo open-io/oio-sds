@@ -20,6 +20,7 @@ import signal
 import time
 from collections import OrderedDict
 from datetime import datetime, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Tuple
 
@@ -478,7 +479,7 @@ class ReplicationRecovery(Command):
         )
         return parser
 
-    def _clean_exit(self, *args):
+    def _clean_exit(self, account, bucket, *args):
         """Exit the tool"""
         if self.kafka_producer is not None:
             nb_msg = self.kafka_producer.flush(1.0)
@@ -490,7 +491,10 @@ class ReplicationRecovery(Command):
             self.kafka_producer.close()
         self.log.info("Replication recovery exiting.")
         self.log.info(
-            "nb_objects_recovered=%d nb_delete_markers_recovered=%d",
+            "account=%s bucket=%s nb_objects_recovered=%d "
+            "nb_delete_markers_recovered=%d",
+            account,
+            bucket,
             self.nb_objects_recovered,
             self.nb_delete_markers_recovered,
         )
@@ -560,7 +564,6 @@ class ReplicationRecovery(Command):
             )
 
     def take_action(self, parsed_args):
-        signal.signal(signal.SIGTERM, self._clean_exit)
         bucket = parsed_args.bucket
         pending = parsed_args.pending
         only_metadata = parsed_args.only_metadata
@@ -594,6 +597,7 @@ class ReplicationRecovery(Command):
         self.success = True
         self.log = self.app.client_manager.logger
         account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
+        signal.signal(signal.SIGTERM, partial(self._clean_exit, account, bucket))
         if pending:
             operation = "pending"
         elif only_metadata:
@@ -659,4 +663,4 @@ class ReplicationRecovery(Command):
                     self.log.error(
                         f"Failed to remove marker file: {self.marker_file}: {err}"
                     )
-        self._clean_exit()
+        self._clean_exit(account, bucket)
