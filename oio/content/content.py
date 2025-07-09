@@ -123,6 +123,15 @@ class Content(object):
             self._storage_method = STORAGE_METHODS.load(self.chunk_method)
         return self._storage_method
 
+    @property
+    def duplication_threshold(self):
+        """
+        Get the threshold beyond which a chunk position is considered has overly
+        duplicated. Chunk positions should be unique for EC and match the number of
+        # copies for replication.
+        """
+        return 1 if self.storage_method.ec else self.storage_method.nb_copy
+
     def _filter_chunk_to_rebuild(self, chunk_id, service_id=None, chunk_pos=None):
         """Identify the chunk to rebuild among all the chunks of the object"""
         current_chunk = self.chunks.filter(id=chunk_id, host=service_id).one()
@@ -390,23 +399,27 @@ class Content(object):
         if current_chunk is None or current_chunk not in self.chunks:
             raise exc.OrphanChunk("Chunk not found in content")
 
+        chunk_filters = {}
         if service_id:
-            other_chunks = (
-                self.chunks.filter(metapos=current_chunk.metapos)
-                .exclude(host=service_id)
-                .all()
-            )
+            chunk_filters["host"] = service_id
         else:
-            other_chunks = (
-                self.chunks.filter(metapos=current_chunk.metapos)
-                .exclude(id=chunk_id)
-                .all()
-            )
+            chunk_filters["id"] = chunk_id
+
+        other_chunks = self.chunks.filter(metapos=current_chunk.metapos).exclude(
+            **chunk_filters
+        )
+        duplicated_chunks = (
+            other_chunks.duplicates(threshold=self.duplication_threshold)
+            .filter(pos=current_chunk.pos)
+            .all()
+        )
+        other_chunks = other_chunks.unique(threshold=self.duplication_threshold).all()
+
         if cur_items:  # If cur_items is defined
             current_chunk.quality["cur_items"] = cur_items
         spare_urls, qualities = self._get_spare_chunk(
             other_chunks,
-            [current_chunk],
+            [current_chunk, *duplicated_chunks],
             position=current_chunk.pos,
             check_quality=check_quality,
             max_attempts=max_attempts,
@@ -544,7 +557,7 @@ class Content(object):
         try:
             self.blob_client.chunk_delete(current_chunk.url, **kwargs)
         except Exception as err:
-            self.logger.warn("Failed to delete chunk %s: %s", current_chunk.url, err)
+            self.logger.warning("Failed to delete chunk %s: %s", current_chunk.url, err)
 
         current_chunk.url = to_url
 
@@ -743,6 +756,30 @@ class ChunksHelper(object):
             if url is not None and c.url == url:
                 continue
             found.append(c)
+        return ChunksHelper(
+            found, False, sort_key=self.sort_key, sort_reverse=self.sort_reverse
+        )
+
+    def unique(self, threshold=1):
+        chunks_by_pos = {}
+        for c in self.chunks:
+            chunks_by_pos.setdefault(c.pos, []).append(c)
+        found = []
+        for chunks in chunks_by_pos.values():
+            chunks.sort(key=lambda c: len(c.imperfections))
+            found.extend(chunks[:threshold])
+        return ChunksHelper(
+            found, False, sort_key=self.sort_key, sort_reverse=self.sort_reverse
+        )
+
+    def duplicates(self, threshold=1):
+        chunks_by_pos = {}
+        for c in self.chunks:
+            chunks_by_pos.setdefault(c.pos, []).append(c)
+        found = []
+        for chunks in chunks_by_pos.values():
+            if len(chunks) > threshold:
+                found.extend(chunks[threshold:])
         return ChunksHelper(
             found, False, sort_key=self.sort_key, sort_reverse=self.sort_reverse
         )

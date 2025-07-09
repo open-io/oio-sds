@@ -67,7 +67,7 @@ class PlainContent(Content):
         self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
-    def _get_duplicate_chunks(self, chunk_id, service_id, chunk_pos):
+    def _get_candidate_chunks(self, chunk_id, service_id, chunk_pos):
         current_chunk = self._filter_chunk_to_rebuild(
             chunk_id,
             service_id=service_id,
@@ -84,15 +84,15 @@ class PlainContent(Content):
             candidates = candidates.exclude(host=service_id)
         else:
             candidates = candidates.exclude(id=chunk_id)
-        duplicate_chunks = candidates.sort(
+        candidate_chunks = candidates.sort(
             key=lambda chunk: _get_weighted_random_score(chunk.raw()), reverse=True
-        ).all()
+        )
 
-        return chunk_pos, current_chunk, duplicate_chunks
+        return chunk_pos, current_chunk, candidate_chunks
 
     def chunk_already_rebuilt(self, chunk_id, chunk_pos=None, service_id=None):
         """Return True if chunk has been already rebuild else False"""
-        _, _, duplicate_chunks = self._get_duplicate_chunks(
+        _, _, duplicate_chunks = self._get_candidate_chunks(
             chunk_id, service_id, chunk_pos
         )
         if len(duplicate_chunks) == 0:
@@ -119,9 +119,10 @@ class PlainContent(Content):
     ):
         if reqid is None:
             reqid = request_id("plaincontent-")
-        chunk_pos, current_chunk, duplicate_chunks = self._get_duplicate_chunks(
+        chunk_pos, current_chunk, candidates = self._get_candidate_chunks(
             chunk_id, service_id, chunk_pos
         )
+        duplicate_chunks = candidates.unique(threshold=self.duplication_threshold).all()
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
         if rebuild_only_missing:
@@ -139,7 +140,7 @@ class PlainContent(Content):
         if cur_items:  # If cur_items is defined
             current_chunk.quality["cur_items"] = cur_items
         # Find a spare chunk address
-        broken_list = []
+        broken_list = candidates.duplicates(threshold=self.duplication_threshold).all()
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_urls, _quals = self._get_spare_chunk(
@@ -156,7 +157,7 @@ class PlainContent(Content):
                 while True:
                     if spare_url == src.url:
                         raise Conflict(
-                            "The source url cannot be the same as destination"
+                            message="The source url cannot be the same as destination"
                         )
                     try:
                         self.blob_client.chunk_copy(
