@@ -123,7 +123,7 @@ class PlainContent(Content):
         # Actually create the spare chunk, by duplicating a good one
         # Use the chunk to rebuild as source in last resort
         errors = []
-        for src in chain(duplicate_chunks, broken_list):
+        for src in chain(duplicate_chunks, (current_chunk,)):
             try:
                 first = True
                 while True:
