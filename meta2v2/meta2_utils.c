@@ -640,6 +640,87 @@ m2v2_sorted_content_extend_chunk_urls(struct m2v2_sorted_content_s *content,
 	return url_n_pol.err;
 }
 
+GError*
+m2v2_check_chunk_uniqueness(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		const GSList *beans, struct namespace_info_s *nsinfo)
+{
+	GError *err = NULL;
+	GPtrArray *tmp = NULL;
+	GHashTable *positions_count = g_hash_table_new_full(
+		g_str_hash, g_str_equal, NULL, NULL);
+
+	// Get chunk positions to be inserted
+	for (const GSList *l = beans; l; l= l->next) {
+		gpointer bean = l->data;
+		// Process only chunk beans
+		if (DESCR(bean) != &descr_struct_CHUNKS) {
+			continue;
+		}
+		GString *position = CHUNKS_get_position(bean);
+		gint64 count = GPOINTER_TO_INT(
+			g_hash_table_lookup(positions_count, position));
+		g_hash_table_replace(
+			positions_count, position->str, GINT_TO_POINTER(count + 1));
+	}
+	if (g_hash_table_size(positions_count) == 0) {
+		// No chunks in beans to insert
+		goto cleanup;
+	}
+	tmp = g_ptr_array_new();
+	err = m2db_get_alias(
+		sq3, url, M2V2_FLAG_MASTER|M2V2_FLAG_NOPROPS, _bean_buffer_cb, tmp);
+	if (err) {
+		goto cleanup;
+	}
+	gint64 allowed_copy = 0;
+	for (guint i = 0; i < tmp->len; ++i) {
+		gpointer bean = tmp->pdata[i];
+		if (DESCR(bean) == &descr_struct_CHUNKS) {
+			GString *position = CHUNKS_get_position(bean);
+			gpointer ptr = NULL;
+			gboolean found = g_hash_table_lookup_extended(
+				positions_count, position->str, NULL, &ptr);
+			if (found) {
+				gint64 count = GPOINTER_TO_INT(ptr);
+				g_hash_table_replace(
+					positions_count, position->str, GINT_TO_POINTER(count + 1));
+			}
+		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			if (strcmp(CONTENTS_HEADERS_get_chunk_method(bean)->str,
+					CHUNK_METHOD_DRAINED) == 0) {
+				// Drained content should not have chunks
+				continue;
+			}
+			gchar *policy_name = NULL;
+			m2v2_policy_decode(
+				CONTENTS_HEADERS_get_policy(bean), &policy_name, NULL);
+			struct storage_policy_s *policy = storage_policy_init(
+				nsinfo, policy_name);
+			const struct data_security_s *dsec = \
+				storage_policy_get_data_security(policy);
+			allowed_copy = data_security_get_int64_param(
+				dsec, DS_KEY_COPY_COUNT, 1);
+			g_free(policy_name);
+			storage_policy_clean(policy);
+		}
+	}
+	GList *counts = g_hash_table_get_values(positions_count);
+	for (GList *l = counts; l;l = l->next) {
+		gint64 count = GPOINTER_TO_INT(l->data);
+		if (count > allowed_copy) {
+			err = NEWERROR(
+				CODE_CONTENT_EXISTS, "Too many copies of the same chunk");
+			break;
+		}
+	}
+	g_list_free(counts);
+cleanup:
+	g_hash_table_unref(positions_count);
+	_bean_cleanv2(tmp);
+
+	return err;
+}
+
 void
 m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content)
 {

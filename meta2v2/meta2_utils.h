@@ -97,6 +97,12 @@ void m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content);
 GError *m2v2_sorted_content_extend_chunk_urls(
 		struct m2v2_sorted_content_s *content, struct oio_url_s *url);
 
+
+/* Ensure chunk position to insert is not already present. */
+GError *m2v2_check_chunk_uniqueness(
+		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, const GSList *beans,
+		struct namespace_info_s *nsinfo);
+
 /* Free a sorted content (the beans must be freed separately). */
 void m2v2_sorted_content_free(struct m2v2_sorted_content_s *content);
 
