@@ -495,7 +495,8 @@ class TestMeta2Containers(BaseTestCase):
         self._raw_insert(params, 404, chunks)
 
         self._create(params, 201)
-        self._raw_insert(params, 204, chunks)
+        self._raw_insert(params, 400, chunks)
+        self._raw_insert({**params, "force": True}, 204, chunks)
 
     def test_create_with_unknown_storage_policy(self):
         params = self.param_ref(self.ref)

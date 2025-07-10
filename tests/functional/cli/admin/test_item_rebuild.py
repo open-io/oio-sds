@@ -255,6 +255,7 @@ class ItemRebuildTest(CliTestCase):
             self.container,
             path=obj_meta["name"],
             version=obj_meta["version"],
+            force=True,
         )
 
     def test_object_repair_too_many_chunks_EC(self):
