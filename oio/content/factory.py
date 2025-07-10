@@ -115,6 +115,7 @@ class ContentFactory(object):
                 content=content_id,
                 path=path,
                 version=version,
+                force_master=True,
                 **kwargs,
             )
         except NotFound:

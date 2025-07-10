@@ -128,7 +128,7 @@ class Content(object):
         """
         Get the threshold beyond which a chunk position is considered has overly
         duplicated. Chunk positions should be unique for EC and match the number of
-        # copies for replication.
+        copies for replication.
         """
         return 1 if self.storage_method.ec else self.storage_method.nb_copy
 
