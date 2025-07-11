@@ -132,7 +132,7 @@ jobs:
           # There may be a more elegant way in bash to filter out the name of
           # development branches, but this weird method also applies to the
           # OVH_Serve_Static_Files step (where we cannot use bash).
-          aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.openmetrics
+          aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/{{ .git.branch | default "master" | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/coverage-summary.openmetrics
           # If we re-run an old build, this will overwrite the report of the
           # actual latest merged code. This will not happen often.
           [ "{{ .git.branch }}" = "master" ] && aws --profile kpi s3 cp coverage/coverage-summary.openmetrics s3://{{.cds.proj.kpi_s3_bucket}}/{{.cds.application}}/master/latest/coverage-summary.openmetrics || true
@@ -140,7 +140,7 @@ jobs:
       - name: Publish code coverage reports on Artifactory
         optional: true
         OVH_Serve_Static_Files:
-          destination: 'coverage/{{.cds.workflow}}/{{ .git.branch | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
+          destination: 'coverage/{{.cds.workflow}}/{{ .git.branch | default "master" | replace "dev/" "develo/" | trunc 6 | replace "develo" "dev" }}/{{.cds.version}}/'
           source: coverage
 
       - name: Publish test reports on CDS
