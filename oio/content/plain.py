@@ -67,19 +67,7 @@ class PlainContent(Content):
         self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
-    def rebuild_chunk(
-        self,
-        chunk_id,
-        service_id=None,
-        allow_same_rawx=False,
-        chunk_pos=None,
-        allow_frozen_container=True,
-        reqid=None,
-        cur_items=None,
-        **_kwargs,
-    ):
-        if reqid is None:
-            reqid = request_id("plaincontent-")
+    def _get_duplicate_chunks(self, chunk_id, service_id, chunk_pos):
         current_chunk = self._filter_chunk_to_rebuild(
             chunk_id,
             service_id=service_id,
@@ -99,8 +87,47 @@ class PlainContent(Content):
         duplicate_chunks = candidates.sort(
             key=lambda chunk: _get_weighted_random_score(chunk.raw()), reverse=True
         ).all()
+
+        return chunk_pos, current_chunk, duplicate_chunks
+
+    def chunk_already_rebuilt(self, chunk_id, chunk_pos=None, service_id=None):
+        """Return True if chunk has been already rebuild else False"""
+        _, _, duplicate_chunks = self._get_duplicate_chunks(
+            chunk_id, service_id, chunk_pos
+        )
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
+        if len(duplicate_chunks) == self.storage_method.expected_chunks:
+            if service_id and service_id not in [c.host for c in self.chunks]:
+                # Chunk has been rebuilt elsewhere
+                return True
+        # We cannot confirm that the chunk has been rebuilt without
+        # knowing the service id to compare with the new chunks locations
+        return False
+
+    def rebuild_chunk(
+        self,
+        chunk_id,
+        service_id=None,
+        allow_same_rawx=False,
+        chunk_pos=None,
+        allow_frozen_container=True,
+        reqid=None,
+        cur_items=None,
+        rebuild_only_missing=False,
+        **_kwargs,
+    ):
+        if reqid is None:
+            reqid = request_id("plaincontent-")
+        chunk_pos, current_chunk, duplicate_chunks = self._get_duplicate_chunks(
+            chunk_id, service_id, chunk_pos
+        )
+        if len(duplicate_chunks) == 0:
+            raise UnrecoverableContent("No copy of missing chunk")
+        if rebuild_only_missing:
+            if len(duplicate_chunks) == self.storage_method.expected_chunks:
+                # All chunks are present no need to proceed with rebuild
+                return
 
         if current_chunk is None:
             chunk = {}

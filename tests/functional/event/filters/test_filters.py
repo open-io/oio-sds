@@ -185,10 +185,13 @@ class TestContentRebuildFilter(BaseTestCase):
                 # The chunk was there before: it has not been created
                 created.remove(cr)
         if len(created) != len(pos_created):
-            print(
-                "The number of newly created chunks is not as expected: %d vs %d"
-                % (len(created), len(pos_created))
-            )
+            if len(created) != 0:
+                print(
+                    "The number of newly created chunks is not as expected: %d vs %d"
+                    % (len(created), len(pos_created))
+                )
+            else:
+                print("The missing position has been already rebuilt")
             return False
         for cr in created:
             if cr["pos"] in pos_created:
@@ -221,11 +224,14 @@ class TestContentRebuildFilter(BaseTestCase):
         except Exception:
             pass
 
-    def _check_rebuild(self, obj_meta, chunks, chunks_to_remove, chunk_created=True):
+    def _check_rebuild(
+        self, obj_meta, chunks, chunks_to_rebuild, chunk_created=True, remove_chunk=True
+    ):
         start = time.time()
-        self._remove_chunks(obj_meta, chunks_to_remove)
+        if remove_chunk:
+            self._remove_chunks(obj_meta, chunks_to_rebuild)
         time.sleep(1)  # Need to sleep 1s, because mtime has 1s precision
-        missing_pos = [chunk["pos"] for chunk in chunks_to_remove]
+        missing_pos = [chunk["pos"] for chunk in chunks_to_rebuild]
         event = self._create_event(obj_meta, chunks, missing_pos)
         self.notify_filter.process(event, None)
         self._rebuild()
@@ -250,11 +256,53 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
+        chunks_to_rebuild = []
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=True)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild, chunk_created=True)
+
+    def test_object_already_rebuilt(self):
+        content_name = "test_object_already_rebuilt"
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=content_name,
+            data="test",
+            policy="THREECOPIES",
+        )
+        self.objects_created.append(content_name)
+
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
+        for chunk in chunks:
+            chunk.pop("score", None)
+
+        self._check_rebuild(
+            obj_meta, chunks, chunks_to_rebuild, chunk_created=False, remove_chunk=False
+        )
+
+    def test_object_already_rebuilt_ec(self):
+        if len(self.conf["services"]["rawx"]) < 9:
+            self.skipTest("Not enough rawx. EC tests needs at least 9 rawx to run")
+        content_name = "test_object_already_rebuilt_ec"
+        chunks, _, _, obj_meta = self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=content_name,
+            data="test",
+            policy="EC",
+        )
+        self.objects_created.append(content_name)
+
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
+        for chunk in chunks:
+            chunk.pop("score", None)
+
+        self._check_rebuild(
+            obj_meta, chunks, chunks_to_rebuild, chunk_created=False, remove_chunk=False
+        )
 
     def test_missing_1_chunk(self):
         content_name = "test_missing_1_chunk"
@@ -267,12 +315,12 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_last_chunk(self):
         content_name = "test_missing_last_chunk"
@@ -286,12 +334,12 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(-1))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(-1))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_2_chunks(self):
         content_name = "test_missing_2_chunks"
@@ -304,13 +352,13 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
+        chunks_to_rebuild = []
         for i in range(0, 2):
-            chunks_to_remove.append(chunks.pop(0))
+            chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_all_chunks(self):
         content_name = "test_missing_all_chunks"
@@ -323,8 +371,8 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
@@ -333,7 +381,7 @@ class TestContentRebuildFilter(BaseTestCase):
             self._check_rebuild,
             obj_meta,
             chunks,
-            chunks_to_remove,
+            chunks_to_rebuild,
             chunk_created=False,
         )
 
@@ -348,9 +396,9 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
+        chunks_to_rebuild = []
         for i in range(0, 3):
-            chunks_to_remove.append(chunks.pop(0))
+            chunks_to_rebuild.append(chunks.pop(0))
 
         for chunk in chunks:
             chunk.pop("score", None)
@@ -360,7 +408,7 @@ class TestContentRebuildFilter(BaseTestCase):
             self._check_rebuild,
             obj_meta,
             chunks,
-            chunks_to_remove,
+            chunks_to_rebuild,
             chunk_created=False,
         )
 
@@ -376,15 +424,15 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(9))
-        chunks_to_remove.append(chunks.pop(6))
-        chunks_to_remove.append(chunks.pop(4))
-        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(9))
+        chunks_to_rebuild.append(chunks.pop(6))
+        chunks_to_rebuild.append(chunks.pop(4))
+        chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_1_chunk_ec(self):
         if len(self.conf["services"]["rawx"]) < 9:
@@ -399,12 +447,12 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_m_chunk_ec(self):
         if len(self.conf["services"]["rawx"]) < 9:
@@ -419,13 +467,13 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
+        chunks_to_rebuild = []
         for i in range(0, 3):
-            chunks_to_remove.append(chunks.pop(0))
+            chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_m_chunk_ec_2(self):
         if len(self.conf["services"]["rawx"]) < 9:
@@ -440,14 +488,14 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(0))
-        chunks_to_remove.append(chunks.pop(3))
-        chunks_to_remove.append(chunks.pop(5))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
+        chunks_to_rebuild.append(chunks.pop(3))
+        chunks_to_rebuild.append(chunks.pop(5))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild)
 
     def test_missing_m1_chunk_ec(self):
         if len(self.conf["services"]["rawx"]) < 9:
@@ -462,15 +510,15 @@ class TestContentRebuildFilter(BaseTestCase):
         )
         self.objects_created.append(content_name)
 
-        chunks_to_remove = []
-        chunks_to_remove.append(chunks.pop(0))
-        chunks_to_remove.append(chunks.pop(0))
-        chunks_to_remove.append(chunks.pop(0))
-        chunks_to_remove.append(chunks.pop(0))
+        chunks_to_rebuild = []
+        chunks_to_rebuild.append(chunks.pop(0))
+        chunks_to_rebuild.append(chunks.pop(0))
+        chunks_to_rebuild.append(chunks.pop(0))
+        chunks_to_rebuild.append(chunks.pop(0))
         for chunk in chunks:
             chunk.pop("score", None)
 
-        self._check_rebuild(obj_meta, chunks, chunks_to_remove, chunk_created=False)
+        self._check_rebuild(obj_meta, chunks, chunks_to_rebuild, chunk_created=False)
 
 
 class TestKafkaNotifyFilter(BaseTestCase):

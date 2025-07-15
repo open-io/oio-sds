@@ -16,7 +16,7 @@
 
 from urllib.parse import urlparse
 
-from oio.common.exceptions import ContentDrained, ContentNotFound, OrphanChunk
+from oio.common.exceptions import ContentDrained, ContentNotFound, NotFound, OrphanChunk
 from oio.common.logger import get_logger
 from oio.content.factory import ContentFactory
 from oio.content.quality import count_local_items
@@ -60,6 +60,7 @@ class ChunkOperator(object):
         allow_frozen_container=True,
         allow_same_rawx=True,
         read_all_available_sources=False,
+        rebuild_only_missing=False,
         **kwargs,
     ):
         """
@@ -124,16 +125,45 @@ class ChunkOperator(object):
         cur_items = count_local_items(
             chunk_id, rawx_id, chunks, self.rawx_srv_locations, self.logger
         )
-        rebuilt_bytes = content.rebuild_chunk(
-            chunk_id,
-            service_id=rawx_id,
-            allow_frozen_container=allow_frozen_container,
-            allow_same_rawx=allow_same_rawx,
-            chunk_pos=chunk_pos,
-            read_all_available_sources=read_all_available_sources,
-            reqid=kwargs.get("reqid"),
-            cur_items=cur_items,
-        )
+        try:
+            rebuilt_bytes = content.rebuild_chunk(
+                chunk_id,
+                service_id=rawx_id,
+                allow_frozen_container=allow_frozen_container,
+                allow_same_rawx=allow_same_rawx,
+                chunk_pos=chunk_pos,
+                read_all_available_sources=read_all_available_sources,
+                rebuild_only_missing=rebuild_only_missing,
+                reqid=kwargs.get("reqid"),
+                cur_items=cur_items,
+            )
+        except NotFound as err:
+            if "bean not found" in str(err):
+                try:
+                    content = self.content_factory.get_by_path_and_version(
+                        container_id=container_id,
+                        content_id=content_id,
+                        path=path,
+                        version=version,
+                        **kwargs,
+                    )
+                except (ContentDrained, ContentNotFound) as err:
+                    raise OrphanChunk(f"{err}: possible orphan chunk") from err
+                if content.chunk_already_rebuilt(
+                    chunk_id=chunk_id, chunk_pos=chunk_pos, service_id=rawx_id
+                ):
+                    self.logger.debug(
+                        f"Chunk id={chunk_id} at position={chunk_pos} has "
+                        "been already rebuilt."
+                    )
+                    return
+                self.logger.debug(
+                    f"Chunk id={chunk_id} at position={chunk_pos} "
+                    "could not be found during the rebuild process. "
+                    f"container_id={container_id}, content_id={content_id}, "
+                    f"path={path}, version={version}."
+                )
+                raise
 
         if try_chunk_delete:
             try:

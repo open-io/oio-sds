@@ -42,6 +42,7 @@ class ECContent(Content):
         cur_items=None,
         max_attempts=3,
         read_all_available_sources=False,
+        rebuild_only_missing=False,
         reqid=None,
         **_kwargs,
     ):
@@ -61,6 +62,9 @@ class ECContent(Content):
             else:
                 chunk_id = current_chunk.id
                 self.logger.debug("Chunk at pos %s has id %s", chunk_pos, chunk_id)
+                if rebuild_only_missing:
+                    # Chunk at the same position has been found no need to proceed
+                    return
 
         # Sort chunks by score to try to rebuild with higher score.
         # When scores are close together (e.g. [95, 94, 94, 93, 50]),
@@ -128,6 +132,24 @@ class ECContent(Content):
         if extras:
             meta["extra_properties"] = extras
         return meta
+
+    def chunk_already_rebuilt(self, chunk_id, chunk_pos=None, service_id=None):
+        """Return True if chunk has been already rebuild else False"""
+        current_chunk = self._filter_chunk_to_rebuild(
+            chunk_id,
+            service_id=service_id,
+            chunk_pos=chunk_pos,
+        )
+        if current_chunk is None:
+            # No chunk with the specified chunk id and service id
+            # Check if there is a chunk at this position
+            current_chunk = self.chunks.filter(pos=chunk_pos).one()
+            if current_chunk is None:
+                # Chunk is not found
+                return False
+            return True
+        # The chunk still at the same location
+        return False
 
     def _actually_rebuild(
         self,

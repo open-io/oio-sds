@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,12 @@ class BlobRebuilderFilter(Filter):
         try:
             container_id, content_id, path, version, chunk_id = item
             self.chunk_operator.rebuild(
-                container_id, content_id, chunk_id, path, version
+                container_id,
+                content_id,
+                chunk_id,
+                path,
+                version,
+                rebuild_only_missing=True,
             )
         except OioException as exc:
             if isinstance(exc, OrphanChunk):
