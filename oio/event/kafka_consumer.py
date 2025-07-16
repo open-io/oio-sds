@@ -708,53 +708,52 @@ class KafkaBatchFeeder(
     def _wait_batch_processed(self):
         if self.has_registered_offsets():
             # Wait all events are processed
-            with self._consumer.events_fetching_disable():
-                while True:
-                    # Heartbeat to broker to maintain connection open
-                    self._consumer.poll()
-                    if self._stop_requested.is_set():
-                        raise StopIteration()
-                    try:
-                        offset = self._offsets_queue.get(True, timeout=1.0)
-                        # Ensure offset belongs to current batch
-                        offset_batch_id = offset.get("batch_id")
-                        if offset_batch_id != self._batch_id:
-                            self.logger.warning(
-                                "Offset belongs to previous batch (got=%s expect=%s)",
-                                offset_batch_id,
-                                self._batch_id,
-                            )
-                            continue
-                        if offset.get("type") in EventTypes.INTERNAL_EVENTS:
-                            # Internal events should not be commited
-                            self._ready_offsets += 1
-                            continue
-                        if offset.get("failure", False):
-                            self._connect_producer()
-                            if not self._producer:
-                                raise SystemError("No producer available")
-                            if offset["delay"] is not None:
-                                # To retry later, send to delayed if delay > 0.
-                                # Resend to the same topic otherwise.
-                                self._producer.send(
-                                    offset["topic"],
-                                    offset["data"],
-                                    delay=offset["delay"],
-                                    key=offset["key"],
-                                    flush=True,
-                                )
-                            else:  # No retry, send to deadletter
-                                self._producer.send(
-                                    DEFAULT_DEADLETTER_TOPIC, offset["data"], flush=True
-                                )
-                        self.set_offset_ready_to_commit(
-                            offset["topic"], offset["partition"], offset["offset"]
+            while True:
+                if self._stop_requested.is_set():
+                    raise StopIteration()
+                # Heartbeat to broker to maintain connection open
+                self._consumer.heartbeat()
+                try:
+                    offset = self._offsets_queue.get(True, timeout=1.0)
+                    # Ensure offset belongs to current batch
+                    offset_batch_id = offset.get("batch_id")
+                    if offset_batch_id != self._batch_id:
+                        self.logger.warning(
+                            "Offset belongs to previous batch (got=%s expect=%s)",
+                            offset_batch_id,
+                            self._batch_id,
                         )
-                    except Empty:
-                        pass
-                    if self._registered_offsets == self._ready_offsets:
-                        # All events had been processed and are ready to be committed
-                        break
+                        continue
+                    if offset.get("type") in EventTypes.INTERNAL_EVENTS:
+                        # Internal events should not be commited
+                        self._ready_offsets += 1
+                        continue
+                    if offset.get("failure", False):
+                        self._connect_producer()
+                        if not self._producer:
+                            raise SystemError("No producer available")
+                        if offset["delay"] is not None:
+                            # To retry later, send to delayed if delay > 0.
+                            # Resend to the same topic otherwise.
+                            self._producer.send(
+                                offset["topic"],
+                                offset["data"],
+                                delay=offset["delay"],
+                                key=offset["key"],
+                                flush=True,
+                            )
+                        else:  # No retry, send to deadletter
+                            self._producer.send(
+                                DEFAULT_DEADLETTER_TOPIC, offset["data"], flush=True
+                            )
+                    self.set_offset_ready_to_commit(
+                        offset["topic"], offset["partition"], offset["offset"]
+                    )
+                except Empty:
+                    pass
+                if self._registered_offsets == self._ready_offsets:
+                    # All events had been processed and are ready to be committed
+                    break
 
     def run(self):
         try:

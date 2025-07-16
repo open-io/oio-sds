@@ -14,7 +14,6 @@
 
 import json
 import time
-from contextlib import contextmanager
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -27,8 +26,9 @@ from confluent_kafka import (
 )
 
 from oio.common.configuration import load_namespace_conf
-from oio.common.easy_value import int_value
+from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import OioException, OioTimeout
+from oio.common.utils import monotonic_time
 from oio.event.evob import EventTypes
 
 DEFAULT_ENDPOINT = "kafka://127.0.0.1:19092"
@@ -52,6 +52,7 @@ KAFKA_CONF_CONSUMER_PREFIX = "kafka_consumer_"
 KAFKA_CONF_PRODUCER_PREFIX = "kafka_producer_"
 POLL_TIMEOUT = 0
 FLUSH_TIMEOUT = 10
+DEFAULT_HEARTBEAT_INTERVAL = 15.0
 
 
 def get_delay_granularity(conf):
@@ -369,6 +370,10 @@ class KafkaConsumer(KafkaClient):
         }
         self._format_args = format_args or {}
         self._resolve_conf()
+        self._heartbeat_interval = float_value(
+            self.app_conf.get("heartbeat_interval"), DEFAULT_HEARTBEAT_INTERVAL
+        )
+        self._last_poll = 0.0
 
         self._connect(self.client_conf)
         if topics:
@@ -392,18 +397,13 @@ class KafkaConsumer(KafkaClient):
                         missing_key = exc.args[0]
                         self._format_args[missing_key](f"{missing_key}")
 
-    @contextmanager
-    def events_fetching_disable(self):
-        topics = self._client.assignment()
-        self._client.pause(topics)
-        yield
-        self._client.resume(topics)
-
     def fetch_events(self):
         """Retrieve events from broker."""
         while True:
             try:
-                yield self._client.poll(1.0)
+                message = self._client.poll(1.0)
+                self._last_poll = monotonic_time()
+                yield message
             except KafkaException as exc:
                 self._logger.error("Failed to fetch event, reason %s", exc)
                 error = exc.args[0]
@@ -411,17 +411,28 @@ class KafkaConsumer(KafkaClient):
                     raise KafkaFatalException() from exc
                 yield None
 
-    def poll(self):
+    def heartbeat(self, force=False):
         """
         Poll the broker to keep the connection alive. No events are fetched.
 
-        Consumer should be paused to prevent event fetching. This method should be
-        called from an `events_fetching_disable` context.
-        ```
-        with self.events_fetching_disable():
-            self.poll()
-        ```"""
-        _ = self._client.poll(0)
+        Consumer must be paused to prevent event fetching.
+        """
+        if not force and monotonic_time() - self._last_poll < self._heartbeat_interval:
+            # To avoid latency during fast batch processing,
+            # wait a few seconds before actually requesting
+            return
+        self._logger.debug("Poll to keep the connection alive")
+        topics = self._client.assignment()
+        self._client.pause(topics)
+        try:
+            if self._client.poll(0) is not None:
+                raise RuntimeError(
+                    "A message was received when the partitions "
+                    "should have been paused. Maybe a reassignment?"
+                )
+            self._last_poll = monotonic_time()
+        finally:
+            self._client.resume(topics)
 
     def _is_valid_offset(self):
         return self.consumer.assignment()[0].offset != OFFSET_INVALID

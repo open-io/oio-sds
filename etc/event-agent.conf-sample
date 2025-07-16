@@ -85,6 +85,8 @@ log_request_format=log_type:access	request_id:%(request_id)s	status_int:%(status
 # Kafka
 # Size of event batch
 batch_size = 100
+# Time between two poll to keep the connection alive
+heartbeat_interval = 15
 # Event queue type for batches default or per_service
 event_queue_type = default
 # If queue is per_service specify the service id for each queue
