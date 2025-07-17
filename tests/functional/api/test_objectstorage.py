@@ -395,7 +395,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertIsNotNone(event)
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])
 
@@ -411,7 +411,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata2, event.data["properties"])
 
@@ -427,7 +427,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata3, event.data["properties"])
 
@@ -446,7 +446,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(event_properties, event.data["properties"])
 
@@ -485,7 +485,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
         self.assertIsNotNone(event)
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])
 
@@ -499,7 +499,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual({key: None}, event.data["properties"])
 
@@ -512,7 +512,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(_metadata, event.data["properties"])
 
@@ -623,7 +623,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         res = self._create(name, metadata, reqid=reqid)
         self.assertEqual(res, True)
         event = self.wait_for_kafka_event(types=[EventTypes.CONTAINER_NEW], reqid=reqid)
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata, event.data["properties"])
 
@@ -637,7 +637,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual({key: None}, event.data["properties"])
 
@@ -653,7 +653,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual({key: None}, event.data["properties"])
 
@@ -665,7 +665,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         event = self.wait_for_kafka_event(
             types=[EventTypes.CONTAINER_UPDATE], reqid=reqid
         )
-        self.assertDictEqual(event_url, event.url)
+        self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual({key: None for key in metadata}, event.data["properties"])
 

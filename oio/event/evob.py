@@ -16,6 +16,8 @@
 
 from functools import partial
 
+from oio.common.constants import SHARDING_ACCOUNT_PREFIX
+
 
 def is_success(status):
     return 200 <= status <= 299
@@ -53,9 +55,68 @@ def get_pipelines_to_resume(event):
     return internal.pop("pipelines_to_resume", [])
 
 
+def get_account_from_event(event):
+    account = event.url.get("account")
+    if account is None:
+        raise ValueError("Unable to extract account from event")
+    if account.startswith(SHARDING_ACCOUNT_PREFIX):
+        account = account[len(SHARDING_ACCOUNT_PREFIX) :]
+    return account
+
+
+def get_root_container_from_event(event):
+    container = event.url.get("user")
+    if container is None:
+        raise ValueError("Unable to extract container from event")
+    if "shard" in event.url:
+        container = container.rsplit("-", 3)[0]
+    return container
+
+
+class URLWrapper:
+    def __init__(self, data):
+        self._data = data
+        self._shard = data.get("shard", {})
+
+    def __getitem__(self, key):
+        return self._data.get(key, self._shard.get(key))
+
+    def __setitem__(self, key, value):
+        self._data[key] = value
+
+    def __delitem__(self, key):
+        del self._data[key]
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __getattr__(self, key):
+        if key in self._data:
+            return self._data[key]
+        if key in self._shard:
+            return self._shard[key]
+        # Handle dictionary methods except 'get'
+        if hasattr(self._data, key):
+            return getattr(self._data, key)
+        raise KeyError(f"{key}")
+
+    def get(self, key, default=None):
+        return self._data.get(key, self._shard.get(key, default))
+
+    @property
+    def dict(self):
+        return self._data
+
+
 def _event_env_property(field, default=None):
     def getter(self):
-        return self.env.get(field, default)
+        value = self.env.get(field, default)
+        if field == "url" and value:
+            return URLWrapper(value)
+        return value
 
     def setter(self, value):
         self.env[field] = value

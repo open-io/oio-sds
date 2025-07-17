@@ -13,10 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.common.exceptions import OioNetworkException
 from oio.common.kafka import get_retry_delay
-from oio.event.evob import Event, RetryableEventError
+from oio.event.evob import Event, RetryableEventError, get_account_from_event
 from oio.event.filters.base import Filter
 
 
@@ -30,17 +29,6 @@ class LifecycleDeleteRestoreFilter(Filter):
     def init(self):
         self._api = self.app_env["api"]
         self._retry_delay = get_retry_delay(self.conf)
-
-    def _get_account(self, url):
-        account = url.get("account")
-        if account is None:
-            shard = url.get("shard", {})
-            shard_account = shard.get("account", "")
-            if shard_account.startswith(SHARDING_ACCOUNT_PREFIX):
-                account = shard_account[len(SHARDING_ACCOUNT_PREFIX) :]
-        if account is None:
-            raise ValueError("Unable to extract account from event")
-        return account
 
     def process(self, env, cb):
         event = Event(env)
@@ -74,7 +62,7 @@ class LifecycleDeleteRestoreFilter(Filter):
         # TODO: restore ctime and mtime
         try:
             self._api.container.content_create(
-                account=self._get_account(event.url),
+                account=get_account_from_event(event),
                 reference=event.url["bucket"],
                 path=event.url["path"],
                 size=headers["size"],

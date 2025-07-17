@@ -82,7 +82,7 @@ class TestMeta2EventsEmission(BaseTestCase):
                     "user": self.container_name,
                     "id": self.container_id,
                 },
-                event.url,
+                event.url.dict,
             )
 
         # Get the peers list and verify it's the same as received
@@ -139,7 +139,7 @@ class TestMeta2EventsEmission(BaseTestCase):
                     "user": self.container_name,
                     "id": self.container_id,
                 },
-                event.url,
+                event.url.dict,
             )
 
         # Verify it's the same as received

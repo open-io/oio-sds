@@ -22,7 +22,14 @@ from oio.common.exceptions import (
 )
 from oio.common.kafka import get_retry_delay
 from oio.common.utils import request_id
-from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
+from oio.event.evob import (
+    Event,
+    EventError,
+    EventTypes,
+    RetryableEventError,
+    get_account_from_event,
+    get_root_container_from_event,
+)
 from oio.event.filters.base import Filter
 
 
@@ -50,10 +57,12 @@ class Transition(Filter):
 
         try:
             target_policy = event.data.get("target_policy")
+            account = get_account_from_event(event)
+            container = get_root_container_from_event(event)
 
             self._api.object_change_policy(
-                event.url.get("account"),
-                event.url.get("user"),
+                account,
+                container,
                 event.url.get("path"),
                 target_policy,
                 version=event.url.get("version"),
