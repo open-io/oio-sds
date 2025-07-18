@@ -436,7 +436,7 @@ sqlx_admin_get_keyvalues(struct sqlx_sqlite3_s *sq3,
 		if (filter && !filter(k))
 			return FALSE;
 		g_ptr_array_add(tmp, g_strdup(k));
-		if (!v->buffer)
+		if (!v->len)
 			g_ptr_array_add(tmp, g_strdup(""));
 		else
 			g_ptr_array_add(tmp, g_strndup((gchar*)v->buffer, v->len));
