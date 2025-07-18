@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -320,18 +320,10 @@ generate_chunk_bean(struct oio_url_s *url, const gchar *pos,
 		}
 	}
 
-	if (sel->item->id) {
-		gchar shifted_id[LIMIT_LENGTH_SRVID];
-		g_strlcpy(shifted_id, sel->item->id, sizeof(shifted_id));
-		meta1_url_shift_addr(shifted_id);
-		chunkid = m2v2_build_chunk_url(shifted_id, strid);
-	} else {
-		/* legacy function called here to build URL
-		 * when chunks were stored on
-		 * other backend than SDS */
-		GRID_ERROR("Deprecated code path called");
-		EXTRA_ASSERT(policy != NULL);
-	}
+	gchar shifted_id[LIMIT_LENGTH_SRVID];
+	g_strlcpy(shifted_id, sel->item->id, sizeof(shifted_id));
+	meta1_url_shift_addr(shifted_id);
+	chunkid = m2v2_build_chunk_url(shifted_id, strid);
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
