@@ -268,9 +268,10 @@ GError * sqlx_repository_get_version2(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n, GTree **result);
 
 GError* sqlx_repository_has_base2(sqlx_repository_t *repo,
-		const struct sqlx_name_s *n, gchar** bddname);
+		const struct sqlx_name_s *n, gchar** bddname,
+		time_t* lastmodified);
 
-#define sqlx_repository_has_base(r,n) sqlx_repository_has_base2(r,n,NULL)
+#define sqlx_repository_has_base(r,n) sqlx_repository_has_base2(r,n,NULL, NULL)
 
 GError* sqlx_repository_remove_from_cache(sqlx_repository_t *repo,
 		const struct sqlx_name_s *name);

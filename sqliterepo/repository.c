@@ -1030,7 +1030,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			return err;
 
 		if (args->create && sqliterepo_election_lazy_recover) {
-			err = sqlx_repository_has_base2(args->repo, &args->name, NULL);
+			err = sqlx_repository_has_base2(args->repo, &args->name, NULL, NULL);
 			if (err) {
 				if (err->code == CODE_CONTAINER_NOTFOUND) {
 					g_clear_error(&err);
@@ -1329,7 +1329,7 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 
 GError*
 sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
-		gchar** bddname)
+		gchar** bddname, time_t* lastmodified)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1340,15 +1340,28 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		*bddname = NULL;
 
 	GError *err = _open_fill_args(&args, repo, n);
-	if (NULL != err)
+	if (NULL != err) {
 		return err;
+	}
 
-	if (!g_file_test(args.realpath, G_FILE_TEST_EXISTS))
-		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Container not found"
+	if (lastmodified == NULL) {
+		if (!g_file_test(args.realpath, G_FILE_TEST_EXISTS)) {
+			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Container not found"
 				" : (%d) %s", errno, strerror(errno));
+			}
+	} else {
+		GStatBuf stats = {0};
+		if (g_stat(args.realpath, &stats) != 0) {
+			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Container not found"
+				" : (%d) %s", errno, strerror(errno));
+		} else {
+			*lastmodified = stats.st_mtime;
+		}
+	}
 
-	if (!err && bddname != NULL)
+	if (!err && bddname != NULL) {
 		*bddname = g_strdup(args.realpath);
+	}
 	_open_clean_args(&args);
 	return err;
 }
@@ -1461,7 +1474,7 @@ _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		enum election_step_e status)
 {
 	GError *err = NULL;
-	if (!(err = sqlx_repository_has_base2(repo, n, NULL)))
+	if (!(err = sqlx_repository_has_base2(repo, n, NULL, NULL)))
 		return NULL;
 
 	g_clear_error(&err);

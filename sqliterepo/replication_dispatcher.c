@@ -959,6 +959,7 @@ _handler_HAS(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	gchar *bddname=NULL;
+	time_t lastmodified = 0;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
@@ -966,8 +967,7 @@ _handler_HAS(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
-
-	if (NULL != (err = sqlx_repository_has_base2(repo, &n0, &bddname))) {
+	if (NULL != (err = sqlx_repository_has_base2(repo, &n0, &bddname, &lastmodified))) {
 		GError *e = sqlx_repository_remove_from_cache(repo, &n0);
 		if (e)
 			g_clear_error(&e);
@@ -977,6 +977,8 @@ _handler_HAS(struct gridd_reply_ctx_s *reply,
 		if (bddname) {
 			g_string_append(body, bddname);
 			g_free(bddname);
+			g_string_append_c(body, ':');
+			g_string_append_printf(body, "%ld", lastmodified);
 		} else {
 			g_string_append(body, "Not found");
 		}
