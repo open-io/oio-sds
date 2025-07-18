@@ -183,6 +183,14 @@ class OutOfSyncDB(OioException):
     pass
 
 
+class UninitializedDB(OioException):
+    pass
+
+
+class DisusedUninitializedDB(UninitializedDB):
+    pass
+
+
 class FileNotFound(OioException):
     pass
 

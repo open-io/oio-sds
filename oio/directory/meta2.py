@@ -14,10 +14,17 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from time import monotonic
+from time import monotonic, time
 
 from oio.common.decorators import ensure_request_id2
-from oio.common.exceptions import ClientException, VolumeException, from_multi_responses
+from oio.common.easy_value import float_value
+from oio.common.exceptions import (
+    ClientException,
+    DisusedUninitializedDB,
+    UninitializedDB,
+    VolumeException,
+    from_multi_responses,
+)
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
@@ -30,6 +37,8 @@ class Meta2Database(object):
     """
     Execute maintenance operations on meta2 databases (or compatible services).
     """
+
+    DISUSED_BASE_DELAY_DEFAULT = 600.0
 
     def __init__(
         self,
@@ -57,6 +66,9 @@ class Meta2Database(object):
         self._all_service_ids = set()
         self._next_refresh = 0.0
         self._refresh_delay = refresh_delay
+        self._disused_base_delay = float_value(
+            self.conf.get("disused_base_delay"), self.DISUSED_BASE_DELAY_DEFAULT
+        )
 
         self.reload_all_services()
 
@@ -214,22 +226,48 @@ class Meta2Database(object):
             )
         return dst
 
+    def _is_master_initialized(self, cid, **kwargs):
+        """
+        Check if master database is initialized
+        """
+        try:
+            props = self.admin.get_properties(
+                "meta2", cid=cid, force_master=True, **kwargs
+            )
+            return props.get("system", {}).get("sys.m2.init", "0") == "1"
+        except Exception:
+            pass
+        return False
+
+    def _is_disused(self, last_modified):
+        """
+        Check if database is still in its initialization phase
+        """
+        return time() > self._disused_base_delay + last_modified
+
     def _has_base(self, bseq, **kwargs):
         """
         Check which of the old peers actually host the database.
         """
         cid, _ = self.get_cid_and_seq(bseq)
-        peers_to_copy_from = list()
+        peers_to_copy_from = []
         master = None
+        last_modified = 0
 
         has = self.admin.has_base(self.service_type, cid=cid, **kwargs)
         for service, status in has.items():
-            if status["status"]["status"] == 200:
-                peers_to_copy_from.append(service)
+            if status["status"]["status"] != 200:
+                self.logger.warning(
+                    "Missing base (base=%s service=%s status=%s)", bseq, service, status
+                )
                 continue
-            self.logger.warning(
-                "Missing base (base=%s service=%s status=%s)", bseq, service, status
-            )
+            peers_to_copy_from.append(service)
+            try:
+                last_modified = max(
+                    last_modified, int(status["body"].rsplit(":", 1)[-1])
+                )
+            except Exception:
+                pass
 
         if not peers_to_copy_from:
             raise ValueError("No base to copy")
@@ -256,6 +294,11 @@ class Meta2Database(object):
             peers_to_copy_from.remove(master)
             peers_to_copy_from.append(master)
             peers_to_copy_from.reverse()
+
+        if not self._is_master_initialized(cid):
+            if self._is_disused(last_modified):
+                raise DisusedUninitializedDB()
+            raise UninitializedDB()
 
         return peers_to_copy_from
 

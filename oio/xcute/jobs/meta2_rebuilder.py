@@ -1,5 +1,5 @@
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,6 +16,7 @@
 
 from collections import Counter
 
+from oio.common.exceptions import DisusedUninitializedDB
 from oio.directory.meta2 import Meta2Database
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
@@ -38,9 +39,11 @@ class Meta2RebuildTask(XcuteTask):
         rebuilt = self.meta2.rebuild(container_id, raise_error=True, reqid=reqid)
 
         resp = Counter()
-        for _ in rebuilt:
-            resp["rebuilt_seq"] += 1
-
+        try:
+            for _ in rebuilt:
+                resp["rebuilt_seq"] += 1
+        except DisusedUninitializedDB:
+            resp["disused"] += 1
         return resp
 
 

@@ -18,6 +18,7 @@ from collections import Counter
 from itertools import islice
 from random import sample
 
+from oio.common.exceptions import DisusedUninitializedDB
 from oio.directory.meta2 import Meta2Database
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
@@ -35,7 +36,7 @@ class Meta2DecommissionTask(XcuteTask):
 
         self.meta2 = Meta2Database(conf, logger=logger)
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, _task_id, task_payload, reqid=None):
         container_id = task_payload["container_id"]
 
         moved = self.meta2.move(
@@ -43,11 +44,15 @@ class Meta2DecommissionTask(XcuteTask):
         )
 
         resp = Counter()
-        for res in moved:
-            resp["moved_seq"] += 1
-            resp["to." + res["dst"]] += 1
-        if not resp:
-            resp["no_seq_found"] += 1
+        try:
+            for res in moved:
+                resp["moved_seq"] += 1
+                resp["to." + res["dst"]] += 1
+            if not resp:
+                resp["no_seq_found"] += 1
+        except DisusedUninitializedDB:
+            resp["disused"] += 1
+
         return resp
 
 

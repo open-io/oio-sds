@@ -103,7 +103,7 @@ class TestAdmin(BaseTestCase):
             self.assertEqual(200, meta["status"]["status"])
 
         peer = list(info.keys())[0]
-        peer_loc = info[peer]["body"]
+        peer_loc = info[peer].get("body", "").rsplit(":", 1)[0]
         self.assertTrue(os.path.isfile(peer_loc))
         os.remove(peer_loc)
 

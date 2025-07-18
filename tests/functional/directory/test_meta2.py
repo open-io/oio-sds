@@ -17,6 +17,9 @@
 
 import random
 
+from mock import Mock, patch
+
+from oio.common.exceptions import DisusedUninitializedDB, UninitializedDB
 from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
 from tests.utils import BaseTestCase, random_str
@@ -253,3 +256,74 @@ class TestMeta2Database(BaseTestCase):
         )
         for _ in range(0, 5):
             self.api.object_get_properties(self.account, self.reference, "test2")
+
+    def test_move_with_unitialized_base(self):
+        self.api.container_create(self.account, self.reference)
+        base = cid_from_name(self.account, self.reference)
+        # Simulate non initialized base
+        self.api.container_set_properties(
+            self.account,
+            self.reference,
+            system={
+                "sys.m2.init": "0",
+            },
+        )
+
+        current_peers = self._get_peers()
+        if len(current_peers) <= 1:
+            self.skipTest("need replicated bases")
+
+        expected_peers = list(current_peers)
+        src = random.choice(current_peers)
+        expected_peers.remove(src)
+        dst = None
+
+        moved = self.meta2_database.move(base, src, dst=dst)
+        moved = list(moved)
+        self.assertEqual(1, len(moved))
+        self.assertTrue(moved[0]["base"].startswith(base))
+        self.assertEqual(src, moved[0]["src"])
+        self.assertIsNotNone(moved[0]["err"])
+        self.assertIsInstance(moved[0]["err"], UninitializedDB)
+        self.assertNotIsInstance(moved[0]["err"], DisusedUninitializedDB)
+
+    def test_move_with_unitialized_disused_base(self):
+        self.api.container_create(self.account, self.reference)
+        base = cid_from_name(self.account, self.reference)
+        # Simulate non initialized base
+        self.api.container_set_properties(
+            self.account,
+            self.reference,
+            system={
+                "sys.m2.init": "0",
+            },
+        )
+
+        current_peers = self._get_peers()
+        if len(current_peers) <= 1:
+            self.skipTest("need replicated bases")
+
+        expected_peers = list(current_peers)
+        src = random.choice(current_peers)
+        expected_peers.remove(src)
+        dst = None
+
+        has_base_response = {
+            s: {
+                "status": {"status": 200, "message": "OK"},
+                "body": f"/{base[:3]}/{base}.1.meta2:16000000",
+            }
+            for s in current_peers
+        }
+
+        with patch(
+            "oio.directory.admin.AdminClient.has_base",
+            Mock(return_value=has_base_response),
+        ):
+            moved = self.meta2_database.move(base, src, dst=dst)
+            moved = list(moved)
+            self.assertEqual(1, len(moved))
+            self.assertTrue(moved[0]["base"].startswith(base))
+            self.assertEqual(src, moved[0]["src"])
+            self.assertIsNotNone(moved[0]["err"])
+            self.assertIsInstance(moved[0]["err"], DisusedUninitializedDB)
