@@ -64,7 +64,6 @@ if __name__ == "__main__":
     # Read metadata
     with open(args.metadata, "r") as infile:
         metadata = json.load(infile)
-        infile.close()
 
     # Decrypt object
     decrypter = Decrypter(
@@ -78,7 +77,6 @@ if __name__ == "__main__":
     decrypted_metadata = decrypter.decrypt_metadata()
     with open(args.metadata, "w") as outfile:
         json.dump(decrypted_metadata, outfile)
-        outfile.close()
 
     while 1:
         chunk = sys.stdin.buffer.read()
@@ -90,4 +88,3 @@ if __name__ == "__main__":
     ivs = decrypter.get_ivs()
     with open(args.iv, "w") as outfile:
         json.dump(ivs, outfile)
-        outfile.close()
