@@ -81,7 +81,8 @@ sharding_create_shard_timeout = 120
 # Maximum amount of time the sharding process is allowed to save writes
 # before applying them directly to the new shards
 sharding_save_writes_timeout = 120
-# Time before considering that one of the sharding steps is blocked
+# Time before considering that one of the sharding steps is blocked.
+# If sharding timestamp is older than twice that time, raise a warning.
 sharding_step_timeout = 600
 # Size of the meta2 database from which shrinking can be triggered
 # (except for the one and last shard).

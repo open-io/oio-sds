@@ -96,6 +96,7 @@ class AutomaticSharding(Meta2Filter):
             self.sharding_strategy_params.pop("step_timeout", None),
             self.DEFAULT_STEP_TIMEOUT,
         )
+        self.sharding_stuck_timeout = self.step_timeout * 2
 
         self.api = self.app_env["api"]
         self.container_sharding = ContainerSharding(
@@ -113,6 +114,7 @@ class AutomaticSharding(Meta2Filter):
         self.possible_orphan_shards = 0
         self.sharding_in_progress = 0
         self.sharding_no_change = 0
+        self.sharding_stuck = 0
         self.sharding_successes = 0
         self.sharding_errors = 0
         self.shrinking_no_change = 0
@@ -145,14 +147,24 @@ class AutomaticSharding(Meta2Filter):
                 return self.app(env, cb)
 
             if self.container_sharding.sharding_in_progress({"system": meta2db.system}):
-                self.logger.info(
-                    "Sharding in progress for container %s: %s",
-                    meta2db.cid,
-                    self.container_sharding.get_sharding_state_name(
-                        {"system": meta2db.system}
-                    ),
-                )
-                self.sharding_in_progress += 1
+                sharding_timestamp = self._get_sharding_timestamp(meta2db)
+                if time.time() - sharding_timestamp > self.sharding_stuck_timeout:
+                    self.logger.warning(
+                        "Sharding of container %s has been in progress "
+                        "for more than %ds!",
+                        meta2db.cid,
+                        int(self.sharding_stuck_timeout),
+                    )
+                    self.sharding_stuck += 1
+                else:
+                    self.logger.info(
+                        "Sharding in progress for container %s: %s",
+                        meta2db.cid,
+                        self.container_sharding.get_sharding_state_name(
+                            {"system": meta2db.system}
+                        ),
+                    )
+                    self.sharding_in_progress += 1
                 return self.app(env, cb)
 
             if self.sharding_db_size > 0 and meta2db_size > self.sharding_db_size:
@@ -219,14 +231,14 @@ class AutomaticSharding(Meta2Filter):
             )
             return resp(env, cb)
 
-    def _clean(self, meta2db, reqid=None):
+    def _clean(self, meta2db: Meta2DB, reqid=None):
         """
         Check if the shard is cleaned up. If not, try to clean it.
+
+        :returns: True if the container must be skipped
         """
         try:
-            sharding_timestamp = (
-                int_value(meta2db.system.get(M2_PROP_SHARDING_TIMESTAMP), 0) / 1000000.0
-            )
+            sharding_timestamp = self._get_sharding_timestamp(meta2db)
             recent_change = time.time() - sharding_timestamp < self.step_timeout
             if recent_change:
                 return False
@@ -302,6 +314,11 @@ class AutomaticSharding(Meta2Filter):
             master_meta2db_size,
         )
         return False
+
+    @staticmethod
+    def _get_sharding_timestamp(meta2db: Meta2DB):
+        """Get the sharing timestamp in seconds (float)"""
+        return int_value(meta2db.system.get(M2_PROP_SHARDING_TIMESTAMP), 0) / 1000000.0
 
     def _shard(self, meta2db, reqid=None):
         self.logger.info(
@@ -406,6 +423,7 @@ class AutomaticSharding(Meta2Filter):
             "huge_databases": self.huge_databases,
             "sharding_in_progress": self.sharding_in_progress,
             "sharding_no_change": self.sharding_no_change,
+            "sharding_stuck": self.sharding_stuck,
             "sharding_successes": self.sharding_successes,
             "sharding_errors": self.sharding_errors,
             "shrinking_no_change": self.shrinking_no_change,
@@ -422,6 +440,7 @@ class AutomaticSharding(Meta2Filter):
         self.huge_databases = 0
         self.sharding_in_progress = 0
         self.sharding_no_change = 0
+        self.sharding_stuck = 0
         self.sharding_successes = 0
         self.sharding_errors = 0
         self.shrinking_no_change = 0

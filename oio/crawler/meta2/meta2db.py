@@ -37,7 +37,8 @@ def _meta2db_env_property(field, fetch_value_function=None):
     return property(getter, setter)
 
 
-def _fetch_file_status(meta2db):
+def _fetch_file_status(meta2db) -> dict:
+    """Fetch the file status attributes with stat()"""
     file_status = os.stat(meta2db.path)
     return {k: getattr(file_status, k) for k in dir(file_status) if k.startswith("st_")}
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -505,7 +505,7 @@ class TestAutoSharding(BaseTestCase):
             current_timestamp, int(meta["system"][M2_PROP_SHARDING_TIMESTAMP])
         )
 
-    def _test_possible_orphan_shard(self, sharding_state):
+    def _test_possible_orphan_shard(self, sharding_state, in_progress=True):
         def _cb(status, _msg):
             self.assertEqual(200, status)
 
@@ -518,7 +518,13 @@ class TestAutoSharding(BaseTestCase):
         # Simulate an unfinished sharding
         meta = self.storage.container_get_properties(None, None, cid=shard_cid)
         current_timestamp = int(meta["system"][M2_PROP_SHARDING_TIMESTAMP])
-        old_timestamp = current_timestamp - (1000 * 1000000)
+        old_timestamp = current_timestamp - 1000  # 1ms margin
+        if in_progress:
+            # Unfinished but still in (slow) progress
+            old_timestamp -= self.auto_sharding.step_timeout * 1000000
+        else:
+            # Really old, probably stuck
+            old_timestamp -= 2 * self.auto_sharding.step_timeout * 1000000
         self.storage.container_set_properties(
             None,
             None,
@@ -532,11 +538,16 @@ class TestAutoSharding(BaseTestCase):
         meta2db = self._get_meta2db(None, cid=shard_cid)
         self.auto_sharding.process(meta2db.env, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        metrics_1 = ("possible_orphan_shards",)
+        if in_progress:
+            metrics_1 += ("sharding_in_progress",)
+        else:
+            metrics_1 += ("sharding_stuck",)
         for key, value in filter_stats.items():
-            if key in ("sharding_in_progress", "possible_orphan_shards"):
-                self.assertEqual(1, value)
+            if key in metrics_1:
+                self.assertEqual(value, 1, key)
             else:
-                self.assertEqual(0, value)
+                self.assertEqual(value, 0, key)
 
         shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertEqual(2, len(shards))
@@ -547,8 +558,14 @@ class TestAutoSharding(BaseTestCase):
     def test_possible_orphan_shard_with_new_shard_applyings_saved_writes(self):
         self._test_possible_orphan_shard(NEW_SHARD_STATE_APPLYING_SAVED_WRITES)
 
+    def test_possible_orphan_shard_with_new_shard_applyings_saved_writes_stuck(self):
+        self._test_possible_orphan_shard(NEW_SHARD_STATE_APPLYING_SAVED_WRITES)
+
     def test_possible_orphan_shard_with_locked_shard(self):
         self._test_possible_orphan_shard(EXISTING_SHARD_STATE_LOCKED)
+
+    def test_possible_orphan_shard_with_locked_shard_stuck(self):
+        self._test_possible_orphan_shard(EXISTING_SHARD_STATE_LOCKED, in_progress=False)
 
     def test_not_found(self):
         def _cb(status, _msg):

@@ -32,7 +32,7 @@ ORPHANS_DIR = "orphans"
 
 
 class Filter(object):
-    NAME = None
+    NAME: str | None = None
 
     def __init__(self, app, conf, logger=None):
         self.app = app
