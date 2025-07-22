@@ -2366,7 +2366,7 @@ _unique_slotnames(gchar **targets)
 static GPtrArray *
 _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t pin)
 {
-	pin = oio_location_mask_after(pin, OIO_LOC_DIST_HOST);
+	pin = oio_location_mask_after(pin, OIO_LOC_PROX_HOST);
 
 	GTree *t = g_tree_new_full(oio_str_cmp3, NULL, NULL, NULL);
 	for (gchar **pname = slots; *pname; ++pname) {
@@ -2378,7 +2378,7 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 			// Linear total collection of items
 			for (guint i=0; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot,i).item;
-				if (pin == oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
+				if (pin == oio_location_mask_after(item->location, OIO_LOC_PROX_HOST))
 					g_tree_replace(t, item->addr, item);
 			}
 		} else {
@@ -2389,7 +2389,7 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 
 #ifdef HAVE_EXTRA_ASSERT
 #define CHECK_HLOC(pin,op,i) g_assert_cmpuint(pin, op, \
-		oio_location_mask_after(SLOT_ITEM(slot,(i)).item->location, OIO_LOC_DIST_HOST))
+		oio_location_mask_after(SLOT_ITEM(slot,(i)).item->location, OIO_LOC_PROX_HOST))
 			if (i != (guint)-1) {
 				// check this is well the first item of its slice
 				if (i > 0)
@@ -2400,7 +2400,7 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 
 			for (; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot, i).item;
-				if (pin != oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
+				if (pin != oio_location_mask_after(item->location, OIO_LOC_PROX_HOST))
 					break;
 				g_tree_replace(t, item->id, item);
 			}
