@@ -95,7 +95,10 @@ static struct grid_main_callbacks sqlx_service_callbacks =
 	.specific_stop = sqlx_service_specific_stop,
 };
 
-static struct grid_main_option_s *custom_options = NULL;
+static struct grid_main_option_s custom_options[] = {
+	{NULL, 0, {.any=0}, NULL},
+};
+
 static struct grid_main_option_s *all_options = NULL;
 static struct grid_main_option_s common_options[] =
 {
