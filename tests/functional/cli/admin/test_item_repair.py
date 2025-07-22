@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,12 +49,53 @@ class ItemRepairTest(CliTestCase):
         base_path = cid[:3] + "/" + cid + ".1.meta2"
         return "/".join([self.get_volume(peer), base_path])
 
-    def test_repair_one_missing_base(self):
+    def test_repair_one_missing_master_base(self):
         container = "test_container_repair_" + random_str(4)
         opts = self.get_opts([])
         self.storage.container_create(self.account, container)
         self.clean_later(container)
         peers = self.get_peers(container)
+        cid = self.storage.directory.list(self.account, container)["cid"]
+        election = self.storage.admin.election_status("meta2", cid=cid)
+        master = None
+        for service, status in election["peers"].items():
+            if status["status"]["status"] == 200:
+                master = service
+                break
+        self.assertIsNotNone(master)
+        path = self.get_path(master, container)
+        os.remove(path)
+        self.assertRaises(OSError, os.stat, path)
+        output = self.openio_admin(
+            f"container repair {container} {opts} --oio-account {self.account}"
+        ).strip()
+
+        expected_output = "|".join([self.ns, self.account, container]) + " OK None"
+        self.assertOutput(expected_output, output)
+        os.stat(path)
+        for peer in peers:
+            if peer != master:
+                new_peer = peer
+                break
+
+        new_path = self.get_path(new_peer, container)
+        self.assertOutput("", self.sqldiff(path, new_path))
+
+    def test_repair_one_missing_slave_base(self):
+        container = "test_container_repair_" + random_str(4)
+        opts = self.get_opts([])
+        self.storage.container_create(self.account, container)
+        self.clean_later(container)
+        peers = self.get_peers(container)
+        cid = self.storage.directory.list(self.account, container)["cid"]
+        election = self.storage.admin.election_status("meta2", cid=cid)
+        master = None
+        for service, status in election["peers"].items():
+            if status["status"]["status"] == 200:
+                master = service
+                break
+        self.assertIsNotNone(master)
+        peers.remove(master)
         removed_peer = random.choice(peers)
         path = self.get_path(removed_peer, container)
         os.remove(path)

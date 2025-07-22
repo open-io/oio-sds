@@ -245,62 +245,93 @@ class Meta2Database(object):
         """
         return time() > self._disused_base_delay + last_modified
 
-    def _has_base(self, bseq, **kwargs):
+    def _get_base_master(self, cid, peers, **kwargs):
+        try:
+            election = self.admin.election_status(self.service_type, cid=cid, **kwargs)
+            for service, status in election["peers"].items():
+                status_code = status["status"]["status"]
+                if service not in peers:
+                    continue
+                if status_code == 200:
+                    return True, service
+                if status_code == 404:
+                    return False, service
+        except Exception as exc:
+            self.logger.warning("Failed to get election status (base=%s): %s", cid, exc)
+        return False, None
+
+    def _get_base_peers_and_master(self, bseq, retries=1, **kwargs):
+        cid, _ = self.get_cid_and_seq(bseq)
+        last_modified = 0
+        peers = []
+        master = None
+        for i in range(retries):
+            if i > 0:
+                # We already failed to get consistent peers and master
+                try:
+                    data = self.admin.election_leave(
+                        self.service_type, cid=cid, service=master, **kwargs
+                    )
+                    from_multi_responses(data)
+                except Exception:
+                    self.logger.warning(
+                        "Unable to leave election for container %s service %s",
+                        cid,
+                        master,
+                    )
+                    continue
+            master = None
+            peers.clear()
+            last_modified = 0
+            has = self.admin.has_base(self.service_type, cid=cid, **kwargs)
+            for service, status in has.items():
+                if status["status"]["status"] != 200:
+                    self.logger.warning(
+                        "Missing base (base=%s service=%s status=%s)",
+                        bseq,
+                        service,
+                        status,
+                    )
+                    continue
+                peers.append(service)
+                try:
+                    last_modified = max(
+                        last_modified, int(status["body"].rsplit(":", 1)[-1])
+                    )
+                except Exception:
+                    pass
+            master_ok, master = self._get_base_master(cid, peers, **kwargs)
+            if master_ok:
+                # Master found and valid
+                break
+        return peers, master, last_modified
+
+    def _has_base(self, bseq, allow_no_master=False, **kwargs):
         """
         Check which of the old peers actually host the database.
         """
         cid, _ = self.get_cid_and_seq(bseq)
-        peers_to_copy_from = []
-        master = None
-        last_modified = 0
-
-        has = self.admin.has_base(self.service_type, cid=cid, **kwargs)
-        for service, status in has.items():
-            if status["status"]["status"] != 200:
-                self.logger.warning(
-                    "Missing base (base=%s service=%s status=%s)", bseq, service, status
-                )
-                continue
-            peers_to_copy_from.append(service)
-            try:
-                last_modified = max(
-                    last_modified, int(status["body"].rsplit(":", 1)[-1])
-                )
-            except Exception:
-                pass
-
-        if not peers_to_copy_from:
-            raise ValueError("No base to copy")
-
-        try:
-            election = self.admin.election_status(self.service_type, cid=cid, **kwargs)
-            for service, status in election["peers"].items():
-                if status["status"]["status"] == 200:
-                    master = service
-                    break
-        except Exception as exc:  # pylint: disable=broad-except
-            self.logger.warning(
-                "Failed to get election status (base=%s): %s", bseq, exc
+        peers_to_copy_from, master, last_modified = self._get_base_peers_and_master(
+            bseq, retries=3, **kwargs
+        )
+        if not allow_no_master and master is None:
+            raise ValueError(f"No master found for {bseq}")
+        if not allow_no_master and master not in peers_to_copy_from:
+            raise ValueError(
+                f"Master service {master} for {bseq} does not host the base!"
             )
+        # Prefer to copy the master
+        if master:
+            peers_to_copy_from = [
+                master,
+                *(s for s in peers_to_copy_from if not master),
+            ]
 
-        if master is None:
-            self.logger.warning("No master")
-        elif master not in peers_to_copy_from:
-            self.logger.warning(
-                "Master service %s for %s does not host the base!", master, bseq
-            )
-        else:
-            # Prefer to copy the master
-            peers_to_copy_from.remove(master)
-            peers_to_copy_from.append(master)
-            peers_to_copy_from.reverse()
-
-        if not self._is_master_initialized(cid):
-            if self._is_disused(last_modified):
-                raise DisusedUninitializedDB()
-            raise UninitializedDB()
-
-        return peers_to_copy_from
+            if not self._is_master_initialized(cid, **kwargs):
+                if self._is_disused(last_modified):
+                    raise DisusedUninitializedDB()
+                raise UninitializedDB()
+            return peers_to_copy_from, master
 
     def _copy_base(self, bseq, dst, peers_to_copy_from, **kwargs):
         cid, _ = self.get_cid_and_seq(bseq)
@@ -456,7 +487,7 @@ class Meta2Database(object):
 
             try:
                 self.logger.debug("Step 1: check available bases.")
-                peers_to_copy_from = self._has_base(bseq, **kwargs)
+                peers_to_copy_from, _ = self._has_base(bseq, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to check if each peer exists (base=%s src=%s dst=%s): %s",
@@ -567,7 +598,9 @@ class Meta2Database(object):
 
             try:
                 self.logger.debug("Step 1: check available bases.")
-                available_bases = self._has_base(bseq, **kwargs)
+                available_bases, master = self._has_base(
+                    bseq, allow_no_master=True, **kwargs
+                )
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to check if each peer exists (base=%s): %s", bseq, exc
@@ -581,7 +614,7 @@ class Meta2Database(object):
                 self.logger.debug("Step 2: copy the database.")
             for dst in missing_bases:
                 try:
-                    self._copy_base(bseq, dst, available_bases, **kwargs)
+                    self._copy_base(bseq, dst, [master], **kwargs)
                 except Exception as exc:  # pylint: disable=broad-except
                     self.logger.error(
                         "Failed to copy base (base=%s dst=%s): %s", bseq, dst, exc
