@@ -127,23 +127,23 @@ kafka_create(const gchar *endpoint,
 	}
 
 	char errstr[512];
-	rd_kafka_resp_err_t kafka_err;
+	rd_kafka_conf_res_t kafka_res;
 	gchar** options = NULL;
 
 	// Endpoints
 	GRID_INFO("Setting option bootstrap.server=%s", endpoint);
-	kafka_err = rd_kafka_conf_set(
+	kafka_res = rd_kafka_conf_set(
 		out1.conf, "bootstrap.servers", endpoint, errstr, sizeof(errstr));
-	if (kafka_err) {
+	if (kafka_res) {
 		err = BADREQ("Invalid endpoint: %s", errstr);
 	}
 
 	if (!err) {
 		// Acks
 		GRID_INFO("Setting option acks=%s", oio_events_kafka_acks);
-		kafka_err = rd_kafka_conf_set(
+		kafka_res = rd_kafka_conf_set(
 			out1.conf, "acks", oio_events_kafka_acks, errstr, sizeof(errstr));
-		if (kafka_err) {
+		if (kafka_res) {
 			err = BADREQ("Invalid acknowledgement: %s", errstr);
 		}
 	}
@@ -165,10 +165,10 @@ kafka_create(const gchar *endpoint,
 				break;
 			}
 			GRID_INFO("Setting option %s=%s", key_value[0], key_value[1]);
-			kafka_err = rd_kafka_conf_set(
+			kafka_res = rd_kafka_conf_set(
 				out1.conf, key_value[0], key_value[1], errstr, sizeof(errstr));
 			g_strfreev(key_value);
-			if (kafka_err) {
+			if (kafka_res) {
 				err = BADREQ("Invalid option: %s", errstr);
 				break;
 			}
@@ -196,18 +196,18 @@ kafka_create(const gchar *endpoint,
 		rd_kafka_conf_set_dr_msg_cb(out1.conf, msg_sync_delivered);
 
 		/* Minimize wait-for-larger-batch delay (since there will be no batching) */
-		kafka_err = rd_kafka_conf_set(
+		kafka_res = rd_kafka_conf_set(
 			out1.conf, "queue.buffering.max.ms", "1", errstr, sizeof(errstr));
-		if (kafka_err) {
+		if (kafka_res) {
 			err = BADREQ("Invalid option: %s", errstr);
 		}
 
 		if (!err) {
 			/* Minimize wait-for-socket delay (otherwise we will lose 100ms per
 			* message instead just the RTT) */
-			kafka_err = rd_kafka_conf_set(
+			kafka_res = rd_kafka_conf_set(
 				out1.conf, "socket.blocking.max.ms", "1", errstr, sizeof(errstr));
-			if (kafka_err) {
+			if (kafka_res) {
 				err = BADREQ("Invalid option: %s", errstr);
 			}
 		}
@@ -217,9 +217,9 @@ kafka_create(const gchar *endpoint,
 			gchar timeout_str[16];
 			g_snprintf(timeout_str, sizeof(timeout_str), "%ld", \
 				(OIO_EVENTS_KAFKA_SYNC_POLL_DELAY * OIO_EVENTS_KAFKA_SYNC_MAX_POLLS) / 1000);
-			kafka_err = rd_kafka_conf_set(
+			kafka_res = rd_kafka_conf_set(
 				out1.conf, "message.timeout.ms", timeout_str, errstr, sizeof(errstr));
-			if (kafka_err) {
+			if (kafka_res) {
 				err = BADREQ("Invalid option: %s", errstr);
 			}
 		}
