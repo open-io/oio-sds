@@ -18,7 +18,7 @@ from collections import Counter
 from itertools import islice
 from random import sample
 
-from oio.common.exceptions import DisusedUninitializedDB
+from oio.common.exceptions import DisusedUninitializedDB, RemainsDB
 from oio.directory.meta2 import Meta2Database
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
@@ -52,6 +52,8 @@ class Meta2DecommissionTask(XcuteTask):
                 resp["no_seq_found"] += 1
         except DisusedUninitializedDB:
             resp["disused"] += 1
+        except RemainsDB:
+            resp["remains"] += 1
 
         return resp
 

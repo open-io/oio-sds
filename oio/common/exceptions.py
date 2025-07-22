@@ -187,6 +187,10 @@ class UninitializedDB(OioException):
     pass
 
 
+class RemainsDB(OioException):
+    pass
+
+
 class DisusedUninitializedDB(UninitializedDB):
     pass
 

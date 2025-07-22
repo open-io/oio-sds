@@ -21,6 +21,7 @@ from oio.common.easy_value import float_value
 from oio.common.exceptions import (
     ClientException,
     DisusedUninitializedDB,
+    RemainsDB,
     UninitializedDB,
     VolumeException,
     from_multi_responses,
@@ -300,6 +301,9 @@ class Meta2Database(object):
                     )
                 except Exception:
                     pass
+
+            if has and not peers:
+                raise RemainsDB(f"Base {bseq} referenced in meta1 is missing.")
             master_ok, master = self._get_base_master(cid, peers, **kwargs)
             if master_ok:
                 # Master found and valid

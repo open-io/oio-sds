@@ -14,12 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-
 import random
 
 from mock import Mock, patch
 
-from oio.common.exceptions import DisusedUninitializedDB, UninitializedDB
+from oio.common.exceptions import DisusedUninitializedDB, RemainsDB, UninitializedDB
 from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
 from tests.utils import BaseTestCase, random_str
@@ -327,3 +326,25 @@ class TestMeta2Database(BaseTestCase):
             self.assertEqual(src, moved[0]["src"])
             self.assertIsNotNone(moved[0]["err"])
             self.assertIsInstance(moved[0]["err"], DisusedUninitializedDB)
+
+    def test_move_meta1_remains_base(self):
+        self.api.container_create(self.account, self.reference)
+        base = cid_from_name(self.account, self.reference)
+        current_peers = self._get_peers()
+        if len(current_peers) <= 1:
+            self.skipTest("need replicated bases")
+        self.admin.election_leave("meta2", cid=base)
+        for peer in current_peers:
+            self.storage.admin.remove_base(
+                service_type="meta2", cid=base, service_id=peer
+            )
+
+        src = current_peers[0]
+        dst = None
+        moved = self.meta2_database.move(base, src, dst=dst)
+        moved = list(moved)
+        self.assertEqual(1, len(moved))
+        self.assertTrue(moved[0]["base"].startswith(base))
+        self.assertEqual(src, moved[0]["src"])
+        self.assertIsNotNone(moved[0]["err"])
+        self.assertIsInstance(moved[0]["err"], RemainsDB)

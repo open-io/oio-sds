@@ -18,7 +18,7 @@ from itertools import combinations
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.easy_value import boolean_value
-from oio.common.exceptions import DisusedUninitializedDB
+from oio.common.exceptions import DisusedUninitializedDB, RemainsDB
 from oio.common.utils import depaginate, service_pool_to_dict
 from oio.content.quality import count_items_per_loc, format_location, get_distance
 from oio.directory.meta2 import Meta2Database
@@ -193,9 +193,15 @@ class Meta2RelocationTask(XcuteTask):
                 break
             except DisusedUninitializedDB:
                 self.logger.info(
-                    "Base %s from %s is disused, ignored (reqid=%s)",
+                    "Base %s  is disused, ignored (reqid=%s)",
                     cid,
-                    res["src"],
+                    reqid,
+                )
+                break
+            except RemainsDB:
+                self.logger.info(
+                    "Base %s does not exist anymore, ignored (reqid=%s)",
+                    cid,
                     reqid,
                 )
                 break
