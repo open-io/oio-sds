@@ -172,6 +172,8 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 add_library(metautils STATIC
+		notify.c
+
 		stats.c
 		rrd.c
 		volume_lock.c
@@ -271,10 +273,7 @@ add_library(metautils STATIC
 		asn1c_ext.c
 )
 
-# NOTE(FVE): We can make systemd optional if we give up on server
-# processes seamless restart.
 target_link_libraries(metautils
 		oiocore
-		${SYSTEMD_LIBRARIES}
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		-lm ${CMAKE_THREAD_LIBS_INIT})

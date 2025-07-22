@@ -372,7 +372,6 @@ pkg_check_modules(RABBITMQ librabbitmq>=0.8)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(KAFKA REQUIRED rdkafka)
 pkg_check_modules(ZMQ REQUIRED libzmq>=4.0.0)
-pkg_check_modules(SYSTEMD REQUIRED libsystemd>=245)
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -425,7 +424,7 @@ endif(NOT SDK_ONLY)
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-	check_found("ATTR" "SQLITE3" "ZMQ" "ZK" "PYTHONINTERP" "LEVELDB" "ZLIB" "SYSTEMD")
+	check_found("ATTR" "SQLITE3" "ZMQ" "ZK" "PYTHONINTERP" "LEVELDB" "ZLIB")
 
 endif (NOT SDK_ONLY)
 

@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -94,6 +94,12 @@ struct grid_main_callbacks
 	void (*specific_interrupt) (void);
 	void (*specific_stop) (void);
 };
+
+/** Notify systemd */
+int oio_sd_notify(int unset_env, const char *msg);
+
+/** Notify systemd */
+int oio_sd_notifyf(int unset_env, const char *fmt, ...);
 
 /** Uses sigprocmask to block a lot of signals */
 void metautils_ignore_signals(void);

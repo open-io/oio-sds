@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -29,8 +29,6 @@ License along with this library.
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-
-#include <systemd/sd-daemon.h>
 
 #include <metautils/lib/common_variables.h>
 
@@ -68,6 +66,7 @@ static gchar errbuff[1024];
 } while (0)
 
 /* ------------------------------------------------------------------------- */
+
 
 static void
 _logger_syslog_udp(const gchar *log_domain, GLogLevelFlags log_level,
@@ -681,7 +680,7 @@ void
 grid_main_interrupt(void)
 {
 	flag_running = FALSE;
-	sd_notify(0, "STATUS=stopping\nSTOPPING=1");
+	oio_sd_notify(0, "STOPPING=1\nSTATUS=stopping");
 	if (user_callbacks->specific_interrupt) {
 		user_callbacks->specific_interrupt();
 	} else {
@@ -693,7 +692,7 @@ void
 grid_main_stop(void)
 {
 	flag_running = FALSE;
-	sd_notify(0, "STATUS=stopping\nSTOPPING=1");
+	oio_sd_notify(0, "STOPPING=1\nSTATUS=stopping");
 	user_callbacks->specific_stop();
 }
 
@@ -731,7 +730,7 @@ grid_main_seamless_restart(postfork_cleanup_cb postfork_clean, gpointer udata)
 	default:
 		GRID_INFO("Service will continue in process %d, notifying systemd.",
 				child_pid);
-		sd_res = sd_notifyf(0, "MAINPID=%d\nSTATUS=restarting", child_pid);
+		sd_res = oio_sd_notifyf(0, "MAINPID=%d\nSTATUS=restarting", child_pid);
 		if (sd_res <= 0) {
 			GRID_ERROR(
 					"Failed to notify systemd: (%d) %m, killing child process",
@@ -797,7 +796,7 @@ grid_main(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 
 		grid_main_install_sighandlers();
 		if (flag_running) {
-			sd_notify(0, "STATUS=started\nREADY=1");
+			oio_sd_notify(0, "READY=1\nSTATUS=started");
 			user_callbacks->action();
 		}
 	}
