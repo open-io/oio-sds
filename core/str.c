@@ -209,14 +209,19 @@ gsize oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS) {
 	if (!s || !sS)
 		return 0;
 
+#if defined(__GNUC__) && !defined(__clang__)
+    /* Alas, "pragma gcc" is accepted by clang */
 	#pragma GCC diagnostic push
 	#pragma GCC diagnostic ignored "-Wunsafe-loop-optimizations"
+#endif
 	for (i = j = 0; i < sS && j < (dS - 1); ) {
 		register const gchar *h = b2h[((guint8*)s)[i++]];
 		d[j++] = h[0];
 		d[j++] = h[1];
 	}
+#if defined(__GNUC__) && !defined(__clang__)
 	#pragma GCC diagnostic pop
+#endif
 
 	d[(j < dS ? j : dS - 1)] = 0;
 	return j;
