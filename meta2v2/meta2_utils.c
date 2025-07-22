@@ -4706,6 +4706,11 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
 	gint64 duration = 0;
 	gboolean finished = FALSE;
 
+	if (max_entries_cleaned <= 0) {
+		max_entries_cleaned = G_MAXINT64;
+	}
+	gint64 _max_entries_cleaned = max_entries_cleaned;
+
 	if (!lower) {
 		err = m2db_get_sharding_lower(sq3, &current_lower);
 		if (err) {
@@ -4725,10 +4730,6 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean local,
 	if (!current_cleaned_tables) {
 		current_cleaned_tables = g_strdup("");
 	}
-	if (max_entries_cleaned <= 0) {
-		max_entries_cleaned = G_MAXINT64;
-	}
-	gint64 _max_entries_cleaned = max_entries_cleaned;
 
 	now = oio_ext_monotonic_time();
 	gint64 dl = _compute_reasonable_deadline(now, local);
