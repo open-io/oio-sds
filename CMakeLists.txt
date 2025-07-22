@@ -109,10 +109,10 @@ if ( ENABLE_CODECOVERAGE )
 	endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 endif (ENABLE_CODECOVERAGE )
 
-set(CMAKE_C_FLAGS_DEBUG		  "-O0 -fno-inline")
-set(CMAKE_C_FLAGS_RELEASE		"-O2")
+set(CMAKE_C_FLAGS_DEBUG          "-Og -g3 -fno-inline")
+set(CMAKE_C_FLAGS_RELEASE        "-O2")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -fno-inline")
-set(CMAKE_C_FLAGS_MINSIZEREL	 "-Os -s")
+set(CMAKE_C_FLAGS_MINSIZEREL     "-Os -s")
 
 add_definitions(-D_XOPEN_SOURCE=700)
 add_definitions(-D_DEFAULT_SOURCE)
