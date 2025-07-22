@@ -23,7 +23,6 @@ liblzo2-dev
 librabbitmq-dev
 librdkafka-dev
 libsqlite3-dev
-libsystemd-dev
 libzmq3-dev
 locales
 python3

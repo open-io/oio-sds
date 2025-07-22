@@ -27,10 +27,9 @@ jobs:
             sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
           # We have troubles with FoundationDB when systemd is restarted.
           # Prevent it from being upgraded (and thus restarted).
-          SYSTEMD_VERSION=$(dpkg -s libsystemd0 | sed -n -E -e 's/^Version: (\w+)/\1/p')
           apt-mark hold libsystemd0 systemd
           apt-get update
-          apt-get install -y "libsystemd-dev=$SYSTEMD_VERSION" $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
+          apt-get install -y $(tr '\n' ' ' < .cds/deps-ubuntu-focal.txt) ${GO_PACKAGE} ${PYTHON_PACKAGE} ${ZOOKEEPER_PACKAGE}
           # Configure environment
           echo "export COVERAGE_PROCESS_START=.coveragerc" > $HOME/oio-env.sh
           echo "export PATH=/opt/${GO_PACKAGE}/bin:$HOME/go/bin:/usr/lib/rust-${RUST_VERSION}/bin:$PATH" >> $HOME/oio-env.sh
