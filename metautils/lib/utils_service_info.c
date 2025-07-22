@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -284,7 +284,7 @@ service_info_dup(const struct service_info_s *si)
 
 	if (!si)
 		return NULL;
-	copy = g_memdup(si, sizeof(struct service_info_s));
+	copy = oio_memdup(si, sizeof(struct service_info_s));
 	if (!copy)
 		return NULL;
 	copy->tags = service_info_copy_tags(si->tags);

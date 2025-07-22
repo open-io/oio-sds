@@ -1,6 +1,10 @@
 add_definitions(-DG_LOG_DOMAIN="oio.core")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
+if (GLIB2_glib-2.0_VERSION VERSION_GREATER_EQUAL 2.68.0)
+    add_definitions(-DHAS_GLIB_MEMDUP2=1)
+endif()
+
 include_directories(BEFORE
 	${CMAKE_CURRENT_SOURCE_DIR}
 	${CMAKE_SOURCE_DIR}

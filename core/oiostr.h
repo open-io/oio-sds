@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -47,6 +47,8 @@ extern "C" {
 	g_string_prepend_len(out, Static, sizeof(Static)-1)
 
 #define oio_ptrv_length(v) oio_constptrv_length((const void * const *)(v))
+
+gpointer oio_memdup(gconstpointer mem, gsize byte_size);
 
 void oio_str_reuse(gchar **dst, gchar *src);
 

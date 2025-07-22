@@ -1,7 +1,7 @@
 /*
 OpenIO SDS load-balancing
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -470,10 +470,10 @@ oio_lb_selected_item_free(struct oio_lb_selected_item_s *sel)
 static struct oio_lb_selected_item_s *
 _item_dup(const struct oio_lb_selected_item_s *sel)
 {
-	struct oio_lb_selected_item_s *res = g_memdup(sel, sizeof(*sel));
+	struct oio_lb_selected_item_s *res = oio_memdup(sel, sizeof(*sel));
 	res->expected_slot = g_strdup(sel->expected_slot);
 	res->final_slot = g_strdup(sel->final_slot);
-	res->item = g_memdup(sel->item, sizeof(*sel->item));
+	res->item = oio_memdup(sel->item, sizeof(*sel->item));
 	/* cur_items_by_level, max_items_by_level, warn_items_by_level
 	 * and flawed are embedded in the main structure and do not require an
 	 * explicit copy. */

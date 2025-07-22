@@ -119,7 +119,7 @@ retry:
 					if (gba->data[i] != ((guint8)'\n'))
 						continue;
 					/* We have a line! */
-					gchar *str = g_memdup (gba->data, i+2);
+					gchar *str = oio_memdup (gba->data, i+2);
 					str[i+1] = 0;
 					g_byte_array_remove_range(gba, 0, i+1);
 					if (*str) _on_line (clt, str);

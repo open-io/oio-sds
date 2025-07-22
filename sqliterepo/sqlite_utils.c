@@ -597,7 +597,7 @@ hook_extract(gchar *k, struct _cache_entry_s *v, GTree *version)
 	ov.when = atoll(p + 1);
 	g_tree_insert(version,
 			hashstr_create(k + sizeof("version:") - 1),
-			g_memdup(&ov, sizeof(ov)));
+			oio_memdup(&ov, sizeof(ov)));
 	return FALSE;
 }
 

@@ -2,6 +2,7 @@
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -115,7 +116,7 @@ static gboolean _tree2list_traverser(gpointer k, gpointer v, gpointer u) {
 	struct meta0_info_s *m0i = g_malloc0(sizeof(*m0i));
 	grid_string_to_addrinfo(url, &(m0i->addr));
 	m0i->prefixes_size = 2 * pfx->len;
-	m0i->prefixes = g_memdup(pfx->data, m0i->prefixes_size);
+	m0i->prefixes = oio_memdup(pfx->data, m0i->prefixes_size);
 	*pl = g_slist_prepend(*pl, m0i);
 
 	return FALSE;

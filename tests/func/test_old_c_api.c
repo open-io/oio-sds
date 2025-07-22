@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -198,7 +199,7 @@ _add_tests(gint64 *tab, size_t tablen, gboolean thorough)
 						"/core/sds/old/upload/17.04/%d/%ld/%ld/%ld",
 						ctx.thorough, ctx.explicit, ctx.global, ctx.config);
 				g_test_add_data_func_full(
-						name, g_memdup(&ctx, sizeof(ctx)), _fixture_1704, g_free);
+						name, oio_memdup(&ctx, sizeof(ctx)), _fixture_1704, g_free);
 			}
 		}
 	}

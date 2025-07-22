@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -112,7 +112,7 @@ _register_record(const struct oio_var_record_s *rec)
 {
 	_oio_var_constructor();
 	g_mutex_lock(&var_lock);
-	var_records = g_slist_append(var_records, g_memdup(rec, sizeof(*rec)));
+	var_records = g_slist_append(var_records, oio_memdup(rec, sizeof(*rec)));
 	g_mutex_unlock(&var_lock);
 }
 

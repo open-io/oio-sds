@@ -632,7 +632,7 @@ hook_update(struct sqlx_repctx_s *ctx, int op, char const *bn, char const *tn,
 
 	GTree *subtree = context_get_pending_table(ctx->pending, key);
 	guint u = (op == SQLITE_DELETE);
-	g_tree_replace(subtree, g_memdup(&rowid, sizeof(rowid)),
+	g_tree_replace(subtree, oio_memdup(&rowid, sizeof(rowid)),
 			GUINT_TO_POINTER(u));
 }
 

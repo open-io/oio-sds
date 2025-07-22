@@ -2,6 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -38,7 +39,7 @@ build_version(struct cfg_s *cfg)
 		struct object_version_s o;
 		o.version = cfg->v;
 		o.when = cfg->t;
-		g_tree_insert(v, hashstr_create(cfg->name), g_memdup(&o, sizeof(o)));
+		g_tree_insert(v, hashstr_create(cfg->name), oio_memdup(&o, sizeof(o)));
 	}
 	return v;
 }

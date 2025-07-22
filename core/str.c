@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -92,6 +92,14 @@ static const gchar json_basic_translations[] =
 	  0,   0,   0,   0,   0,   0,   0,   0,
 	'b', 't', 'n',   0, 'f', 'r',   0,   0,
 };
+
+gpointer oio_memdup(gconstpointer mem, gsize byte_size) {
+#if HAS_GLIB_MEMDUP2
+    return g_memdup2(mem, byte_size);
+#else
+    return g_memdup(mem, byte_size);
+#endif
+}
 
 void oio_str_reuse(gchar **dst, gchar *src) {
 	oio_pfree(dst, src);
@@ -693,7 +701,7 @@ gchar ** KV_extract_prefixed (gchar **kv, const char *prefix) {
 	/* no prefix: keep all the items */
 	if (!oio_str_is_set(prefix)) {
 		gsize len = g_strv_length(kv);
-		return g_memdup(kv, (len+1) * sizeof(gchar*));
+		return oio_memdup(kv, (len+1) * sizeof(gchar*));
 	}
 
 	gsize prefix_len = strlen(prefix);
@@ -717,7 +725,7 @@ gchar ** KV_extract_not_prefixed (gchar **kv, const char *prefix) {
 	/* no prefix: keep all the items */
 	if (!oio_str_is_set(prefix)) {
 		gsize len = g_strv_length(kv);
-		return g_memdup(kv, (len+1) * sizeof(gchar*));
+		return oio_memdup(kv, (len+1) * sizeof(gchar*));
 	}
 
 	GPtrArray *tmp = g_ptr_array_new();

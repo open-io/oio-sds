@@ -799,7 +799,7 @@ _direct_use(struct sqlx_peering_s *self,
 				strcpy(req->peers, peers);
 			if (sqliterepo_udp_deferred) {
 				metautils_gthreadpool_push("UDP", p->pool_udp_use,
-						g_memdup(req, struct_size));
+						oio_memdup(req, struct_size));
 			} else {
 				_use_by_udp_no_free(req, p);
 			}

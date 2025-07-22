@@ -226,7 +226,7 @@ kafka_create(const gchar *endpoint,
 	}
 
 	if (!err) {
-		*out = g_memdup(&out1, sizeof(struct kafka_s));
+		*out = oio_memdup(&out1, sizeof(struct kafka_s));
 	} else {
 		kafka_destroy(&out1);
 	}

@@ -73,7 +73,7 @@ _strv_pointers(gchar **dst, gchar *src, guint count)
 {
 	while (count--) {
 		register gsize s = strlen(src) + 1;
-		*(dst++) = g_memdup(src, s);
+		*(dst++) = oio_memdup(src, s);
 		src += s;
 	}
 }

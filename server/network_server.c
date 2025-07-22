@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022-2024 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -790,7 +790,7 @@ _manage_udp_event(struct network_server_s *srv, struct endpoint_s *e,
 
 		/* Insert a slab in the input queue */
 		data_slab_sequence_append(&clt->input,
-				data_slab_make_buffer(g_memdup(buf, r), r));
+				data_slab_make_buffer(oio_memdup(buf, r), r));
 
 		/* notify the transport layer, and manage this in another thread */
 		EXTRA_ASSERT(NULL != clt->transport.notify_input);
