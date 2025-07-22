@@ -53,7 +53,8 @@ struct oio_lb_pool_vtable_s
 	GError* (*patch) (struct oio_lb_pool_s *self,
 			const oio_location_t * avoids,
 			const oio_location_t * known,
-			oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+			oio_lb_on_id_f on_id, gpointer on_id_ctx,
+            gboolean force_fair_constraints,
 			gboolean adjacent_mode, gboolean *flawed);
 
 	struct oio_lb_item_s* (*get_item) (struct oio_lb_pool_s *self,
@@ -98,11 +99,11 @@ GError*
 oio_lb_pool__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
-		gboolean adjacent_mode, gboolean *flawed)
+		oio_lb_on_id_f on_id, gpointer on_id_ctx,
+        gboolean force_fair_constraints, gboolean adjacent_mode,
+        gboolean *flawed)
 {
-	CFG_CALL(self, patch)(self, avoids, known, on_id,
-	force_fair_constraints, adjacent_mode, flawed);
+	CFG_CALL(self, patch)(self, avoids, known, on_id, on_id_ctx, force_fair_constraints, adjacent_mode, flawed);
 }
 
 struct oio_lb_item_s *
@@ -432,7 +433,8 @@ static GError *_local__poll (struct oio_lb_pool_s *self,
 static GError *_local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
 		const oio_location_t * known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
+		oio_lb_on_id_f on_id, gpointer on_id_ctx,
+        gboolean force_fair_constraints,
 		gboolean adjacent_mode, gboolean *flawed);
 
 static struct oio_lb_item_s *_local__get_item(struct oio_lb_pool_s *self,
@@ -553,16 +555,17 @@ djb_hash_buf(const guint8 * b, register gsize bs)
 	return h;
 }
 
+static void _datalist_count(GQuark key_id UNUSED, gpointer data UNUSED, gpointer udata) {
+    guint *pcounter = udata;
+    *pcounter = *pcounter + 1;
+}
+
 /** Gets the number of elements in a GData. */
 static guint
 oio_ext_gdatalist_length(GData **datalist)
 {
 	guint counter = 0;
-	void _datalist_count(GQuark key_id UNUSED,
-			gpointer data UNUSED, gpointer udata UNUSED) {
-		counter++;
-	}
-	g_datalist_foreach(datalist, _datalist_count, NULL);
+	g_datalist_foreach(datalist, _datalist_count, &counter);
 	return counter;
 }
 
@@ -1113,7 +1116,9 @@ _local__poll (struct oio_lb_pool_s *self,
 		gboolean *flawed)
 {
 	gboolean force_fair_constraints = FALSE;
-	return _local__patch(self, avoids, NULL, on_id,
+	return _local__patch(self,
+            avoids, NULL,
+            on_id, NULL,
 			force_fair_constraints, FALSE, flawed);
 }
 
@@ -1226,39 +1231,38 @@ _match_item_with_targets(struct oio_lb_pool_LOCAL_s *lb,
 	return FALSE;
 }
 
+static void _display(GQuark k, gpointer data, gpointer u) {
+    guint level = GPOINTER_TO_UINT(u);
+    oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
+    GRID_DEBUG("%0*" G_GINT64_MODIFIER "X selected %u times",
+            4 * (OIO_LB_LOC_LEVELS - level),
+            loc, GPOINTER_TO_UINT(data));
+}
+
 static void
 _debug_service_selection(struct polling_ctx_s *ctx)
 {
 	// FIXME: there is similar code in _slot_rehash()
-	void _display(GQuark k, gpointer data, gpointer u) {
-		guint level = GPOINTER_TO_UINT(u);
-		oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
-		GRID_DEBUG("%0*" G_GINT64_MODIFIER "X selected %u times",
-				4 * (OIO_LB_LOC_LEVELS - level),
-				loc, GPOINTER_TO_UINT(data));
-	}
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++)
 		g_datalist_foreach(&(ctx->counters[level]),
 				_display, GUINT_TO_POINTER(level));
-	guint i = 0;
-	void _display_selected(gpointer element, gpointer udata UNUSED) {
-		struct oio_lb_selected_item_s *sel = element;
+	for (guint i = 0; i < ctx->selection->len; i++) {
+		struct oio_lb_selected_item_s *sel = ctx->selection->pdata[i];
 		GRID_DEBUG("Selected %s at loc %016"G_GINT64_MODIFIER
 				"X, dist: %u/%u/%u, slot: %s/%s",
 				sel->item? sel->item->id : "known service",
 				sel->item? sel->item->location : ctx->polled[i],
 				sel->final_dist, sel->warn_dist, sel->expected_dist,
 				sel->final_slot, sel->expected_slot);
-		i++;
 	}
-	g_ptr_array_foreach(ctx->selection, _display_selected, NULL);
 }
 
 static GError*
 __local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
-		gboolean adjacent_mode, gboolean *flawed)
+		oio_lb_on_id_f on_id, gpointer on_id_ctx,
+        gboolean force_fair_constraints, gboolean adjacent_mode,
+        gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	EXTRA_ASSERT(lb != NULL);
@@ -1363,8 +1367,10 @@ __local__patch(struct oio_lb_pool_s *self,
 	g_rw_lock_reader_unlock(&lb->world->lock);
 
 	gboolean _flawed = FALSE;
-	void _set_dists(gpointer element, guint cur) {
-		struct oio_lb_selected_item_s *sel = element;
+	for (i = 0; i < ctx.selection->len; i++) {
+		struct oio_lb_selected_item_s *sel = g_ptr_array_index(ctx.selection, i);
+        guint cur = i;
+
 		sel->expected_dist = max_dist;
 		sel->warn_dist = lb->warn_dist;
 		if (sel->item) {
@@ -1387,9 +1393,7 @@ __local__patch(struct oio_lb_pool_s *self,
 		if (sel->flawed) {
 			_flawed = TRUE;
 		}
-	}
-	for (i = 0; i < ctx.selection->len; i++)
-		_set_dists(g_ptr_array_index(ctx.selection, i), i);
+    }
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
 		_debug_service_selection(&ctx);
@@ -1404,13 +1408,12 @@ __local__patch(struct oio_lb_pool_s *self,
 		if (flawed) {
 			*flawed = _flawed;
 		}
-		void _forward(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+        for (guint idx=0; idx<ctx.selection->len; idx++) {
+            struct oio_lb_selected_item_s *sel = ctx.selection->pdata[idx];
 			if (sel->item)
-				on_id(sel, NULL);
+				on_id(sel, on_id_ctx);
 			// Do not forward "known" items (sel->item == NULL)
-		}
-		// FIXME(FVE): change signature, specify last parameter
-		g_ptr_array_foreach(ctx.selection, (GFunc)_forward, NULL);
+        }
 	}
 	g_ptr_array_free(ctx.selection, TRUE);
 	return err;
@@ -1419,8 +1422,9 @@ __local__patch(struct oio_lb_pool_s *self,
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
-		gboolean adjacent_mode, gboolean *flawed)
+		oio_lb_on_id_f on_id, gpointer on_id_ctx,
+        gboolean force_fair_constraints, gboolean adjacent_mode,
+        gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	EXTRA_ASSERT(lb != NULL);
@@ -1432,8 +1436,11 @@ _local__patch(struct oio_lb_pool_s *self,
 	if (oio_lb_try_fair_constraints_first && !force_fair_constraints
 			&& lb->fair_max_items[0]) {
 		// Quick attempt to find an ideal solution
-		GError *err = __local__patch(self, avoids, known, on_id, TRUE,
-				adjacent_mode, flawed);
+		GError *err = __local__patch(self,
+                avoids, known,
+                on_id, on_id_ctx,
+                TRUE, adjacent_mode,
+                flawed);
 		if (!err) {
 			return NULL;
 		}
@@ -1442,8 +1449,11 @@ _local__patch(struct oio_lb_pool_s *self,
 				oio_ext_get_reqid(), err->code, err->message);
 		g_error_free(err);
 	}
-	return __local__patch(self, avoids, known, on_id, force_fair_constraints,
-			adjacent_mode, flawed);
+	return __local__patch(self,
+            avoids, known,
+            on_id, on_id_ctx,
+            force_fair_constraints, adjacent_mode,
+            flawed);
 }
 
 struct oio_lb_item_s *
@@ -2073,17 +2083,23 @@ oio_lb_world__feed_slot_with_list(struct oio_lb_world_s *self,
 	g_rw_lock_writer_unlock(&self->lock);
 }
 
+struct _forward_foreach_ctx_s {
+    void (*on_item)(const char *id, const char *addr, const char *internal_addr, void *user_data);
+    void *original_udata;
+};
+
+static gboolean _forward_foreach(gpointer key UNUSED, struct _lb_item_s *item, struct _forward_foreach_ctx_s *ctx) {
+    (*ctx->on_item)(item->id, item->addr, item->internal_addr, ctx->original_udata);
+    return FALSE;
+}
+
 void
 oio_lb_world__foreach(struct oio_lb_world_s *self, void *udata,
 		void (*on_item)(const char *id, const char *addr, const char *internal_addr, void *user_data))
 {
-	gboolean _on_id(gpointer _key UNUSED, gpointer _item, gpointer data) {
-		struct _lb_item_s *item = _item;
-		(*on_item)(item->id, item->addr, item->internal_addr, data);
-		return FALSE;
-	}
+    struct _forward_foreach_ctx_s ctx = {.on_item = on_item, .original_udata = udata};
 	g_rw_lock_writer_lock(&self->lock);
-	g_tree_foreach(self->items, (GTraverseFunc) _on_id, udata);
+	g_tree_foreach(self->items, (GTraverseFunc) _forward_foreach, &ctx);
 	g_rw_lock_writer_unlock(&self->lock);
 }
 
@@ -2111,15 +2127,15 @@ _slot_debug(struct oio_lb_slot_s *slot)
 	_slot_items_debug(slot->zero_scored_items, " (zero_scored)");
 }
 
+static gboolean _on_slot (gchar *name UNUSED, struct oio_lb_slot_s *slot, void *i UNUSED) {
+    _slot_debug (slot);
+    return FALSE;
+}
+
 void
 oio_lb_world__debug (struct oio_lb_world_s *self)
 {
 	EXTRA_ASSERT (self != NULL);
-	gboolean _on_slot (gchar *name UNUSED, struct oio_lb_slot_s *slot,
-			void *i UNUSED) {
-		_slot_debug (slot);
-		return FALSE;
-	}
 	g_rw_lock_reader_lock(&self->lock);
 	g_tree_foreach (self->slots, (GTraverseFunc)_on_slot, NULL);
 	g_rw_lock_reader_unlock(&self->lock);
@@ -2138,15 +2154,16 @@ absolute_delta(register const guint32 u0, register const guint32 u1)
 	return MIN((u1-u0),(u0-u1));
 }
 
+static gboolean _on_slot_rehash(gpointer k UNUSED,
+        struct oio_lb_slot_s *slot, gpointer w UNUSED) {
+    if (_slot_needs_rehash(slot))
+        _slot_rehash(slot);
+    return FALSE;
+}
+
 static void
 _world_rehash_slots(struct oio_lb_world_s *self)
 {
-	gboolean _on_slot_rehash(gpointer k UNUSED,
-			struct oio_lb_slot_s *slot, gpointer w UNUSED) {
-		if (_slot_needs_rehash(slot))
-			_slot_rehash(slot);
-		return FALSE;
-	}
 	WRITER_LOCK_DO(&self->lock,
 			g_tree_foreach(self->slots, (GTraverseFunc)_on_slot_rehash, self));
 }
@@ -2166,37 +2183,55 @@ _purge_slot_items(GArray *items, generation_t current_generation, guint32 age) {
 	return pre - items->len;
 }
 
+struct _on_slot_purge_context_s {
+    struct oio_lb_world_s *world;
+    guint32 age;
+};
+
+static gboolean _on_slot_purge_inside(gpointer k UNUSED,
+        struct oio_lb_slot_s *slot, struct _on_slot_purge_context_s *ctx) {
+
+    guint removed = _purge_slot_items(slot->items, ctx->world->generation, ctx->age);
+    if (removed != 0) {
+        GRID_DEBUG("%u services removed from %s (%u remain)",
+                removed, slot->name, slot->items->len);
+        slot->flag_dirty_weights = 1;
+        slot->flag_dirty_order = 1;
+    }
+
+    removed = _purge_slot_items(slot->zero_scored_items, ctx->world->generation, ctx->age);
+    if (removed != 0) {
+        GRID_DEBUG("%u zero_scored services removed from %s (%u remain)",
+                removed, slot->name, slot->zero_scored_items->len);
+        slot->flag_zero_scored_dirty_order = 1;
+    }
+
+    if (_slot_needs_rehash(slot)) {
+        _slot_rehash(slot);
+    }
+
+    return FALSE;
+}
+
 static void
 _world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
 {
-	gboolean _on_slot_purge_inside(gpointer k UNUSED,
-			struct oio_lb_slot_s *slot, struct oio_lb_world_s *world) {
-
-		guint removed = _purge_slot_items(slot->items, world->generation, age);
-		if (removed != 0) {
-			GRID_DEBUG("%u services removed from %s (%u remain)",
-					removed, slot->name, slot->items->len);
-			slot->flag_dirty_weights = 1;
-			slot->flag_dirty_order = 1;
-		}
-
-		removed = _purge_slot_items(slot->zero_scored_items, world->generation, age);
-		if (removed != 0) {
-			GRID_DEBUG("%u zero_scored services removed from %s (%u remain)",
-					removed, slot->name, slot->zero_scored_items->len);
-			slot->flag_zero_scored_dirty_order = 1;
-		}
-
-		if (_slot_needs_rehash(slot)) {
-			_slot_rehash(slot);
-		}
-
-		return FALSE;
-	}
-
-
+    struct _on_slot_purge_context_s ctx = {.world = self, .age = age};
 	WRITER_LOCK_DO(&self->lock, g_tree_foreach(self->slots,
-			(GTraverseFunc)_on_slot_purge_inside, self));
+			(GTraverseFunc)_on_slot_purge_inside, &ctx));
+}
+
+struct _on_slot_generation_purge_context_s {
+    struct oio_lb_world_s *world;
+    guint32 age;
+    GSList **pslots;
+};
+
+static gboolean _on_slot_extract(gpointer k UNUSED, struct oio_lb_slot_s *slot,
+        struct _on_slot_generation_purge_context_s *ctx) {
+    if (absolute_delta(slot->generation, ctx->world->generation) > ctx->age)
+        *(ctx->pslots) = g_slist_prepend(*(ctx->pslots), slot);
+    return FALSE;
 }
 
 static void
@@ -2204,15 +2239,9 @@ _world_purge_slots(struct oio_lb_world_s *self, guint32 age)
 {
 	GSList *slots = NULL;
 
-	gboolean _on_slot_extract(gpointer k UNUSED, struct oio_lb_slot_s *slot,
-			gpointer i UNUSED) {
-		if (absolute_delta(slot->generation, self->generation) > age)
-			slots = g_slist_prepend(slots, slot);
-		return FALSE;
-	}
-
+    struct _on_slot_generation_purge_context_s ctx = {.world = self, .age = age, .pslots = &slots};
 	g_rw_lock_writer_lock(&self->lock);
-	g_tree_foreach(self->slots, (GTraverseFunc)_on_slot_extract, &slots);
+	g_tree_foreach(self->slots, (GTraverseFunc)_on_slot_extract, &ctx);
 	for (GSList *l=slots; l ;l=l->next) {
 		struct oio_lb_slot_s *slot = l->data;
 		_slot_flush(slot);
@@ -2312,15 +2341,18 @@ oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 GError*
 oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
-		oio_lb_on_id_f on_id, gboolean force_fair_constraints,
-		gboolean adjacent_mode, gboolean *flawed)
+		oio_lb_on_id_f on_id, gpointer on_id_ctx,
+        gboolean force_fair_constraints, gboolean adjacent_mode,
+        gboolean *flawed)
 {
 	EXTRA_ASSERT(name != NULL);
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
 	if (pool)
-		res = oio_lb_pool__patch(pool, avoids, known, on_id,
+		res = oio_lb_pool__patch(pool,
+                avoids, known,
+                on_id, on_id_ctx,
 				force_fair_constraints, adjacent_mode, flawed);
 	else
 		res = BADREQ("pool [%s] not found", name);
@@ -2342,6 +2374,11 @@ oio_lb__get_item_from_pool(struct oio_lb_s *lb, const char *name,
 	return res;
 }
 
+static gboolean _add_key (gpointer *k, gpointer v UNUSED, GPtrArray *out) {
+    g_ptr_array_add(out, k);
+    return FALSE;
+}
+
 static gchar **
 _unique_slotnames(gchar **targets)
 {
@@ -2352,15 +2389,16 @@ _unique_slotnames(gchar **targets)
 		}
 	}
 
-	gboolean _add_key (gpointer *k, gpointer v UNUSED, GPtrArray *out) {
-		g_ptr_array_add(out, k);
-		return FALSE;
-	}
 	GPtrArray *out = g_ptr_array_sized_new(g_tree_nnodes(t) + 1);
 	g_tree_foreach(t, (GTraverseFunc)_add_key, out);
 	g_tree_destroy(t);
 	g_ptr_array_add(out, NULL);
 	return (gchar**) g_ptr_array_free(out, FALSE);
+}
+
+static gboolean _add_val (gpointer *k UNUSED, gpointer v, GPtrArray *out) {
+    g_ptr_array_add(out, v);
+    return FALSE;
 }
 
 static GPtrArray *
@@ -2407,14 +2445,17 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 		}
 	}
 
-	gboolean _add_val (gpointer *k UNUSED, gpointer v, GPtrArray *out) {
-		g_ptr_array_add(out, v);
-		return FALSE;
-	}
 	GPtrArray *out = g_ptr_array_sized_new(g_tree_nnodes(t));
 	g_tree_foreach(t, (GTraverseFunc)_add_val, out);
 	g_tree_destroy(t);
 	return out;
+}
+
+static void _poll_around_select(struct oio_lb_selected_item_s *sel,
+        GPtrArray *selection) {
+    if (sel->item) {
+        g_ptr_array_add(selection, _item_dup(sel));
+    }
 }
 
 static GError*
@@ -2506,11 +2547,6 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	// Eventually complete with traditionally polled services
 	GError *err = NULL;
 	if (selection->len < count_targets) {
-		void _select(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
-			if (sel->item) {
-				g_ptr_array_add(selection, _item_dup(sel));
-			}
-		}
 		oio_location_t known[selection->len + 1];
 		for (guint i=0; i < selection->len ;++i) {
 			struct oio_lb_selected_item_s *sel = selection->pdata[i];
@@ -2518,7 +2554,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 		}
 		known[selection->len] = 0;
 		gboolean force_fair_constraints = FALSE;
-		err = _local__patch(self, NULL, known, _select,
+		err = _local__patch(self,
+                NULL, known,
+                (oio_lb_on_id_f)_poll_around_select, selection,
 				force_fair_constraints, FALSE, flawed);
 	}
 

@@ -169,8 +169,11 @@ get_conditioned_spare_chunks(
 		beans = g_slist_prepend(beans, prop);
 		beans = g_slist_prepend(beans, chunk);
 	}
-	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id,
-			force_fair_constraints, adjacent_mode, flawed);
+	err = oio_lb__patch_with_pool(
+            lb, pool, avoid, known,
+            _on_id, NULL,
+			force_fair_constraints, adjacent_mode,
+            flawed);
 	guint chunks_count = g_slist_length(beans) / 2;
 	if (err) {
 		g_prefix_error(&err,
