@@ -2658,7 +2658,7 @@ member_fail_on_error(struct election_member_s *member, int zrc)
 
 static void
 _common_action_to_LEAVE(struct election_member_s *member,
-		enum event_type_e evt)
+		enum election_step_e step)
 {
 	EXTRA_ASSERT(!member_has_action(member));
 
@@ -2703,7 +2703,7 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	member_ref(member);
 	member_reset_master(member);
 	member_reset_peers(member);
-	return member_set_status(member, evt);
+	return member_set_status(member, step);
 }
 
 static void
