@@ -2,7 +2,7 @@
 
 # oio-reset.sh
 # Copyright (C) 2015-2019 OpenIO SAS, original work as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -185,7 +185,7 @@ $cmd_openio directory bootstrap --check \
 # Help debugging "The current META0 service is not ready yet [...]"
 if [ "$(oio-test-config.py -v directory_replicas)" -gt 1 ]
 then
-    $cmd_openio election status meta0 0000
+    $cmd_openio election status meta0 --cid 0000
 fi
 
 echo -e "\n### Assign rdir services"
