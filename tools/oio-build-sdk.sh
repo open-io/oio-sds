@@ -2,6 +2,7 @@
 
 # oio-build-sdk.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -25,7 +26,7 @@ cd $D
 for TYPE in Debug Release ; do
 	cmake ${CMAKE_OPTS} -D CMAKE_BUILD_TYPE=$TYPE -D SDK_ONLY=on ${SRCDIR}
 	make -j 8 all
-	make test
+	ctest --output-on-failure --force-new-ctest-process
 	make clean
 done
 cd
