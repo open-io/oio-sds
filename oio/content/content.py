@@ -205,6 +205,49 @@ class Content(object):
 
         return url_list, quals
 
+    def _handle_raw_registration_error(self, url, err, **kwargs):
+        """
+        Triggers a rollback by deleting the previously uploaded chunk
+        in case of unrecoverable errors
+
+        :param url: URL of the chunk that failed to register.
+        :type url: str
+        :param err: exception raised during chunk registration
+        :type err: ClientException
+        :raises err: original exception if the status code is not
+            among the handled error codes.
+        """
+        # 400 -> BAD_REQUEST
+        # 418 -> UNEXPECTED NS
+        # 420 -> CONTENT_NOT_FOUND
+        # 421 -> CONTENT_ALREADY_EXIST
+        # 431 -> CONTAINER_NOT_FOUND
+        # 500 -> INTERNAL ERROR: Backend not ready
+        # 511 -> CORRUPT_DATABASE
+        if err.status in (
+            400,
+            418,
+            420,
+            421,
+            431,
+            500,
+            511,
+        ):
+            try:
+                # Rollback as the registration of the chunk failed
+                self.blob_client.chunk_delete(url, **kwargs)
+                self.logger.debug(
+                    "Chunk %s deleted due to registration failure: %s", url, str(err)
+                )
+            except Exception as exc:
+                self.logger.warning(
+                    "Rollback failed to remove chunk %s after registration"
+                    " was unsuccessful: %s",
+                    url,
+                    str(exc),
+                )
+        raise err
+
     def _add_raw_chunk(self, current_chunk, url, **kwargs):
         data = {
             "type": "chunk",
@@ -214,12 +257,18 @@ class Content(object):
             "pos": current_chunk.pos,
             "content": self.content_id,
         }
-
-        # path is required in order to redirect the request to the appropriate
-        # shard. version is not required, but we can pass it anyway.
-        self.container_client.container_raw_insert(
-            data, cid=self.container_id, path=self.path, version=self.version, **kwargs
-        )
+        try:
+            # path is required in order to redirect the request to the appropriate
+            # shard. version is not required, but we can pass it anyway.
+            self.container_client.container_raw_insert(
+                data,
+                cid=self.container_id,
+                path=self.path,
+                version=self.version,
+                **kwargs,
+            )
+        except exc.ClientException as err:
+            self._handle_raw_registration_error(url, err, **kwargs)
 
     def _update_spare_chunk(self, current_chunk, new_url, **kwargs):
         old = {
@@ -238,14 +287,17 @@ class Content(object):
             "pos": current_chunk.pos,
             "content": self.content_id,
         }
-        self.container_client.container_raw_update(
-            [old],
-            [new],
-            cid=self.container_id,
-            path=self.path,
-            version=self.version,
-            **kwargs,
-        )
+        try:
+            self.container_client.container_raw_update(
+                [old],
+                [new],
+                cid=self.container_id,
+                path=self.path,
+                version=self.version,
+                **kwargs,
+            )
+        except exc.ClientException as err:
+            self._handle_raw_registration_error(new_url, err, **kwargs)
 
     def _generate_sysmeta(self):
         sysmeta = {}
