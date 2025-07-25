@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -70,7 +70,7 @@ class Draining(Meta2Filter):
         self.root_waiting = 0
         self.errors = 0
 
-    def _process_draining(self, meta2db):
+    def _process_draining(self, meta2db, check_kafka_cluster=True):
         self.logger.info("Draining the container %s", meta2db.cid)
         account = meta2db.system[M2_PROP_ACCOUNT_NAME]
         container = meta2db.system[M2_PROP_CONTAINER_NAME]
@@ -79,8 +79,9 @@ class Draining(Meta2Filter):
         nb_objects = 0
         try:
             while truncated and nb_objects + self.drain_limit <= self.limit_per_pass:
-                # Ensure cluster can absorb generated events
-                self.kafka_cluster_health.check()
+                if check_kafka_cluster:
+                    # Ensure cluster can absorb generated events
+                    self.kafka_cluster_health.check()
                 resp = self.api.container_drain(
                     account, container, limit=self.drain_limit
                 )
@@ -112,7 +113,9 @@ class Draining(Meta2Filter):
         try:
             shards = self.container_sharding.show_shards(account, container)
             for shard in shards:
-                props = self.api.container_get_properties(None, None, cid=shard["cid"])
+                props = self.api.container_get_properties(
+                    None, None, cid=shard["cid"], force_master=True
+                )
                 draining_state = int(props["system"].get(M2_PROP_DRAINING_STATE, 0))
                 if draining_state in (
                     DRAINING_STATE_NEEDED,
@@ -127,7 +130,9 @@ class Draining(Meta2Filter):
             return False, resp
 
         if shards_drained:
-            return self._process_draining(meta2db)
+            # A drain on a root container has no impact on the kafka cluster,
+            # no events will be sent
+            return self._process_draining(meta2db, check_kafka_cluster=False)
         else:
             self.root_waiting += 1
             return False, None
