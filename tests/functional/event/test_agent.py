@@ -119,14 +119,16 @@ broker_endpoint = {endpoint}
         self.pool = None
 
     def tearDown(self):
-        self._service("oio-rawx.target", "start", wait=3)
-        self._service("oio-event-agent-delete.target", "start", wait=3)
-        if self.pool is not None:  # Check an stop all workers if needed
+        if self.pool is not None:  # Check and stop all workers if needed
+            self.pool.stop()
             for worker_id, worker in self.pool._workers.items():
                 if worker.is_alive():
                     self.pool.logger.info("Stopping worker %s", worker_id)
                     worker.stop()
                     worker.join()
+            self.pool = None
+        self._service("oio-rawx.target", "start", wait=1)
+        self._service("oio-event-agent-delete.target", "start", wait=3)
         super().tearDown()
 
     def create_objects(self, cname, n_obj=10, reqid=None):
@@ -150,7 +152,7 @@ broker_endpoint = {endpoint}
             )
             self.assertIsNotNone(_event, f"Received events {i}/{n_obj}")
 
-    def run_pool_with_conf(self, error_queue):
+    def run_pool_with_conf(self, error_queue, iterations=45):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".conf") as temp:
             temp.write(self.handlers_conf.format(endpoint=self.endpoint))
             temp.flush()
@@ -190,15 +192,14 @@ broker_endpoint = {endpoint}
                 self.pool._workers[worker_id].start()
 
             def run_limited_time():
-                "Run workers for about 45s"
+                "Run workers for a limited number of 1s iterations"
                 nb_processes = self.pool.processes + 1
                 worker_factories = {"feeder": self.pool._start_feeder}
 
                 self.pool._workers = {w: None for w in range(nb_processes)}
                 self.pool._workers["feeder"] = None
                 counter = 0
-                max_time = 45
-                while counter < max_time:
+                while counter < iterations:
                     for worker_id, instance in self.pool._workers.items():
                         if instance is None or not instance.is_alive():
                             if instance:
@@ -246,6 +247,13 @@ broker_endpoint = {endpoint}
         self.assertTrue(errors.empty())
 
     def test_event_agent_delete_producer_oio_protocol(self):
+        rawx_by_host = self.grouped_services(
+            "rawx",
+            key=lambda s: s["tags"]["tag.loc"].rsplit(".", 1)[0],
+        )
+        if len(rawx_by_host) > 3:
+            self.skipTest("Disabled in multi-host environment")
+
         """Check that event is delayed when OioProtocolError exceptions occur"""
         cname = f"event-agent-delete-producer-oio-protocol-{time.time()}"
         create_reqid = request_id("event-agent-create-chunk-")
@@ -253,7 +261,7 @@ broker_endpoint = {endpoint}
         self.create_objects(cname, 10, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
-        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        self._service("oio-event-agent-delete.target", "stop", wait=1)
         # Stop rawx services
         self._service("oio-rawx.target", "stop", wait=5)
 
@@ -266,6 +274,9 @@ broker_endpoint = {endpoint}
         rejected_without_delay = Queue()
 
         def _reject_message(*args, **kwargs):
+            # This is executed in a subprocess, need to use stdout
+            # for the logs to be captured by pytest.
+            print(f"_reject_message, {args}")
             if "delay" not in kwargs:
                 rejected_without_delay.put(1)
             else:
@@ -276,7 +287,7 @@ broker_endpoint = {endpoint}
             wraps=_reject_message,
         ):
             errors = Queue()
-            self.run_pool_with_conf(errors)
+            self.run_pool_with_conf(errors, iterations=45)
             # No errors should be in the queue as producer
             # error are not expected from the worker
             self.assertTrue(errors.empty())
@@ -284,7 +295,10 @@ broker_endpoint = {endpoint}
             # OioProtocolError exceptions, and we expect processing to be retried later
             self.assertTrue(rejected_without_delay.empty())
             # Ensure we actually got some retryable messages
-            self.assertFalse(rejected_with_delay.empty())
+            self.assertFalse(
+                rejected_with_delay.empty(),
+                "Expected some retryable messages",
+            )
 
     def test_event_agent_check_max_events_set_to_lag(self):
         """
