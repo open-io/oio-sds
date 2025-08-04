@@ -273,30 +273,35 @@ class RdirCheck(BaseCheckCommand):
     """
 
     def _take_action(self, parsed_args):
-        from oio.rdir.client import RdirDispatcher
-
         self.logger.debug("Checking rdir services.")
 
         # Load the assigned rdir services
-        client = RdirDispatcher({"namespace": self.app.options.ns})
+        client = self.app.client_manager.rdir_dispatcher
 
-        # rawx
-        all_rawx, all_rdir = client.get_assignments("rawx")
-        assert not any(r["rdir"] is None for r in all_rawx)
-        self.logger.info("All rawx services have an rdir service assigned.")
-
-        # meta2
-        all_meta2, all_rdir = client.get_assignments("meta2")
-        assert not any(r["rdir"] is None for r in all_meta2)
-        self.logger.info("All meta2 services have an rdir service assigned.")
+        for svc_type in ("rawx", "meta2"):
+            all_svc, all_rdir = client.get_assignments(svc_type)
+            broken = [s for s in all_svc if s.get("rdir") is None]
+            for svc in broken:
+                yield ("Error", f"{svc.get('id', svc['addr'])} has no rdir assigned")
+            if broken:
+                self.success = False
+            else:
+                self.logger.info(
+                    "All %s services have an rdir service assigned.",
+                    svc_type,
+                )
 
         # Compare with the number of expected services
         l0 = list(self.filter_services(self.live, "rdir"))
         c0 = list(self.filter_services(self.catalog, "rdir"))
-        assert len(l0) == len(c0)
-        assert len(l0) == len(all_rdir)
-        self.logger.info("All rdir services are alive.")
-        yield ("OK", None)
+        if not (len(l0) == len(c0) and len(l0) == len(all_rdir)):
+            yield ("Error", "Some rdir services are down")
+            self.success = False
+        else:
+            self.logger.info("All rdir services are alive.")
+
+        if self.success:
+            yield ("OK", None)
 
 
 class RawxCheck(MultipleServicesCommandMixin, ItemCheckCommand):
