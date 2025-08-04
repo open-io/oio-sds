@@ -37,7 +37,7 @@ from oio.common.kafka import (
 )
 from oio.common.logger import get_logger
 from oio.common.utils import ratelimit, request_id
-from oio.event.evob import EventTypes
+from oio.event.evob import EventTypes, get_kafka_metadata_from_event
 from oio.event.kafka_consumer import KafkaOffsetHelperMixin, KafkaRejectorMixin
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.job import XcuteJobStatus
@@ -757,11 +757,19 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     offset = event.offset()
 
                     self.register_offset(topic, partition, offset)
-
-                    success = self.process_reply(event.value())
-
+                    topic, partition, offset, _, value = get_kafka_metadata_from_event(
+                        event
+                    )
+                    success = self.process_reply(value)
                     if not success:
-                        reply_listener.reject_message(event)
+                        reply_listener.reject_message(
+                            {
+                                "topic": topic,
+                                "partition": partition,
+                                "offset": offset,
+                                "data": value,
+                            }
+                        )
 
                     self.set_offset_ready_to_commit(topic, partition, offset)
             except KafkaFatalException as exc:

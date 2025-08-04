@@ -39,6 +39,7 @@ from oio.common.statsd import StatsdTiming, get_statsd
 from oio.common.utils import monotonic_time, ratelimit, request_id
 from oio.event.evob import (
     EventTypes,
+    get_kafka_metadata_from_event,
     get_pipelines_to_resume,
     set_pausable_flag,
 )
@@ -317,7 +318,7 @@ class KafkaRejectorMixin:
         if self._producer is not None:
             self._producer.close()
 
-    def reject_message(self, message, callback=None, delay=None):
+    def reject_message(self, message: dict, callback=None, delay=None):
         """Rejects message by calling the callback function if it is defined
         or producing an event to deadletter/delayed topic.
 
@@ -650,13 +651,9 @@ class KafkaBatchFeeder(
 
             if event and not event.error():
                 # Enqueue event
-                topic = event.topic()
-                partition = event.partition()
-                offset = event.offset()
-                key = event.key()
-                if isinstance(key, bytes):
-                    key = key.decode("utf-8")
-                value = event.value()
+                topic, partition, offset, key, value = get_kafka_metadata_from_event(
+                    event
+                )
                 self.logger.debug(
                     "Got event topic=%s, partition=%s, offset=%s",
                     topic,

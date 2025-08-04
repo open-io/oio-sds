@@ -124,6 +124,22 @@ def _event_env_property(field, default=None):
     return property(getter, setter)
 
 
+def get_kafka_metadata_from_event(event):
+    """Extract information from polled event
+
+    :param event: polled event
+    :type event: cimpl.Message
+    """
+    topic = event.topic()
+    partition = event.partition()
+    offset = event.offset()
+    key = event.key()
+    if isinstance(key, bytes):
+        key = key.decode("utf-8")
+    value = event.value()
+    return topic, partition, offset, key, value
+
+
 class Event(object):
     job_id = _event_env_property("job_id")
     event_type = _event_env_property("event")
