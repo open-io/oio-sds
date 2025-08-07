@@ -752,14 +752,10 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                         if not error.retriable():
                             raise KafkaFatalException(error)
                         continue
-                    topic = event.topic()
-                    partition = event.partition()
-                    offset = event.offset()
-
-                    self.register_offset(topic, partition, offset)
                     topic, partition, offset, _, value = get_kafka_metadata_from_event(
                         event
                     )
+                    self.register_offset(topic, partition, offset)
                     success = self.process_reply(value)
                     if not success:
                         reply_listener.reject_message(
