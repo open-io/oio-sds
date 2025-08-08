@@ -129,6 +129,7 @@ broker_endpoint = {endpoint}
             self.pool = None
         self._service("oio-rawx.target", "start", wait=1)
         self._service("oio-event-agent-delete.target", "start", wait=3)
+        self.wait_for_score(("rawx",), score_threshold=5)
         super().tearDown()
 
     def create_objects(self, cname, n_obj=10, reqid=None):
@@ -229,7 +230,7 @@ broker_endpoint = {endpoint}
         cname = f"event-agent-delete-producer-usage-{time.time()}"
         create_reqid = request_id("event-agent-delete-chunk-")
         delete_reqid = request_id("event-agent-delete-chunk-")
-        self.create_objects(cname, 10, reqid=create_reqid)
+        self.create_objects(cname, 12, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
         self._service("oio-event-agent-delete.target", "stop", wait=5)
@@ -251,14 +252,14 @@ broker_endpoint = {endpoint}
             "rawx",
             key=lambda s: s["tags"]["tag.loc"].rsplit(".", 1)[0],
         )
-        if len(rawx_by_host) > 3:
+        if len(rawx_by_host) > 1:
             self.skipTest("Disabled in multi-host environment")
 
         """Check that event is delayed when OioProtocolError exceptions occur"""
         cname = f"event-agent-delete-producer-oio-protocol-{time.time()}"
         create_reqid = request_id("event-agent-create-chunk-")
         delete_reqid = request_id("event-agent-delete-chunk-")
-        self.create_objects(cname, 10, reqid=create_reqid)
+        self.create_objects(cname, 12, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
         self._service("oio-event-agent-delete.target", "stop", wait=1)
