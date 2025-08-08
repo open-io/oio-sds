@@ -90,29 +90,6 @@
                 }
             ]
         },
-        "ip":{
-            "type": "string",
-            "pattern": "^((\\d{1,3}\\.){3}\\d{1,3}(\\/\\d{1,2})?|([a-fA-F0-9:]+:+)+[a-fA-F0-9]+(\\/\\d{1,3})?)$",
-            "maxLength": 50
-        },
-        "ip-array":{
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/ip"
-            },
-            "minItems": 1,
-            "uniqueItems": true
-        },
-        "ip-or-ip-array": {
-            "anyOf": [
-                {
-                    "$ref": "#/$defs/ip"
-                },
-                {
-                    "$ref": "#/$defs/ip-array"
-                }
-            ]
-        },
         "aws-principal-arn": {
             "anyOf": [
                 {
@@ -158,13 +135,6 @@
                     }
                 ]
             }
-        },
-        "condition-ip-value": {
-            "type": "object",
-            "additionalProperties": 
-                    {
-                        "$ref": "#/$defs/ip-or-ip-array"
-                    }
         },
         "Statement": {
             "allOf": [
@@ -407,10 +377,10 @@
                     "$ref": "#/$defs/condition-value"
                 },
                 "IpAddress": {
-                    "$ref": "#/$defs/condition-ip-value"
+                    "$ref": "#/$defs/condition-value"
                 },
                 "NotIpAddress": {
-                    "$ref": "#/$defs/condition-ip-value"
+                    "$ref": "#/$defs/condition-value"
                 },
                 "ArnEquals": {
                     "$ref": "#/$defs/condition-value"
@@ -485,10 +455,10 @@
                     "$ref": "#/$defs/condition-value"
                 },
                 "IpAddressIfExists": {
-                    "$ref": "#/$defs/condition-ip-value"
+                    "$ref": "#/$defs/condition-value"
                 },
                 "NotIpAddressIfExists": {
-                    "$ref": "#/$defs/condition-ip-value"
+                    "$ref": "#/$defs/condition-value"
                 },
                 "ArnEqualsIfExists": {
                     "$ref": "#/$defs/condition-value"

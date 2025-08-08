@@ -769,7 +769,7 @@ class TestIamServer(TestAccountServerBase):
         self.user1 = self.account_id + ":user1"
         self.user2 = self.account_id + ":user2"
 
-    def _put_policy(self, account, user, policy_name, policy, status_code=201):
+    def _put_policy(self, account, user, policy_name, policy):
         resp = self.app.put(
             "/v1.0/iam/put-user-policy",
             query_string={
@@ -779,7 +779,7 @@ class TestIamServer(TestAccountServerBase):
             },
             json=policy,
         )
-        self.assertEqual(resp.status_code, status_code)
+        self.assertEqual(resp.status_code, 201)
 
     def _get_and_compare_policy(self, account, user, policy_name, expected):
         resp = self.app.get(
@@ -1323,51 +1323,6 @@ class TestIamServer(TestAccountServerBase):
         }
         self._put_policy(self.account_id, self.user1, policy_name, policy)
         self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
-
-    def _test_put_and_get_user_policy_Ip_condition(self, condition):
-        policy_name = "mypolicy"
-        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
-        policy["Statement"][0]["Condition"] = condition
-        self._put_policy(self.account_id, self.user1, policy_name, policy)
-        self._get_and_compare_policy(self.account_id, self.user1, policy_name, policy)
-
-    def test_put_and_get_user_policy_with_IpAddress_condition(self):
-        condition = {"IpAddress": {"aws:SourceIp": ["203.0.113.0/24"]}}
-        self._test_put_and_get_user_policy_Ip_condition(condition)
-
-    def test_put_and_get_user_policy_with_NotIpAddress_condition(self):
-        condition = {"NotIpAddress": {"aws:SourceIp": ["203.0.113.0/24"]}}
-        self._test_put_and_get_user_policy_Ip_condition(condition)
-
-    def test_put_and_get_user_policy_with_NotIpAddress_and_IpAdress(self):
-        condition = {
-            "NotIpAddress": {"aws:SourceIp": ["203.0.113.0/24"]},
-            "IpAddress": {"aws:SourceIp": ["203.0.113.1/24"]},
-        }
-        self._test_put_and_get_user_policy_Ip_condition(condition)
-
-    def test_put_and_get_user_policy_with_ip_condition_Ipv6(self):
-        condition = {
-            "NotIpAddress": {
-                "aws:SourceIp": ["2001:0db8:85a3:0000:0000:8a2e:0370:7334"]
-            },
-            "IpAddress": {"aws:SourceIp": ["2001:db8:abcd:0012::0/64"]},
-        }
-        self._test_put_and_get_user_policy_Ip_condition(condition)
-
-    def test_put_user_policy_with_ip_condition_invalid(self):
-        condition = {
-            "NotIpAddress": {
-                "aws:SourceIp": ["2001:0db8:85a3:0000:0000:8a2e:0370:7334"]
-            },
-            "IpAddress": {"aws:SourceIp": ["2001:db8:abcd:001i::0/64"]},
-        }
-        policy_name = "mypolicy"
-        policy = copy.deepcopy(IAM_POLICY_FULLACCESS)
-        policy["Statement"][0]["Condition"] = condition
-        self._put_policy(
-            self.account_id, self.user1, policy_name, policy, status_code=400
-        )
 
     def test_put_and_get_user_policy_with_no_list(self):
         policy_name = "mypolicy"

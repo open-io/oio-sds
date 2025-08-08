@@ -129,17 +129,6 @@ IMPLEMENTED_CONDITION_STRING_VALUE = {
         },
     }
 }
-
-IMPLEMENTED_CONDITION_IP_VALUE = {
-    "condition-ip-value": {
-        "type": "object",
-        "additionalProperties": False,
-        "properties": {
-            "aws:SourceIp": {"$ref": "#/definitions/ip-or-ip-array"},
-        },
-    }
-}
-
 _clear_unimplemented_properties(
     IMPLEMENTED_USER_POLICY_SCHEMA["$defs"]["Condition"]["properties"],
     {
@@ -147,8 +136,6 @@ _clear_unimplemented_properties(
         "StringNotEquals": IMPLEMENTED_CONDITION_STRING_VALUE,
         "StringLike": IMPLEMENTED_CONDITION_STRING_VALUE,
         "StringNotLike": IMPLEMENTED_CONDITION_STRING_VALUE,
-        "IpAddress": IMPLEMENTED_CONDITION_IP_VALUE,
-        "NotIpAddress": IMPLEMENTED_CONDITION_IP_VALUE,
     },
 )
 
