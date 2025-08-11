@@ -522,8 +522,11 @@ class CommonTestCase(unittest.TestCase):
         """
         self._ns_conf = set_namespace_options(self.ns, opts, remove=remove)
 
-    def _list_srvs(self, srvtype):
-        resp = self.request("GET", self._url_cs("list"), params={"type": srvtype})
+    def _list_srvs(self, srvtype, cs_addr=None):
+        params = {"type": srvtype}
+        if cs_addr:
+            params["cs"] = cs_addr
+        resp = self.request("GET", self._url_cs("list"), params=params)
         self.assertEqual(resp.status, 200)
         return self.json_loads(resp.data)
 

@@ -442,15 +442,32 @@ class TestConscienceFunctional(BaseTestCase):
         service = random.choice(expected_services)
         expected_services.remove(service)
         self._deregister_srv(service)
+
+        # Query proxy (if cache enabled)
         services = self._list_srvs("echo")
         self.assertListEqual(
             sorted([srv["addr"] for srv in expected_services]),
             sorted([srv["addr"] for srv in services]),
         )
+        # Query each Conscience (through proxy, but no cache)
+        for cs in self.conf["services"]["conscience"]:
+            services = self._list_srvs("echo", cs_addr=cs["addr"])
+            self.assertListEqual(
+                sorted([srv["addr"] for srv in expected_services]),
+                sorted([srv["addr"] for srv in services]),
+            )
 
         self._deregister_srv(expected_services)
         services = self._list_srvs("echo")
         self.assertListEqual([], services)
+
+        for cs in self.conf["services"]["conscience"]:
+            services = self._list_srvs("echo", cs_addr=cs["addr"])
+            self.assertListEqual(
+                [],
+                services,
+                f"List not empty on {cs['addr']}",
+            )
 
     def test_single_score(self):
         srv0 = self._srv("echo", ip="127.0.0.3")

@@ -499,7 +499,7 @@ conscience_srvtype_destroy(struct conscience_srvtype_s *srvtype)
 	g_free(srvtype);
 }
 
-static void
+static gboolean
 conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 		const addr_info_t *srvid, time_t mtime)
 {
@@ -508,16 +508,15 @@ conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 		if (mtime) {
 			if (srv->lock_mtime > mtime || srv->tags_mtime > mtime) {
 				// The service has been re-registered
-				return;
+				return FALSE;
 			}
 		}
 
 		g_hash_table_remove(srvtype->services_ht, srvid);
-		srv->prev->next = srv->next;
-		srv->next->prev = srv->prev;
-		srv->next = srv->prev = NULL;
 		conscience_srv_destroy(srv);
+		return TRUE;
 	}
+	return FALSE;
 }
 
 static struct conscience_srv_s *
@@ -1130,8 +1129,8 @@ rm_service_dated(struct service_info_dated_s *sid)
 
 	gint64 start = oio_ext_monotonic_time();
 	g_rw_lock_writer_lock(&srvtype->rw_lock);
-	conscience_srvtype_remove_srv(srvtype, &sid->si->addr,
-			sid->lock_mtime);
+	gboolean removed = conscience_srvtype_remove_srv(
+			srvtype, &sid->si->addr, sid->lock_mtime);
 	g_rw_lock_writer_unlock(&srvtype->rw_lock);
 	gint64 duration = oio_ext_monotonic_time() - start;
 
@@ -1141,7 +1140,11 @@ rm_service_dated(struct service_info_dated_s *sid)
 		gq_time_hub_remove, duration,
 		0, 0
 	);
-	GRID_INFO("Service removed [%s]", str_desc);
+	if (removed) {
+		GRID_INFO("Service removed [%s]", str_desc);
+	} else {
+		GRID_WARN("Service NOT removed [%s], concurrent update?", str_desc);
+	}
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1195,14 +1198,23 @@ rm_service(struct service_info_s *si)
 
 	struct conscience_srvtype_s *srvtype = conscience_get_srvtype(si->type, FALSE);
 	if (!srvtype) {
-		GRID_ERROR("Service type not found [%s]", str_desc);
+		GRID_ERROR("Service type not found [%s] (reqid=%s)",
+				str_desc, oio_ext_get_reqid());
 	} else {
 		g_rw_lock_writer_lock(&srvtype->rw_lock);
 		time_t now = oio_ext_real_time();
-		conscience_srvtype_remove_srv(srvtype, &si->addr, 0);
-		sid = service_info_dated_new(si, now);
+		gboolean removed = conscience_srvtype_remove_srv(srvtype, &si->addr, 0);
+		if (removed) {
+			sid = service_info_dated_new(si, now);
+		}
 		g_rw_lock_writer_unlock(&srvtype->rw_lock);
-		GRID_INFO("Service removed [%s]", str_desc);
+		if (removed) {
+			GRID_INFO("Service removed [%s] (reqid=%s)",
+					str_desc, oio_ext_get_reqid());
+		} else {
+			GRID_WARN("Service NOT removed [%s], concurrent update? (reqid=%s)",
+					str_desc, oio_ext_get_reqid());
+		}
 	}
 
 	return sid;
@@ -1639,8 +1651,9 @@ _cs_dispatch_RM(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	GRID_NOTICE("[NS=%s] [%d] services to be removed",
-			oio_server_namespace, g_slist_length(list_srvinfo));
+	GRID_NOTICE("[NS=%s] [%d] services to be removed (reqid=%s)",
+			oio_server_namespace, g_slist_length(list_srvinfo),
+			oio_ext_get_reqid());
 
 	for (GSList *l = list_srvinfo; l; l = l->next) {
 		struct service_info_dated_s *sid = rm_service(l->data);
