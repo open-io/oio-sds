@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2024 OVH SAS
+# Copyright (C) 2020-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ import random
 import re
 import time
 
+from oio.common.constants import TIMEOUT_HEADER
 from oio.common.json import json
 from tests.utils import CODE_SRVTYPE_NOTMANAGED, BaseTestCase
 
@@ -574,7 +575,12 @@ class TestConscienceFunctional(BaseTestCase):
             params["format"] = output_format
         if cs:
             params["cs"] = cs
-        resp = self.request("GET", self._url_cs("list"), params=params)
+        resp = self.request(
+            "GET",
+            self._url_cs("list"),
+            params=params,
+            headers={TIMEOUT_HEADER: "10000000"},
+        )
         self.assertEqual(expected_status, resp.status)
         if expected_status != 200:
             return

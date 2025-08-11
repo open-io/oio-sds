@@ -84,6 +84,7 @@ static gboolean flush_stats_on_refresh = FALSE;
 static gboolean config_system = TRUE;
 static GSList *config_paths = NULL;
 
+static GMutex persistence_lock = {0};
 static GString *persistence_path = NULL;
 static time_t persistence_period = 30;
 static gboolean synchronize_at_startup = FALSE;
@@ -619,7 +620,7 @@ static void
 conscience_update_srv(gboolean first, time_t now, gint32 si_score,
 		enum score_type_e score_type, struct conscience_srv_s *p_srv)
 {
-	gboolean locked;
+	gboolean locked = FALSE;
 	gchar score_type_name[4];
 	if (score_type == PUT) {
 		locked = p_srv->put_locked;
@@ -1932,13 +1933,14 @@ serialize_info(struct conscience_srv_s *srv, gpointer buffer)
 static void
 write_status(gchar *path)
 {
-	gchar **services_names = conscience_get_srvtype_names();
 	GError *err = NULL;
 	guint nb_services = 0;
-
 	GByteArray *all_encoded = g_byte_array_sized_new(8192);
 	g_byte_array_append(all_encoded, header, 2);
 
+	g_mutex_lock(&persistence_lock);
+
+	gchar **services_names = conscience_get_srvtype_names();
 	for (gchar **name = services_names; *name; name++){
 		err = conscience_run_srvtypes(*name, serialize_info, all_encoded);
 
@@ -1953,12 +1955,20 @@ write_status(gchar *path)
 
 	g_byte_array_append(all_encoded, footer, 2);
 
+#if GLIB_CHECK_VERSION(2,66,0)
+	if (!g_file_set_contents_full(
+			path, (const gchar *)all_encoded->data, all_encoded->len,
+			G_FILE_SET_CONTENTS_DURABLE, 0644, &err)) {
+#else
 	if (!g_file_set_contents(
 			path, (const gchar *)all_encoded->data, all_encoded->len, &err)) {
+#endif
 		GRID_ERROR("Failed to write service status in [%s]: (%d) %s",
 			path, err->code, err->message);
 	}
 end:
+	g_mutex_unlock(&persistence_lock);
+
 	g_clear_error(&err);
 	g_byte_array_free(all_encoded, TRUE);
 	g_free(services_names);
@@ -2696,6 +2706,7 @@ _cs_set_defaults(void)
 	server = network_server_init();
 	dispatcher = transport_gridd_build_empty_dispatcher ();
 
+	g_mutex_init(&persistence_lock);
 	g_mutex_init(&srv_lists_lock);
 	g_rw_lock_init(&rwlock_srv);
 	srvtypes = g_tree_new_full(metautils_strcmp3, NULL,
@@ -2750,6 +2761,7 @@ _cs_specific_fini(void)
 
 	g_rw_lock_clear(&rwlock_srv);
 	g_mutex_clear(&srv_lists_lock);
+	g_mutex_clear(&persistence_lock);
 	if (srvtypes)
 		g_tree_destroy(srvtypes);
 
