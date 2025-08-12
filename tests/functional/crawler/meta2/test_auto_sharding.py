@@ -70,11 +70,12 @@ class TestAutoSharding(BaseTestCase):
         self.cname = f"test_meta2_crawler_{time.time()}"
         self.app_env = dict()
         self.app_env["api"] = self.storage
-        self.conf["sharding_db_size"] = 1048576  # 1MB
+        page_size = self.conf.get("config", {}).get("sqliterepo.page_size", 4096)
+        self.conf["sharding_db_size"] = page_size * 128
         self.conf["sharding_strategy"] = "shard-with-partition"
         self.conf["sharding_partition"] = [50, 50]
         self.conf["sharding_threshold"] = 1
-        self.conf["shrinking_db_size"] = 262144  # 256KB
+        self.conf["shrinking_db_size"] = page_size * 32
         self.app_env["statsd_client"] = get_statsd(
             conf={"statsd_prefix": "test-auto-sharding"}
         )
