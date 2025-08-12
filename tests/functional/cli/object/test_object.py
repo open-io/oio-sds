@@ -41,6 +41,7 @@ CONTAINER_FIELDS = [
     "shards",
     "stats.db_size",
     "stats.freelist_count",
+    "stats.journal_mode",
     "stats.page_count",
     "stats.page_size",
     "stats.space_wasted",

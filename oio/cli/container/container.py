@@ -926,6 +926,8 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             wasted * 100,
             convert_size(wasted_bytes),
         )
+        if "stats.journal_mode" in sys:
+            info["stats.journal_mode"] = sys["stats.journal_mode"]
 
         bucket = sys.get(M2_PROP_BUCKET_NAME, None)
         if bucket is not None:

@@ -738,6 +738,26 @@ static gint64 _sqlx_get_number(struct sqlx_sqlite3_s *sq3, const gchar *req) {
 	return result;
 }
 
+gchar *
+sqlite3_get_str(sqlite3 *handle, const gchar *req)
+{
+	gchar *output = NULL;
+	const unsigned char *result = NULL;
+	gint rc;
+	sqlite3_stmt *stmt = NULL;
+
+	sqlite3_prepare_debug(rc, handle, req, -1, &stmt, NULL);
+	if (rc == SQLITE_OK) {
+		EXTRA_ASSERT(stmt != NULL);
+		if (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+			result = sqlite3_column_text(stmt, 0);
+			output = g_strdup((gchar*)result);
+		}
+	}
+	sqlite3_finalize(stmt);
+	return output;
+}
+
 GPtrArray* sqlx_admin_get_usage(struct sqlx_sqlite3_s *sq3) {
 	GPtrArray *result = g_ptr_array_new();
 
@@ -753,6 +773,9 @@ GPtrArray* sqlx_admin_get_usage(struct sqlx_sqlite3_s *sq3) {
 	g_ptr_array_add(result, g_strdup("stats.page_size"));
 	g_ptr_array_add(result, g_strdup_printf("%"G_GINT64_FORMAT,
 		_sqlx_get_number(sq3, "PRAGMA main.page_size")));
+
+	g_ptr_array_add(result, g_strdup("stats.journal_mode"));
+	g_ptr_array_add(result, sqlite3_get_str(sq3->db, "PRAGMA journal_mode"));
 
 	return result;
 }

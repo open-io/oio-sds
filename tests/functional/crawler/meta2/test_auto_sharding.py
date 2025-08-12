@@ -245,7 +245,8 @@ class TestAutoSharding(BaseTestCase):
                 self.assertEqual(0, value)
 
     def test_shrinking(self):
-        def _cb(status, _msg):
+        def _cb(status, msg):
+            print(msg)
             self.assertEqual(200, status)
 
         for i in range(2):
@@ -265,7 +266,7 @@ class TestAutoSharding(BaseTestCase):
             if key == "skipped":
                 self.assertEqual(1, value)
             else:
-                self.assertEqual(0, value)
+                self.assertEqual(0, value, key)
         new_shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertListEqual(shards, new_shards)
         shards = new_shards
@@ -279,7 +280,7 @@ class TestAutoSharding(BaseTestCase):
             if key == "shrinking_successes":
                 self.assertEqual(1, value)
             else:
-                self.assertEqual(0, value)
+                self.assertEqual(0, value, key)
         shards = list(self.container_sharding.show_shards(self.account, self.cname))
         self.assertEqual(1, len(shards))
 

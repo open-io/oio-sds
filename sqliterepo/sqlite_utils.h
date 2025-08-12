@@ -133,6 +133,10 @@ sqlx_code_good(const int rc)
 /** Return a string describing the error that occurred on the SQLite base */
 const char * sqlite_strerror(const int rc);
 
+/** Execute an SQL query and return the 1st column of 1st row as a string.
+ * Result must be freed with g_free(). */
+gchar *sqlite3_get_str(sqlite3 *handle, const gchar *sql);
+
 int sqlx_exec(sqlite3 *handle, const gchar *sql);
 
 /** Set sqlite's journal mode. Call this right after opening the database.
