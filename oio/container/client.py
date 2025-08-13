@@ -621,7 +621,9 @@ class ContainerClient(ProxyClient):
         self, bean, account=None, reference=None, cid=None, **kwargs
     ):
         params = self._make_params(account, reference, cid=cid, **kwargs)
-        data = json.dumps((bean,))
+        if not isinstance(bean, list):
+            bean = (bean,)
+        data = json.dumps(bean)
         if kwargs.pop("frozen", None):
             params["frozen"] = 1
         if kwargs.pop("force", None):

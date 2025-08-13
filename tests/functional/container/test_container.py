@@ -101,7 +101,7 @@ class TestMeta2Containers(BaseTestCase):
         super(TestMeta2Containers, self).setUp()
         self.ref = f"TestMeta2Containers-{random_container()}"
 
-    def tearDown(self):
+    def __tearDown(self):
         super(TestMeta2Containers, self).tearDown()
         try:
             params = self.param_ref(self.ref)
@@ -452,22 +452,31 @@ class TestMeta2Containers(BaseTestCase):
         resp = self.request("POST", self.url_container("touch"), params=params)
         self.assertEqual(resp.status, 204)
 
-    def _raw_insert(self, p, code, what):
-        resp = self.request(
-            "POST", self.url_container("raw_insert"), params=p, data=json.dumps(what)
-        )
-        self.assertEqual(resp.status, code)
+    def _raw_insert(self, ref, what, exception=None, **kwargs):
+        if exception:
+            self.assertRaises(
+                exception,
+                self.storage.container.container_raw_insert,
+                what,
+                reference=ref,
+                account=self.account,
+                **kwargs,
+            )
+        else:
+            self.storage.container.container_raw_insert(
+                what, reference=ref, account=self.account, **kwargs
+            )
 
     def test_raw(self):
         params = self.param_ref(self.ref)
 
         # Missing/invalid body
-        self._raw_insert(params, 400, None)
-        self._raw_insert(params, 400, "lmlkmlk")
-        self._raw_insert(params, 400, 1)
-        self._raw_insert(params, 400, [])
-        self._raw_insert(params, 400, {})
-        self._raw_insert(params, 400, [{}])
+        self._raw_insert(self.ref, None, exception=exc.BadRequest)
+        self._raw_insert(self.ref, "lmlkmlk", exception=exc.BadRequest)
+        self._raw_insert(self.ref, 1, exception=exc.BadRequest)
+        self._raw_insert(self.ref, [], exception=exc.BadRequest)
+        self._raw_insert(self.ref, {}, exception=exc.BadRequest)
+        self._raw_insert(self.ref, [{}], exception=exc.BadRequest)
 
         chunks = list(gen_chunks(16))
         # any missing field
@@ -478,25 +487,78 @@ class TestMeta2Containers(BaseTestCase):
                 del x[i]
                 return x
 
-            self._raw_insert(params, 400, [remove_field(x) for x in chunks])
+            self._raw_insert(
+                self.ref, [remove_field(x) for x in chunks], exception=exc.BadRequest
+            )
+
         # bad size
         c0 = list(map(lambda x: dict(x).update({"size": "0"}), chunks))
-        self._raw_insert(params, 400, c0)
+        self._raw_insert(self.ref, c0, exception=exc.BadRequest)
         # bad ctime
         c0 = list(map(lambda x: dict(x).update({"ctime": "0"}), chunks))
-        self._raw_insert(params, 400, c0)
+        self._raw_insert(self.ref, c0, exception=exc.BadRequest)
         # bad position
         c0 = list(map(lambda x: dict(x).update({"pos": 0}), chunks))
-        self._raw_insert(params, 400, c0)
+        self._raw_insert(self.ref, c0, exception=exc.BadRequest)
         # bad content
         c0 = list(map(lambda x: dict(x).update({"content": "x"}), chunks))
-        self._raw_insert(params, 400, c0)
+        self._raw_insert(self.ref, c0, exception=exc.BadRequest)
         # ok but no such container
-        self._raw_insert(params, 404, chunks)
+        self._raw_insert(self.ref, chunks, exception=exc.NotFound)
 
         self._create(params, 201)
-        self._raw_insert(params, 400, chunks)
-        self._raw_insert({**params, "force": True}, 204, chunks)
+        expected_chunks, _, _, meta = self.storage.object_create_ext(
+            self.account, self.ref, obj_name="test", data="123"
+        )
+        expected_chunks = sorted(expected_chunks, key=lambda c: c["url"])
+
+        def generate_chunks_payload(content, chunks):
+            return [
+                {
+                    "type": "chunk",
+                    "id": c["url"],
+                    "hash": c["hash"],
+                    "size": c["size"],
+                    "content": content,
+                    "pos": c["pos"],
+                }
+                for c in chunks
+            ]
+
+        # Delete all chunks
+        self.storage.container.container_raw_delete(
+            self.account,
+            self.ref,
+            path="test",
+            data=generate_chunks_payload(meta["id"], expected_chunks),
+        )
+        with self.assertRaises(exc.ServiceBusy) as e:
+            self.storage.object_locate(self.account, self.ref, "test", chunk_info=True)
+            self.assertRegex(e.msg, "chunks are missing")
+
+        # Restore chunks
+        self._raw_insert(
+            self.ref, generate_chunks_payload(meta["id"], expected_chunks), path="test"
+        )
+
+        _, obj_chunks = self.storage.object_locate(
+            self.account, self.ref, "test", chunk_info=False
+        )
+        self.assertIsNotNone(obj_chunks)
+        obj_chunks = sorted(obj_chunks, key=lambda c: c["url"])
+        for c in obj_chunks:
+            c["hash"] = c["hash"].lower()
+        self.assertEqual(len(expected_chunks), len(obj_chunks))
+        for i in range(len(expected_chunks)):
+            self.assertDictContainsSubset(obj_chunks[i], expected_chunks[i])
+
+        # Insert arbitrary chunks
+        self._raw_insert(self.ref, chunks, exception=exc.BadRequest)
+        self._raw_insert(self.ref, chunks, force=True)
+
+        # Insert chunks one by one
+        for chunk in chunks:
+            self._raw_insert(self.ref, chunk, force=True)
 
     def test_create_with_unknown_storage_policy(self):
         params = self.param_ref(self.ref)
