@@ -2086,8 +2086,6 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	// TODO(FVE): to migrate from old URLs to new URLs we need to try
-	// with unmodified URLs first.
 	m2v2_shorten_chunk_ids(beans);
 
 	if (!(nsinfo = meta2_backend_get_nsinfo (m2b))) {
@@ -2145,21 +2143,46 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	// TODO(FVE): to migrate from old URLs to new URLs we need to try
-	// with unmodified URLs first.
-	m2v2_shorten_chunk_ids(beans);
-
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			for (; !err && beans; beans = beans->next) {
-				if (unlikely(NULL == beans->data))
+				gpointer original_bean = beans->data;
+				gpointer shortened_chunk = NULL;
+				gpointer bean_1st_format = NULL;
+				gpointer bean_2nd_format = NULL;
+
+				if (unlikely(original_bean == NULL)) {
 					continue;
-				err = _db_delete_bean(sq3, beans->data);
+				}
+
+				// Prepare two beans to try with original and shortened chunk
+				if (DESCR(original_bean) == &descr_struct_CHUNKS) {
+					shortened_chunk = _bean_dup(original_bean);
+					m2v2_shorten_chunk_id(shortened_chunk);
+					if (meta2_flag_store_chunk_ids) {
+						bean_1st_format = original_bean;
+						bean_2nd_format = shortened_chunk;
+					} else {
+						bean_1st_format = shortened_chunk;
+						bean_2nd_format = original_bean;
+					}
+				} else {
+					bean_1st_format = original_bean;
+				}
+				// No error is raised when deleting a non-existent bean,
+				// therefore try deleting with both formats
+				err = _db_delete_bean(sq3, bean_1st_format);
+				if (!err && bean_2nd_format) {
+					err = _db_delete_bean(sq3, bean_2nd_format);
+				}
+
+				_bean_clean(shortened_chunk);
 			}
-			if (!err)
+			if (!err) {
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(m2b, sq3, url);
@@ -2170,25 +2193,25 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *new_chunks, GSList *old_chunks, gboolean frozen)
+		GSList *new_beans, GSList *old_beans, gboolean frozen)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	if (g_slist_length(new_chunks) != g_slist_length(old_chunks))
+	if (g_slist_length(new_beans) != g_slist_length(old_beans))
 		return NEWERROR(CODE_BAD_REQUEST, "BeanSet length mismatch");
-	for (GSList *l0=new_chunks, *l1=old_chunks; l0 && l1 ;l0=l0->next,l1=l1->next) {
+	for (GSList *l0=new_beans, *l1=old_beans; l0 && l1 ;l0=l0->next,l1=l1->next) {
 		if (!l0->data || !l1->data)
 			return NEWERROR(CODE_BAD_REQUEST, "BeanSet validity mismatch");
 		if (DESCR(l0->data) != DESCR(l1->data))
 			return NEWERROR(CODE_BAD_REQUEST, "BeanSet type mismatch");
 	}
 
-	// TODO(FVE): to migrate from old URLs to new URLs we need to try
-	// with unmodified URLs first.
-	m2v2_shorten_chunk_ids(old_chunks);
-	m2v2_shorten_chunk_ids(new_chunks);
+	// No changes are made to the old beans.
+	// It is necessary to maintain the ability to test both formats.
+	// For the new chunks, respect the chunk format according to the configuration
+	m2v2_shorten_chunk_ids(new_beans);
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -2198,13 +2221,44 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open_for_object(m2b, url, flags, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			for (GSList *l0 = old_chunks, *l1 = new_chunks;
+			for (GSList *l0 = old_beans, *l1 = new_beans;
 					!err && l0 && l1;
 					l0 = l0->next, l1 = l1->next) {
-				err = _db_substitute_bean(sq3, l0->data, l1->data);
+				gpointer original_bean = l0->data;
+				gpointer shortened_chunk = NULL;
+				gpointer bean_1st_format = NULL;
+				gpointer bean_2nd_format = NULL;
+
+				// Prepare two beans to try with original and shortened chunk
+				if (DESCR(original_bean) == &descr_struct_CHUNKS) {
+					shortened_chunk = _bean_dup(original_bean);
+					m2v2_shorten_chunk_id(shortened_chunk);
+					if (meta2_flag_store_chunk_ids) {
+						bean_1st_format = original_bean;
+						bean_2nd_format = shortened_chunk;
+					} else {
+						bean_1st_format = shortened_chunk;
+						bean_2nd_format = original_bean;
+					}
+				} else {
+					bean_1st_format = original_bean;
+				}
+
+				// First attempt with the first chunk format
+				err = _db_substitute_bean(sq3, bean_1st_format, l1->data);
+				if (err != NULL && err->code == CODE_CONTENT_NOTFOUND
+						&& bean_2nd_format) {
+					// Second attempt with the second chunk format
+					// if the first attempt finds nothing
+					g_clear_error(&err);
+					err = _db_substitute_bean(sq3, bean_2nd_format, l1->data);
+				}
+
+				_bean_clean(shortened_chunk);
 			}
-			if (!err)
+			if (!err) {
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(m2b, sq3, url);
