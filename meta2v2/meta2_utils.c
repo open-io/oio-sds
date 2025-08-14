@@ -2675,6 +2675,9 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 	_patch_beans_with_contentid(new_beans, content_id, content_idlen);
 	/* Overwrite default mime-type with current one */
 	CONTENTS_HEADERS_set_mime_type(new_header, current_mime_type);
+	if (!args->preserve_chunk_ids) {
+		m2v2_shorten_chunk_ids(new_beans);
+	}
 
 	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);
 	if (!err) {
