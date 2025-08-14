@@ -1930,6 +1930,14 @@ sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 		// TODO(FVE): we may want to unlink(path) now
 		err = _backup_main(src, sq3->db);
 		_close_handle(&src);
+		if (!err) {
+			err = sqlx_repository_flush_wal(sq3);  // Safe if no WAL
+			if (err) {
+				GRID_WARN("%s restored, but %s (reqid=%s)",
+						sq3->name.base, err->message, oio_ext_get_reqid());
+				g_clear_error(&err);
+			}
+		}
 		sqlx_admin_reload(sq3);
 	}
 
