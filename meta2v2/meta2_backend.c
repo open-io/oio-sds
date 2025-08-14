@@ -2086,8 +2086,6 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	// TODO(FVE): to migrate from old URLs to new URLs we need to try
-	// with unmodified URLs first.
 	m2v2_shorten_chunk_ids(beans);
 
 	if (!(nsinfo = meta2_backend_get_nsinfo (m2b))) {
@@ -2134,6 +2132,41 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	return err;
 }
 
+static GSList* deep_copy_beans(GSList *beans) {
+	GSList *copy = NULL;
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		if (bean && &descr_struct_CHUNKS == DESCR(bean)) {
+			struct bean_CHUNKS_s *chunk = _bean_dup(bean);
+			copy = g_slist_prepend(copy, chunk);
+		}
+	}
+	return copy;
+}
+
+static gboolean
+has_chunk_beans(GSList *beans){
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		if (DESCR(bean) == &descr_struct_CHUNKS)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static GError*
+delete_beans(struct sqlx_sqlite3_s *sq3, GSList *beans)
+{
+	GError *err = NULL;
+	for (; !err && beans; beans = beans->next) {
+		if (unlikely(beans->data == NULL))
+			continue;
+		err = _db_delete_bean(sq3, beans->data);
+	}
+	return err;
+}
+
+
 GError*
 meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans)
@@ -2145,50 +2178,100 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	// TODO(FVE): to migrate from old URLs to new URLs we need to try
-	// with unmodified URLs first.
-	m2v2_shorten_chunk_ids(beans);
+	// Prepare two old beans list to try with original and shortened chunks
+	GSList *shortened_beans = NULL;
+	GSList *beans_1st_format = NULL;
+	GSList *beans_2nd_format = NULL;
+	if (has_chunk_beans(beans)) {
+		shortened_beans = deep_copy_beans(beans);
+		m2v2_shorten_chunk_ids_always(shortened_beans);
+		if (meta2_flag_store_chunk_ids) {
+			beans_1st_format = beans;
+			beans_2nd_format = shortened_beans;
+		} else {
+			beans_1st_format = shortened_beans;
+			beans_2nd_format = beans;
+		}
+	} else {
+		beans_1st_format = beans;
+	}
 
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			for (; !err && beans; beans = beans->next) {
-				if (unlikely(NULL == beans->data))
-					continue;
-				err = _db_delete_bean(sq3, beans->data);
+			// First attempt with the first chunk format
+			err = delete_beans(sq3, beans_1st_format);
+			if (err != NULL && err->code == CODE_CONTENT_NOTFOUND
+					&& beans_2nd_format) {
+				g_clear_error(&err);
+				// Second attempt with the second chunk format
+				// if the first attempt finds nothing
+				err = delete_beans(sq3, beans_2nd_format);
 			}
-			if (!err)
+			if (!err) {
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(m2b, sq3, url);
 	}
+	if (shortened_beans) {
+		g_slist_free_full(shortened_beans, _bean_clean);
+	}
+	return err;
+}
 
+static GError*
+substitute_beans(struct sqlx_sqlite3_s *sq3, GSList *old_beans,
+		GSList *new_beans)
+{
+	GError *err = NULL;
+	for (GSList *l0 = old_beans, *l1 = new_beans;
+		!err && l0 && l1;
+		l0 = l0->next, l1 = l1->next) {
+		err = _db_substitute_bean(sq3, l0->data, l1->data);
+	}
 	return err;
 }
 
 GError*
 meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *new_chunks, GSList *old_chunks, gboolean frozen)
+		GSList *new_beans, GSList *old_beans, gboolean frozen)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	if (g_slist_length(new_chunks) != g_slist_length(old_chunks))
+	if (g_slist_length(new_beans) != g_slist_length(old_beans))
 		return NEWERROR(CODE_BAD_REQUEST, "BeanSet length mismatch");
-	for (GSList *l0=new_chunks, *l1=old_chunks; l0 && l1 ;l0=l0->next,l1=l1->next) {
+	for (GSList *l0=new_beans, *l1=old_beans; l0 && l1 ;l0=l0->next,l1=l1->next) {
 		if (!l0->data || !l1->data)
 			return NEWERROR(CODE_BAD_REQUEST, "BeanSet validity mismatch");
 		if (DESCR(l0->data) != DESCR(l1->data))
 			return NEWERROR(CODE_BAD_REQUEST, "BeanSet type mismatch");
 	}
 
-	// TODO(FVE): to migrate from old URLs to new URLs we need to try
-	// with unmodified URLs first.
-	m2v2_shorten_chunk_ids(old_chunks);
-	m2v2_shorten_chunk_ids(new_chunks);
+	// Prepare two old beans list to try with original and shortened chunks
+	GSList *shortened_old_beans = NULL;
+	GSList *old_beans_1st_format = NULL;
+	GSList *old_beans_2nd_format = NULL;
+	if (has_chunk_beans(old_beans)) {
+		shortened_old_beans = deep_copy_beans(old_beans);
+		m2v2_shorten_chunk_ids_always(shortened_old_beans);
+		if (meta2_flag_store_chunk_ids) {
+			old_beans_1st_format = old_beans;
+			old_beans_2nd_format = shortened_old_beans;
+		} else {
+			old_beans_1st_format = shortened_old_beans;
+			old_beans_2nd_format = old_beans;
+		}
+	} else {
+		old_beans_1st_format = old_beans;
+	}
+
+	// Respect the chunk format according to the configuration
+	m2v2_shorten_chunk_ids(new_beans);
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -2198,18 +2281,26 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open_for_object(m2b, url, flags, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			for (GSList *l0 = old_chunks, *l1 = new_chunks;
-					!err && l0 && l1;
-					l0 = l0->next, l1 = l1->next) {
-				err = _db_substitute_bean(sq3, l0->data, l1->data);
+			// First attempt with the first chunk format
+			err = substitute_beans(sq3, old_beans_1st_format, new_beans);
+			if (err != NULL && err->code == CODE_CONTENT_NOTFOUND
+					&& old_beans_2nd_format) {
+				// Second attempt with the second chunk format
+				// if the first attempt finds nothing
+				g_clear_error(&err);
+				err = substitute_beans(
+						sq3, old_beans_2nd_format, new_beans);
 			}
-			if (!err)
+			if (!err) {
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(m2b, sq3, url);
 	}
-
+	if (shortened_old_beans) {
+		g_slist_free_full(shortened_old_beans, _bean_clean);
+	}
 	return err;
 }
 

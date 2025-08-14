@@ -113,6 +113,9 @@ void m2v2_shorten_chunk_id(struct bean_CHUNKS_s *bean);
  * If meta2.store_chunk_ids is false, do nothing. */
 void m2v2_shorten_chunk_ids(GSList *beans);
 
+/* Remove the protocol and path from chunk URLs, keen only service IDs. */
+void m2v2_shorten_chunk_ids_always(GSList *beans);
+
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
 /** Recompute the cumulated size and number of contents in the database

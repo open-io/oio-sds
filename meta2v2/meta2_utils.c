@@ -750,11 +750,7 @@ m2v2_shorten_chunk_id(struct bean_CHUNKS_s *bean)
 }
 
 void
-m2v2_shorten_chunk_ids(GSList *beans)
-{
-	if (meta2_flag_store_chunk_ids)
-		return;
-
+m2v2_shorten_chunk_ids_always(GSList *beans){
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
 		if (DESCR(bean) != &descr_struct_CHUNKS)
@@ -763,6 +759,15 @@ m2v2_shorten_chunk_ids(GSList *beans)
 		m2v2_shorten_chunk_id(bean);
 	}
 }
+
+void
+m2v2_shorten_chunk_ids(GSList *beans)
+{
+	if (meta2_flag_store_chunk_ids)
+		return;
+	m2v2_shorten_chunk_ids_always(beans);
+}
+
 
 /** Load all chunks related to the specified content header,
  * pass them to the callback function. */
