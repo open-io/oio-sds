@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,7 @@
 import os
 import random
 import time
+from urllib.parse import urlparse
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common.exceptions import OrphanChunk
@@ -63,12 +64,14 @@ class TestBlobRebuilder(BaseTestCase):
         )
         self.version = meta["version"]
         self.content_id = meta["id"]
-
+        self.stopped = []
         # Prevent the chunks' rebuilds by the rdir crawlers
         self._service("oio-crawler.target", "stop", wait=3)
 
     def tearDown(self):
         self._service("oio-crawler.target", "start", wait=1)
+        for service in self.stopped:
+            self._service(service, "start", wait=3)
         super(TestBlobRebuilder, self).tearDown()
 
     def _chunk_path(self, chunk):
@@ -223,4 +226,117 @@ class TestBlobRebuilder(BaseTestCase):
             "possible orphan chunk",
             rebuilder_worker._process_item,
             (self.ns, self.cid, self.content_id, self.path, self.version, chunk_id),
+        )
+
+    def _stop_service(self, service_id):
+        self._service(service_id, "stop", wait=3)
+        self.stopped.append(service_id)
+
+    def _test_object_rebuild_store_chunk_ids(
+        self, store_chunk_ids="on", store_chunk_ids_after="off"
+    ):
+        if len(self.conf["services"]["meta2"]) > 1:
+            self.skipTest(
+                "This test can only be run in an environment with "
+                "a single meta2 service"
+            )
+        _, _, meta2_addr, _ = self.get_service_url("meta2")
+        meta2_config = self.admin.service_get_live_config(meta2_addr)
+        store_chunks_default_value = meta2_config["meta2.store_chunk_ids"]
+        random_chunks_default_value = meta2_config["core.lb.generate_random_chunk_ids"]
+        meta_2_reset_conf = False
+        try:
+            if store_chunks_default_value != store_chunk_ids:
+                meta2_config["meta2.store_chunk_ids"] = store_chunk_ids
+                meta2_config["core.lb.generate_random_chunk_ids"] = store_chunk_ids
+                self.admin.service_set_live_config(meta2_addr, meta2_config)
+                meta_2_reset_conf = True
+            obj_name = "rebuild_obj_" + random_str(4)
+            self.api.object_create(
+                self.account,
+                self.container,
+                obj_name=obj_name,
+                data=random_data(50 * 1024),
+            )
+            obj_meta, obj_chunks = self.api.object_locate(
+                self.account, self.container, obj_name
+            )
+        finally:
+            if meta_2_reset_conf:
+                meta2_config["meta2.store_chunk_ids"] = store_chunks_default_value
+                meta2_config["core.lb.generate_random_chunk_ids"] = (
+                    random_chunks_default_value
+                )
+                self.admin.service_set_live_config(meta2_addr, meta2_config)
+        # Select a chunk and stop the rawx
+        url = random.choice(obj_chunks)["url"]
+        url_parsed = urlparse(url)
+        srvc_num = url_parsed.netloc.rsplit("-", 1)[-1]
+        chunk_id = url_parsed.path[1:]
+        rawx_id = url_parsed.netloc
+        service_id = "oio-rawx-" + srvc_num
+        service_internal_id = "oio-internal-rawx-" + srvc_num
+        self._stop_service(service_id)
+        self._stop_service(service_internal_id)
+        # Rebuild the chunk
+        conf = self.conf.copy()
+        rebuilder = BlobRebuilder(
+            conf, service_id=rawx_id, logger=self.logger, watchdog=self.watchdog
+        )
+        rebuilder_worker = rebuilder.create_worker(None, None)
+        meta_2_reset_conf = False
+        try:
+            if store_chunks_default_value != store_chunk_ids_after:
+                meta2_config["meta2.store_chunk_ids"] = store_chunk_ids_after
+                meta2_config["core.lb.generate_random_chunk_ids"] = (
+                    store_chunk_ids_after
+                )
+                self.admin.service_set_live_config(meta2_addr, meta2_config)
+                meta_2_reset_conf = False
+            rebuilder_worker._process_item(
+                (
+                    self.ns,
+                    self.cid,
+                    obj_meta["id"],
+                    obj_name,
+                    obj_meta["version"],
+                    chunk_id,
+                )
+            )
+        finally:
+            if meta_2_reset_conf:
+                meta2_config["meta2.store_chunk_ids"] = store_chunks_default_value
+                meta2_config["core.lb.generate_random_chunk_ids"] = (
+                    random_chunks_default_value
+                )
+                self.admin.service_set_live_config(meta2_addr, meta2_config)
+        # Check chunks
+        obj_meta_after, obj_chunks_after = self.api.object_locate(
+            self.account,
+            self.container,
+            obj_name,
+        )
+        chunk_ids = [chunk["url"].rsplit("/", 1)[-1] for chunk in obj_chunks_after]
+        self.assertIn(chunk_id, chunk_ids)
+        index = chunk_ids.index(chunk_id)
+        new_url = obj_chunks_after[index]["url"]
+        srvc_num_after = urlparse(new_url).netloc.rsplit("-", 1)[-1]
+        self.assertNotEqual(srvc_num, srvc_num_after)
+        self.assertEqual(len(obj_meta), len(obj_meta_after))
+        self.assertEqual(len(obj_chunks), len(obj_chunks_after))
+
+    def test_object_rebuild_store_chunk_ids_on(self):
+        """
+        Rebuild object with chunk ids preserved and
+        meta2.store_chunk_ids off.
+        """
+        self._test_object_rebuild_store_chunk_ids()
+
+    def test_object_rebuild_store_chunk_ids_off(self):
+        """
+        Rebuild object with chunk ids not preserved and
+        meta2.store_chunk_ids on
+        """
+        self._test_object_rebuild_store_chunk_ids(
+            store_chunk_ids="off", store_chunk_ids_after="on"
         )
