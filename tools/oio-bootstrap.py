@@ -351,7 +351,7 @@ statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger check_integrity draining auto_vacuum auto_sharding indexer copy_cleaner
+pipeline = logger check_integrity draining auto_vacuum auto_sharding indexer copy_cleaner sse_checker
 
 [filter:indexer]
 use = egg:oio#indexer
@@ -391,6 +391,11 @@ kafka_cluster_health_topics = oio,oio-chunks,oio-delete-*
 use = egg:oio#copy_cleaner
 keywords = VerifyChunkPlacement-
 delay = 172800
+
+[filter:sse_checker]
+use = egg:oio#sse_checker
+target_buckets= bucket1, bucket2
+max_scanned_objects_per_second = 2000
 
 [filter:logger]
 use = egg:oio#logger

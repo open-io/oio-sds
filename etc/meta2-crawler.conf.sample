@@ -31,7 +31,7 @@ syslog_prefix = OIO,OPENIO,meta2-crawler,1
 statsd_prefix = meta2-crawler
 
 [pipeline:main]
-pipeline = logger draining auto_vacuum auto_sharding indexer
+pipeline = logger draining auto_vacuum auto_sharding indexer sse_checker
 
 [filter:indexer]
 # Index meta2 databases into the associated rdir service(s).
@@ -149,3 +149,11 @@ dry_run_rebuild = False
 # if True placement checker will identify the misplaced chunks
 # but will not tag them as so.
 dry_run_checker = False
+
+[filter:sse_checker]
+# Verify sses3 key for given container.
+use = egg:oio#sse_checker
+# Check only the given buckets if defined
+target_buckets= bucket1, bucket2
+# Parameter used to rate limit the sse processing
+max_scanned_objects_per_second = 2000
