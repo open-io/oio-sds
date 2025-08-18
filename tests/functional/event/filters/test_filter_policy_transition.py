@@ -122,3 +122,41 @@ class TestFilterPolicyTransition(BaseTestCase):
         )
 
         self.assertIsNone(evt)
+
+    def test_transition_force_event_emit(self):
+        # Stop processing events
+        self.logger.debug("Stopping the event system")
+        self._service("oio-event.target", "stop", wait=8)
+
+        def check_event_transition(**kwargs):
+            reqid = request_id("pol-chg-force-event-emit")
+            self.storage.object_request_transition(
+                self.account,
+                self.container,
+                self.object,
+                "THREECOPIES",
+                reqid=reqid,
+                **kwargs,
+            )
+            evt = self.wait_for_kafka_event(
+                reqid=reqid,
+                data_fields={"target_policy": "THREECOPIES"},
+                types=[EventTypes.CONTENT_TRANSITIONED],
+                kafka_consumer=self._cls_tests_consumer,
+            )
+
+            self.assertIsNotNone(evt)
+            obj = self.storage.object_get_properties(
+                self.account,
+                self.container,
+                self.object,
+            )
+            self.assertEqual(obj["target_policy"], "THREECOPIES")
+
+        try:
+            # First time to set target policy and emit the event
+            check_event_transition()
+            # Second time to re emit the event
+            check_event_transition(force_event_emit=True)
+        finally:
+            self._service("oio-event.target", "start", wait=3)

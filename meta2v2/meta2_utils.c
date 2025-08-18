@@ -3886,7 +3886,7 @@ end:
 GError*
 m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct namespace_info_s* nsinfo, gboolean* updated,
-		gboolean* send_event, const gchar *new_policy)
+		gboolean* send_event, const gchar *new_policy, gboolean force_event_emit)
 {
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -3898,6 +3898,7 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	struct bean_ALIASES_s *current_alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
 	struct bean_PROPERTIES_s *prop = NULL;
+	gboolean is_event_remission = FALSE;
 
 	void _search_alias_and_size(gpointer ignored, gpointer bean) {
 		(void) ignored;
@@ -3931,7 +3932,10 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	// Ensure new policy is not already applied
 	if (g_strcmp0(new_policy, target_policy) == 0) {
-		goto cleanup;
+		if (!force_event_emit){
+			goto cleanup;
+		}
+		is_event_remission = TRUE;
 	}
 	if (g_strcmp0(new_policy, actual_policy) == 0) {
 		if (g_strcmp0(target_policy, actual_policy) == 0) {
@@ -3967,12 +3971,16 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		goto cleanup;
 	}
 	err = _db_save_bean(sq3, current_header);
-	// Decrement old policy
-	m2db_update_size(sq3, -size, previous_policy);
-	m2db_update_obj_count(sq3, -1, previous_policy);
-	// Increment new policy
-	m2db_update_size(sq3, size, new_policy);
-	m2db_update_obj_count(sq3, 1, new_policy);
+	// Target policy has been previously set,
+	// assuming policy updates were handled at that time
+	if (!is_event_remission) {
+		// Decrement old policy
+		m2db_update_size(sq3, -size, previous_policy);
+		m2db_update_obj_count(sq3, -1, previous_policy);
+		// Increment new policy
+		m2db_update_size(sq3, size, new_policy);
+		m2db_update_obj_count(sq3, 1, new_policy);
+	}
 
 	*updated = TRUE;
 

@@ -1315,6 +1315,7 @@ class ContainerClient(ProxyClient):
             json={
                 "policy": policy,
                 "skip_data_move": kwargs.pop("skip_data_move", False),
+                "force_event_emit": kwargs.pop("force_event_emit", False),
             },
             **kwargs,
         )

@@ -138,7 +138,8 @@ GError* meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
 GError* meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
-		struct oio_url_s *url, const gchar* new_policy, gboolean skip_data_move);
+		struct oio_url_s *url, const gchar* new_policy,
+		gboolean skip_data_move, gboolean force_event_emit);
 
 GError* meta2_backend_restore_drained(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in,

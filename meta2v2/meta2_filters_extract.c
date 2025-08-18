@@ -290,12 +290,13 @@ meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
-	gchar buf[64];
+	gchar buf[128];
 	TRACE_FILTER();
 	EXTRACT_OPT(NAME_MSGKEY_OVERWRITE);
 	EXTRACT_OPT(NAME_MSGKEY_UPDATE);
 	EXTRACT_OPT(NAME_MSGKEY_CHANGE_POLICY);
 	EXTRACT_OPT(NAME_MSGKEY_SKIP_DATA_MOVE);
+	EXTRACT_OPT(NAME_MSGKEY_FORCE_EVENT_EMIT);
 	EXTRACT_OPT(NAME_MSGKEY_RESTORE_DRAINED);
 	return FILTER_OK;
 }

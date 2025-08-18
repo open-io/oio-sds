@@ -70,6 +70,7 @@ License along with this library.
 #define NAME_MSGKEY_FLAGS              "FLAGS"
 #define NAME_MSGKEY_FLUSH              "FLUSH"
 #define NAME_MSGKEY_FORCE              "FORCE"
+#define NAME_MSGKEY_FORCE_EVENT_EMIT   "FORCE_EVENT_EMIT"
 #define NAME_MSGKEY_FORCE_VERSIONING   "FORCE_VERSIONING"
 #define NAME_MSGKEY_FORMAT             "FORMAT"
 #define NAME_MSGKEY_FROZEN             "FROZEN"
