@@ -178,6 +178,7 @@ class FdbIamDb(object):
 
     IAM_KEY_PREFIX = "iam"
     DEFAULT_ALLOW_EMPTY_POLICY_NAME = True
+    DEFAULT_ALLOW_USER_POLICY_IPADDRESS = False
 
     def __init__(self, conf=None, logger=None, **kwargs):
         self.conf = conf
@@ -190,11 +191,25 @@ class FdbIamDb(object):
         self.allow_empty_policy_name = boolean_value(
             conf.get("allow_empty_policy_name"), self.DEFAULT_ALLOW_EMPTY_POLICY_NAME
         )
+        self.allow_user_policy_ipaddress = boolean_value(
+            conf.get("allow_user_policy_ipaddress"),
+            self.DEFAULT_ALLOW_USER_POLICY_IPADDRESS,
+        )
+        if not self.allow_user_policy_ipaddress:
+            self.clear_disabled_features(
+                IMPLEMENTED_USER_POLICY_SCHEMA["$defs"]["Condition"]["properties"],
+                ("IpAddress", "NotIpAddress"),
+            )
 
         self.name_regex = re.compile(r"[\w+=,.@-]+")
         self.db = None
         self.namespace = None
         self.iam_space = None
+
+    def clear_disabled_features(self, implemented_properties, disabled_features):
+        for feature in disabled_features:
+            self.logger.debug("Condition %s is implemented but disabled", feature)
+            implemented_properties.pop(feature, None)
 
     def init_db(self, event_model="gevent"):
         """

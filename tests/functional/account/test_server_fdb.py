@@ -52,7 +52,11 @@ class TestAccountServerBase(BaseTestCase):
             self.fdb_file = CommonFdb.DEFAULT_FDB
         else:
             self.fdb_file = str(Path.home()) + f"/.oio/sds/conf/{self.ns}-fdb.cluster"
-        conf = {"fdb_file": self.fdb_file, "allow_empty_policy_name": "False"}
+        conf = {
+            "fdb_file": self.fdb_file,
+            "allow_empty_policy_name": "False",
+            "allow_user_policy_ipaddress": "True",
+        }
 
         self.account_id = "test"
         self.acct_app = create_app(conf)

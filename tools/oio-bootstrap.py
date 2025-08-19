@@ -1922,6 +1922,7 @@ fdb_max_retries = 4
 
 time_window_clear_deleted = 60
 allow_empty_policy_name = False
+allow_user_policy_ipaddress = True
 
 # KMS API
 kmsapi_enabled = True

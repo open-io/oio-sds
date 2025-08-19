@@ -29,6 +29,7 @@ bucket_reservation_timeout = 30
 max_buckets_per_account = 100
 
 allow_empty_policy_name = True
+allow_user_policy_ipaddress = False
 
 # KMS API
 kmsapi_enabled = False
