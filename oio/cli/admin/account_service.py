@@ -81,9 +81,9 @@ class AccountServiceClean(ShowOne):
         self.success = cleaner.run(reqid=reqid)
         if self.success:
             if cleaner.deleted_containers > 0:
-                self.error_code = 2
+                self.return_code = 2
             elif cleaner.deleted_buckets > 0:
-                self.error_code = 3
+                self.return_code = 3
         buckets_excess_volume = cleaner.buckets_excess_volume["total"]
         buckets_excess_volume_details = {
             k: v
