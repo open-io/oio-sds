@@ -129,8 +129,9 @@ class PlainContent(Content):
             if len(duplicate_chunks) == self.storage_method.expected_chunks:
                 # All chunks are present no need to proceed with rebuild
                 return
-
+        is_current_chunk_found = True
         if current_chunk is None:
+            is_current_chunk_found = False
             chunk = {}
             chunk["hash"] = duplicate_chunks[0].checksum
             chunk["size"] = duplicate_chunks[0].size
@@ -151,7 +152,12 @@ class PlainContent(Content):
         # Actually create the spare chunk, by duplicating a good one
         # Use the chunk to rebuild as source in last resort
         errors = []
-        for src in chain(duplicate_chunks, (current_chunk,)):
+        last_resort_chunk = ()
+        if is_current_chunk_found:
+            # As a last resort, rebuild using the current chunk
+            # but only if it has been found
+            last_resort_chunk = (current_chunk,)
+        for src in chain(duplicate_chunks, last_resort_chunk):
             try:
                 first = True
                 while True:
