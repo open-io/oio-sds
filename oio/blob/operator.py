@@ -163,7 +163,7 @@ class ChunkOperator(object):
                     f"container_id={container_id}, content_id={content_id}, "
                     f"path={path}, version={version}."
                 )
-                raise
+            raise
 
         if try_chunk_delete:
             try:
