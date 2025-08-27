@@ -907,7 +907,7 @@ Used by `gcc`
 
 > In a proxy, sets how many objects can be deleted at once.
 
- * default: **100**
+ * default: **250**
  * type: guint
  * cmake directive: *OIO_PROXY_BULK_MAX_DELETE_MANY*
  * range: 0 -> 10000

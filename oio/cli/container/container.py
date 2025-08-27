@@ -633,6 +633,7 @@ class FlushContainer(ContainerCommandMixin, Command):
         )
         parser.add_argument(
             "--limit",
+            type=int,
             help="Limit the number of objects per iteration.",
         )
         parser.add_argument(
@@ -654,12 +655,22 @@ class FlushContainer(ContainerCommandMixin, Command):
         self.log.debug("take_action(%s)", parsed_args)
 
         kwargs = {}
+        proxy_limit = self.app.client_manager.admin.proxy_get_live_config().get(
+            "proxy.bulk.max.delete_many"
+        )
+        if proxy_limit:
+            proxy_limit = int_value(proxy_limit, default=None)
         if parsed_args.limit:
+            if parsed_args.limit < 0:
+                raise ValueError("The limit must be a positive number")
+            if proxy_limit and parsed_args.limit > proxy_limit:
+                raise ValueError(
+                    f"'proxy.bulk.max.delete_many={proxy_limit}', "
+                    "so the limit cannot exceed this value"
+                )
             kwargs["limit"] = parsed_args.limit
         else:
-            kwargs["limit"] = int_value(
-                self.app.client_manager.sds_conf.get("proxy.bulk.max.delete_many"), 100
-            )
+            kwargs["limit"] = proxy_limit or 250
         if parsed_args.delay:
             kwargs["delay"] = parsed_args.delay
 
