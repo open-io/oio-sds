@@ -4602,14 +4602,28 @@ m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path,
 		struct bean_SHARD_RANGE_s **pshard_range)
 {
 	/* sanity checks */
-	if (!path) {
+	if (!path || !*path) {
 		return BADREQ("Missing path");
 	}
 
 	/* query */
+	/* Unlike the upper, which is due to the last shard (empty upper),
+	 * the lower is always increasing, including for the first shard
+	 * (empty lower).
+	 * Adding the management of the first shard with an empty lower
+	 * in the SQL query is therefore unnecessary and significantly
+	 * degrades response times.
+	 * Thus, to find the shard, simply search for the largest lower
+	 * that is strictly smaller than the path.
+	 * To protect against a possible (serious) bug, the SQL query can
+	 * always check that the upper shard is much smaller than the path
+	 * (except for the last shard).
+	 * This last check does not significantly increase processing time,
+	 * because the first shard obtained with the rest of the query is
+	 * always expected to respect this constraint (barring a serious bug). */
 	GError *err = NULL;
-	const gchar *sql = "(lower == '' OR lower < ?) "
-			"AND (upper == '' OR upper >= ?) ORDER BY lower ASC LIMIT 1";
+	const gchar *sql = "lower < ? "
+			"AND (upper == '' OR upper >= ?) ORDER BY lower DESC LIMIT 1";
 	GVariant *params[3] = {
 		g_variant_new_string(path),
 		g_variant_new_string(path),
