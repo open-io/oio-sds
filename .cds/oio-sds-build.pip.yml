@@ -79,9 +79,17 @@ jobs:
           eval $(worker key install --env-git proj-ssh-openio)
           . .cds/versions
           export DEBIAN_FRONTEND=noninteractive
+          echo "deb [trusted=yes] http://read:{{.cds.proj.private_ovh_objectstorage_openio_read_password}}@last-private-ovh-objectstorage-openio.snap-priv.mirrors.ovh.net/ubuntu focal/main main" > /etc/apt/sources.list.d/snapmirror-ovh-objectstorage-openio.list
+          echo "deb [trusted=yes] http://last-public-ovh-pcs.snap.mirrors.ovh.net/ubuntu focal main" > /etc/apt/sources.list.d/snapmirror-ovh-pcs-public.list
+          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal main" >> /etc/apt/sources.list.d/snapmirror-focal.list
+          echo "deb [trusted=yes] http://last-public.canonical.ubuntu.archive.snap.mirrors.ovh.net/ubuntu focal-updates main" >> /etc/apt/sources.list.d/snapmirror-focal.list
           apt update
-          apt install -y python3-virtualenv virtualenv
-          virtualenv -p /usr/bin/python3 $HOME/oiovenv
+          apt install -y ${PYTHON_PACKAGE}
+          # Configure environment
+          echo "export PATH=/opt/${PYTHON_PACKAGE}/bin:$PATH" > $HOME/oio-env.sh
+          echo "export PIP_INDEX_URL=https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/" >> $HOME/oio-env.sh
+          source $HOME/oio-env.sh
+          /opt/${PYTHON_PACKAGE}/bin/python3 -m venv $HOME/oiovenv
           cat << EOF > $HOME/oiovenv/pip.conf
           [global]
           index-url = https://${PYPI_SNAPSHOT}-pypi.snap.mirrors.ovh.net/simple/
@@ -89,8 +97,8 @@ jobs:
           progress-bar = off
           EOF
           . $HOME/oiovenv/bin/activate
-          pip install --progress-bar off --upgrade pip build twine
-          pip install --progress-bar off -e ".[all]"
+          pip install --upgrade pip setuptools tox virtualenv build twine wheel
+          pip install -e ".[all]"
           # Need to fetch tags and enough commits for pbr to build a correct version number
           git fetch origin master --depth 500 --tags
 
