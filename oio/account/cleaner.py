@@ -304,22 +304,8 @@ class AccountServiceCleaner(object):
             owner = self.api.bucket.bucket_get_owner(bucket, reqid=reqid)
             if account == owner:
                 return True
-            self.logger.warning(
-                "Failed to get information about bucket %s/%s "
-                "(account service): The account is not the owner reqid=%s",
-                account,
-                bucket,
-                reqid,
-            )
             return False
         except NotFound:
-            self.logger.warning(
-                "Failed to get information about bucket %s/%s "
-                "(account service): No owner reqid=%s",
-                account,
-                bucket,
-                reqid,
-            )
             return False
         except Exception as exc:
             self.success = False
@@ -418,6 +404,13 @@ class AccountServiceCleaner(object):
         if not self.is_owner(account, bucket, reqid=reqid):
             return
         # The bucket was deleted, release the bucket name
+        self.logger.warning(
+            "The bucket %s/%s no longer exists but the name is still reserved "
+            "by this account (account service) reqid=%s",
+            account,
+            bucket,
+            reqid,
+        )
         self.delete_bucket(account, bucket, bucket_size, reqid=reqid)
 
     def run(self, reqid=None):
