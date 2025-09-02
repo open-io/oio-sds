@@ -3,7 +3,7 @@
 # OpenIO SDS meta2v2
 # Copyright (C) 2014 Worldline, as part of Redcurrant
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2022 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -52,7 +52,7 @@ def next_seq():
 
 
 def dquoted(s):
-    return '"' + str(s) + '"'
+    return f'"{s}"'
 
 
 def field_index(bean, name):
@@ -61,7 +61,7 @@ def field_index(bean, name):
         if f.name == name:
             return i
         i = i + 1
-    raise Exception("Field " + str(name) + " not found in bean " + str(bean.name))
+    raise KeyError(f"Field {name} not found in bean {bean.name}")
 
 
 class ForeignKey(object):
@@ -71,13 +71,13 @@ class ForeignKey(object):
         # configure the source part
         self.base = base
         self.base_name = str(base_name)
-        self.base_fields = list()
+        self.base_fields = []
         for f in base_fields:
             self.base_fields.append((field_index(base, f), str(f)))
         # configure the target part
         self.target = target
         self.target_name = str(target_name)
-        self.target_fields = list()
+        self.target_fields = []
         for f in target_fields:
             self.target_fields.append((field_index(target, f), str(f)))
         # now the FK in itself
@@ -145,15 +145,15 @@ class Struct(object):
         self.name = str(name)
         self.c_name = str(name).upper()
         self.sql_name = str(name).upper()
-        self.fields = list()
+        self.fields = []
         self.pk = None
-        self.fk_outgoing = list()
-        self.fk_incoming = list()
-        self.indexes = list()
+        self.fk_outgoing = []
+        self.fk_incoming = []
+        self.indexes = []
         self.order = 999
 
     def __repr__(self):
-        repr_list = list()
+        repr_list = []
         repr_list.append('<Struct name="' + str(self.name) + '">')
         for f in self.fields:
             repr_list.append("\t" + repr(f))
@@ -185,7 +185,7 @@ class Struct(object):
         return [str(f.name) for f in self.fields]
 
     def get_fk_names(self):
-        target_names = list()
+        target_names = []
         for fk in self.fk_incoming:
             target_names.append(str(fk.target_name))
         for fk in self.fk_outgoing:
@@ -199,8 +199,8 @@ class Struct(object):
 
 class Generator(object):
     def __init__(self):
-        self.allbeans = dict()
-        self.allfk = list()
+        self.allbeans = {}
+        self.allfk = []
 
     def add_bean(self, bean):
         self.allbeans[bean.name] = bean
@@ -215,8 +215,8 @@ class Generator(object):
         dependencies, then the bean with already listed dependencies until the end of
         the list."""
         done = set()
-        result = list()
-        queue = list()
+        result = []
+        queue = []
 
         def push(n):
             queue.append(n)
@@ -358,7 +358,7 @@ class Generator(object):
         for t in self.reverse_dependencies():
             print_quoted("CREATE TABLE IF NOT EXISTS " + t.sql_name + " (")
             for f in t.fields:
-                tmp = list()
+                tmp = []
                 tmp.append(" " + f.name + " " + f.type_sql)
                 if f.mandatory:
                     tmp.append(" NOT NULL")
@@ -367,7 +367,7 @@ class Generator(object):
                 tmp.append(",")
                 print_quoted("".join(tmp))
             for fk in t.fk_outgoing:
-                tmp = list()
+                tmp = []
                 tmp.append(" CONSTRAINT " + fk.name)
                 tmp.append(
                     " FOREIGN KEY (" + ",".join([n for i, n in fk.base_fields]) + ")"
@@ -394,17 +394,17 @@ class Generator(object):
                     + ");"
                 )
         print_quoted(
-            'INSERT OR IGNORE INTO admin(k,v) VALUES (\\"schema_version\\",\\"1.8\\");'
+            "INSERT OR IGNORE INTO admin(k,v) VALUES"
+            " ('schema_version','1.8');"
         )
         print_quoted(
             "INSERT OR IGNORE INTO admin(k,v) VALUES"
-            ' (\\"version:main.admin\\",\\"1:0\\");'
+            " ('version:main.admin','1:0');"
         )
         for t in self.reverse_dependencies():
             print_quoted(
-                'INSERT OR IGNORE INTO admin(k,v) VALUES (\\"version:main.'
-                + t.sql_name
-                + '\\",\\"1:0\\");'
+                "INSERT OR IGNORE INTO admin(k,v) VALUES"
+                f" ('version:main.{t.sql_name}','1:0');"
             )
         out.write(";\n")
 
@@ -788,11 +788,11 @@ generator.add_fk(
     ForeignKey((chunks, ("content",), "content"), (contents, ("id",), "chunks"))
 )
 
-with open("./autogen_codec.c", "w") as out:
+with open("./autogen_codec.c", "w", encoding="utf-8") as out:
     generator.dump_c_codec(out)
 
-with open("./autogen_storage.c", "w") as out:
+with open("./autogen_storage.c", "w", encoding="utf-8") as out:
     generator.dump_c_storage(out)
 
-with open("./autogen.h", "w") as out:
+with open("./autogen.h", "w", encoding="utf-8") as out:
     generator.dump_c_header(out)
