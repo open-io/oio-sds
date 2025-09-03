@@ -205,36 +205,38 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 
 	sqlx_repository_call_close_callback(sq3);
 
-	if (sq3->deleted || sq3->corrupted) {
-		if (sq3->repo->election_manager) {
-			NAME2CONST(n0, sq3->name);
-			GError *err = election_exit(sq3->repo->election_manager, &n0);
-			if (err) {
-				GRID_WARN("Failed to exit election [%s][%s]: (%d) %s",
-						sq3->name.base, sq3->name.type,
-						err->code, err->message);
-				g_clear_error(&err);
-			} else {
-				GRID_TRACE("exit election succeeded [%s][%s]",
-						sq3->name.base, sq3->name.type);
-			}
-		}
-
-		if (sq3->deleted) {
-			__delete_base(sq3);
-		} else if (sq3->corrupted) {
-			gchar dst[sizeof(sq3->path_inline) + sizeof(SQLX_CORRUPT_SUFFIX)];
-			char *suffix = stpcpy(dst, sq3->path_inline);
-			strcpy(suffix, SQLX_CORRUPT_SUFFIX);
-			GRID_ERROR("Renaming corrupted base [%s][%s] to %s",
-					sq3->name.base, sq3->name.type, dst);
-			__rename_base(sq3, dst);
-			sq3->corrupted = 0;
+	if ((sq3->deleted || sq3->corrupted) && sq3->repo->election_manager) {
+		NAME2CONST(n0, sq3->name);
+		GError *err = election_exit(sq3->repo->election_manager, &n0);
+		if (err) {
+			GRID_WARN("Failed to exit election [%s][%s]: (%d) %s",
+					sq3->name.base, sq3->name.type,
+					err->code, err->message);
+			g_clear_error(&err);
+		} else {
+			GRID_TRACE("exit election succeeded [%s][%s]",
+					sq3->name.base, sq3->name.type);
 		}
 	}
 
 	if (sq3->db)
 		_close_handle(&(sq3->db));
+
+	/* We used to delete (unlink) the file before closing the handle,
+	 * but recent versions of sqlite3 complain about that.
+	 * By the way, there is no chance the database is open in the meantime
+	 * because we have the lock on the database cache. */
+	if (sq3->deleted) {
+		__delete_base(sq3);
+	} else if (sq3->corrupted) {
+		gchar dst[sizeof(sq3->path_inline) + sizeof(SQLX_CORRUPT_SUFFIX)];
+		char *suffix = stpcpy(dst, sq3->path_inline);
+		strcpy(suffix, SQLX_CORRUPT_SUFFIX);
+		GRID_ERROR("Renaming corrupted base [%s][%s] to %s",
+				sq3->name.base, sq3->name.type, dst);
+		__rename_base(sq3, dst);
+		sq3->corrupted = 0;
+	}
 
 	/* Clean the structure */
 	sq3->path_inline[0] = 0;
@@ -1927,7 +1929,6 @@ sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 				sqlite_strerror(rc), errno, strerror(errno));
 		g_prefix_error(&err, "Invalid raw SQLite base: ");
 	} else { /* Backup now! */
-		// TODO(FVE): we may want to unlink(path) now
 		err = _backup_main(src, sq3->db);
 		_close_handle(&src);
 		if (!err) {
