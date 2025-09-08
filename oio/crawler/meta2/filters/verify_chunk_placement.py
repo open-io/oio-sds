@@ -318,6 +318,17 @@ class VerifyChunkPlacement(Meta2Filter):
         for chunk_data in obj_data:
             # [(rawx_srv_id, position, content_id, policy, object name, version), ...]
             rawx_srv_id = chunk_data[0]
+            if rawx_srv_id not in self.rawx_srv_locations:
+                try:
+                    # The chunk id may have been registered in old version
+                    # e.g: http://rawx-49962/{chunk_id}'
+                    # Extract the rawx id from the chunk URL
+                    parsed_url = urlparse(rawx_srv_id)
+                    if not all([parsed_url.scheme, parsed_url.netloc]):
+                        raise ValueError
+                    rawx_srv_id = parsed_url.netloc
+                except ValueError:
+                    pass
             pos = chunk_data[1]
             # Location of the rawx of the chunk selected
             location = format_location(self.rawx_srv_locations[rawx_srv_id])
