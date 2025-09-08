@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,6 +51,7 @@ class VerifyChunkPlacement(Meta2Filter):
         self.rebuilt_chunks = 0
         self.failed_post = 0
         self.failed_rebuild = 0
+        self.empty_db = 0
         # Counter for slaves database
         self.slave_volume_skipped = 0
         self.api = self.app_env["api"]
@@ -616,6 +617,10 @@ class VerifyChunkPlacement(Meta2Filter):
         meta2db = Meta2DB(self.app_env, env)
 
         cid = meta2db.cid
+        if "sys.account" not in meta2db.system:
+            self.logger.debug("Database %s not initialized", self.NAME)
+            self.empty_db += 1
+            return self.app(env, cb)
         account = meta2db.system["sys.account"]
         container = meta2db.system["sys.user.name"]
         try:
@@ -672,16 +677,19 @@ class VerifyChunkPlacement(Meta2Filter):
             "slave_volume_skipped": self.slave_volume_skipped,
             "rebuilt_chunks": self.rebuilt_chunks,
             "failed_rebuild": self.failed_rebuild,
+            "empty_db": self.empty_db,
         }
 
     def _reset_filter_stats(self):
-        self.successes = 0
-        self.errors = 0
+        """Reset counters"""
         self.created_symlinks = 0
+        self.empty_db = 0
+        self.errors = 0
         self.failed_post = 0
-        self.slave_volume_skipped = 0
-        self.rebuilt_chunks = 0
         self.failed_rebuild = 0
+        self.rebuilt_chunks = 0
+        self.slave_volume_skipped = 0
+        self.successes = 0
 
 
 def filter_factory(global_conf, **local_conf):
