@@ -39,6 +39,7 @@ class Filter(object):
         self.app_env = app.app_env
         self.conf = conf
         self.logger = logger or self.app_env.get("logger") or get_logger(conf)
+        self.stop_requested = self.app_env.get("stop_requested")
         self.init()
 
     def init(self):

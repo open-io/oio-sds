@@ -387,6 +387,7 @@ class PipelineWorker(CrawlerWorker):
         self.app_env["volume_id"] = self.volume_id
         self.app_env["watchdog"] = watchdog
         self.app_env["working_dir"] = self.working_dir
+        self.app_env["stop_requested"] = self._stop_requested
         # Loading pipeline
         self.pipeline = LOAD_PIPELINES[self.__class__.SERVICE_TYPE](
             self.conf.get("conf_file"), global_conf=self.conf, app=self

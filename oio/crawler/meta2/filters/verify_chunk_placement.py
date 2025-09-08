@@ -464,6 +464,9 @@ class VerifyChunkPlacement(Meta2Filter):
         chunks = []
         try:
             for chunk in chunks_data:
+                if self.stop_requested.is_set():
+                    # If worker has been stopped
+                    break
                 chunks.append(chunk)
                 # New object
                 if content_id is None:
@@ -483,8 +486,10 @@ class VerifyChunkPlacement(Meta2Filter):
         except StopIteration:
             pass
         finally:  # The last object will be handled by the call below
-            obj_chunks = chunks
-            self._tag_misplaced_chunks(account, container, obj_chunks)
+            if not self.stop_requested.is_set():
+                # If worker has not been stopped
+                obj_chunks = chunks
+                self._tag_misplaced_chunks(account, container, obj_chunks)
 
     def _tag_misplaced_chunks(self, account, container, obj_chunks):
         """Add non optimal placement tag to misplaced chunks

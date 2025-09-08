@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,7 @@ import os
 import random
 import sqlite3
 import time
+from multiprocessing import Event
 from os.path import exists, isfile, islink, join
 from urllib.parse import urlparse
 
@@ -74,6 +75,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
             self.conf, logger=self.logger, pool_manager=self.api.container.pool_manager
         )
         self.app_env["watchdog"] = get_watchdog(called_from_main_application=True)
+        self.app_env["stop_requested"] = Event()
         self.app = App(self.app_env)
         self.conscience_client = self.api.conscience
         self.content_factory = ContentFactory(
