@@ -403,6 +403,7 @@ user = ${USER}
 volume_list = ${META2_VOLUMES}
 
 wait_random_time_before_starting = True
+use_eventlet = True
 interval = 1200
 one_shot = True
 report_interval = 300
