@@ -2015,18 +2015,22 @@ static void
 _completion_router(gpointer p, struct election_manager_s *M)
 {
 	oio_ext_set_deadline(oio_ext_monotonic_time() + 2 * G_TIME_SPAN_SECOND);
-	oio_ext_set_prefixed_random_reqid("zk-comp-");
 
 	switch (*((enum deferred_action_type_e*)p)) {
 		case DAT_CREATING:
+			oio_ext_set_prefixed_random_reqid("zk-comp-creating-");
 			return deferred_completion_CREATING(p);
 		case DAT_ASKING:
+			oio_ext_set_prefixed_random_reqid("zk-comp-asking-");
 			return deferred_completion_ASKING(p);
 		case DAT_LISTING:
+			oio_ext_set_prefixed_random_reqid("zk-comp-listing-");
 			return deferred_completion_LISTING(p);
 		case DAT_LEAVING:
+			oio_ext_set_prefixed_random_reqid("zk-comp-leaving-");
 			return deferred_completion_LEAVING(p);
 		case DAT_WATCHING:
+			oio_ext_set_prefixed_random_reqid("zk-comp-watching-");
 			return deferred_completion_WATCHING(p);
 		case DAT_LEFT:
 			oio_ext_set_prefixed_random_reqid("zk-watch-");
