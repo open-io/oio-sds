@@ -52,6 +52,9 @@ class VerifyChunkPlacement(Meta2Filter):
         self.failed_post = 0
         self.failed_rebuild = 0
         self.empty_db = 0
+        # Count the number of chunks hosted on rawx
+        # that are unknown to conscience.
+        self.unknown_to_conscience = 0
         # Counter for slaves database
         self.slave_volume_skipped = 0
         self.api = self.app_env["api"]
@@ -81,6 +84,7 @@ class VerifyChunkPlacement(Meta2Filter):
         self.rawx_volume = {}
         timestamp = f"-{int(time.time())}"
         self.suffix = self.NAME + timestamp
+        self.obj_chunks_locations = {}
 
     def _update_srv_data(self):
         """
@@ -135,9 +139,9 @@ class VerifyChunkPlacement(Meta2Filter):
                         data_security,
                         storage_constraints,
                     )
-                except Exception as exc:
+                except Exception:
                     self.logger.exception(
-                        "Failed to fetch policy data of %s: %s.", policy, exc
+                        "Failed to fetch policy data of %s: %s.", policy
                     )
                     continue
             self.last_services_update = now
@@ -281,7 +285,7 @@ class VerifyChunkPlacement(Meta2Filter):
                 )
         return to_rebuild
 
-    def _get_misplaced_chunks(self, obj_data, account, container):
+    def _get_misplaced_chunks(self, obj_data, account, container, container_id):
         """
         Return the misplaced chunks positions among the list of chunks passed in
         the parameters. In addition to that if a chunk needs to be recovered a restore
@@ -294,13 +298,14 @@ class VerifyChunkPlacement(Meta2Filter):
         :type account: str
         :param container: container name
         :type container: str
+        :param container_id: container (cid)
+        :type container_id: str
         :return: list of misplaced chunks position
         :rtype: list
         """
         misplaced_chunks_pos = list()
         counters = {}
-        container_id = cid_from_name(account, container)
-        _, _, content_id, policy, obj_name, _ = obj_data[0]
+        _, _, content_id, policy, obj_name, version = obj_data[0]
         try:
             # Constraint defined for all the chunks object
             fair_location_constraint = self.policy_data[policy][2]
@@ -314,10 +319,15 @@ class VerifyChunkPlacement(Meta2Filter):
                 exc,
             )
             return misplaced_chunks_pos
-        self._rebuild_chunks_if_needed(obj_data, container_id, content_id)
-        for chunk_data in obj_data:
+        # Rebuild only missing position
+        rebuilt_chunks = self._rebuild_chunks_if_needed(
+            obj_data, account, container, container_id, content_id
+        )
+        # Add rebuilt chunks to already listed chunks data
+        for chunk_data in [*rebuilt_chunks, *obj_data]:
             # [(rawx_srv_id, position, content_id, policy, object name, version), ...]
             rawx_srv_id = chunk_data[0]
+            pos = chunk_data[1]
             if rawx_srv_id not in self.rawx_srv_locations:
                 try:
                     # The chunk id may have been registered in old version
@@ -328,9 +338,42 @@ class VerifyChunkPlacement(Meta2Filter):
                         raise ValueError
                     rawx_srv_id = parsed_url.netloc
                 except ValueError:
-                    pass
-            pos = chunk_data[1]
-            # Location of the rawx of the chunk selected
+                    # Chunk id seems not to be an chunk url either.
+                    # The conscience might not know the specified rawx.
+                    # Try to rebuild the chunk elsewhere
+                    try:
+                        self.unknown_to_conscience += 1
+                        self.logger.debug(
+                            "Rawx %s is not known to conscience service. "
+                            "Try to rebuild chunk at position %s, content %s, "
+                            "version %s, container %s, account %s",
+                            rawx_srv_id,
+                            pos,
+                            obj_name,
+                            version,
+                            container,
+                            account,
+                        )
+                        rebuilt_chunks = self._rebuid_chunks(
+                            [pos],
+                            account,
+                            container,
+                            container_id,
+                            content_id,
+                            version,
+                            obj_name,
+                        )
+                        if rebuilt_chunks:
+                            rawx_srv_id = rebuilt_chunks[0][0]
+                    except Exception:
+                        self.logger.exception(
+                            "Unable to rebuild chunk. Host service rawx %s, "
+                            "is unknown to conscience.",
+                            rawx_srv_id,
+                        )
+                        raise
+
+            # Location of the rawx hosting the chunk selected
             location = format_location(self.rawx_srv_locations[rawx_srv_id])
             for depth in range(NB_LOCATION_LEVELS):
                 # Create a counter for each depth
@@ -341,13 +384,19 @@ class VerifyChunkPlacement(Meta2Filter):
                     misplaced_chunks_pos.append((rawx_srv_id, pos))
         return misplaced_chunks_pos
 
-    def _rebuild_chunks_if_needed(self, obj_data, container_id, content_id):
+    def _rebuild_chunks_if_needed(
+        self, obj_data, account, container, container_id, content_id
+    ):
         """
         Rebuild chunk not pushed if needed
 
         :param obj_data: object chunks data
             [(rawx_srv_id, position, content_id, policy, object name, version), ...]
         :type obj_data: list
+        :param account: account name
+        :type account: str
+        :param container: container name
+        :type container: str
         :param container_id: container (cid)
         :type container_id: str
         :param content_id: object id
@@ -355,6 +404,45 @@ class VerifyChunkPlacement(Meta2Filter):
         """
         # Get chunks to rebuild
         chunk_pos_to_rebuild, version, path = self._get_chunk_to_rebuild(obj_data)
+        rebuilt_chunks = self._rebuid_chunks(
+            chunk_pos_to_rebuild,
+            account,
+            container,
+            container_id,
+            content_id,
+            version,
+            path,
+        )
+        return rebuilt_chunks
+
+    def _rebuid_chunks(
+        self,
+        chunk_pos_to_rebuild,
+        account,
+        container,
+        container_id,
+        content_id,
+        version,
+        path,
+    ):
+        """Rebuild chunks
+
+        :param account: account name
+        :type account: str
+        :param container: container name
+        :type container: str
+        :param container_id: container (cid)
+        :type container_id: str
+        :param content_id: content id
+        :type content_id: str
+        :param chunk_pos_to_rebuild: list of chunk position to rebuild
+        :type chunk_pos_to_rebuild: list
+        :param version: content version
+        :type version: str
+        :param path: content name
+        :type path: str
+        """
+        rebuilt_chunks = []
         for position in chunk_pos_to_rebuild:
             try:
                 if self.dry_run_rebuild:
@@ -369,6 +457,19 @@ class VerifyChunkPlacement(Meta2Filter):
                         version=version,
                     )
                     msg = "Chunk of object %s at position %s rebuilt, cid %s."
+                    # Get object location to get the new rawx service id
+                    _, chunks_loc = self.api.object_locate(
+                        account, container, path, version
+                    )
+                    self.obj_chunks_locations[(account, content_id, version)] = (
+                        chunks_loc
+                    )
+                    new_rawx_id = [
+                        urlparse(chunk_loc["url"]).netloc
+                        for chunk_loc in chunks_loc
+                        if chunk_loc["pos"] == position
+                    ][0]
+                    rebuilt_chunks.append((new_rawx_id, position))
 
                 self.rebuilt_chunks += 1
                 self.logger.debug(
@@ -378,15 +479,15 @@ class VerifyChunkPlacement(Meta2Filter):
                     container_id,
                 )
 
-            except Exception as exc:
+            except Exception:
                 self.logger.exception(
-                    "Rebuild chunk of object %s at position %s has failed, cid %s: %s.",
+                    "Rebuild chunk of object %s at position %s has failed, cid %s.",
                     path,
                     position,
                     container_id,
-                    exc,
                 )
                 self.failed_rebuild += 1
+        return rebuilt_chunks
 
     def _find_misplaced_chunks(self, chunks, account, container):
         """
@@ -404,17 +505,30 @@ class VerifyChunkPlacement(Meta2Filter):
             return
         # Update the rawx service data if needed
         self._update_srv_data()
+        container_id = cid_from_name(account, container)
         # Fetch misplaced chunks among the list of chunks belonging to the same object
-        misplaced_chunks_pos = self._get_misplaced_chunks(chunks, account, container)
+        misplaced_chunks_pos = self._get_misplaced_chunks(
+            chunks, account, container, container_id
+        )
+        chunk_urls = {}
         for index, pos in enumerate(misplaced_chunks_pos):
             if index == 0:
                 # We only need to do this one time
-                _, _, _, _, obj_name, version = chunks[0]
+                _, _, content_id, _, obj_name, version = chunks[0]
                 try:
-                    # Get object location to fetch the chunks url
-                    _, chunks_loc = self.api.object_locate(
-                        account, container, obj_name, version
-                    )
+                    if (
+                        container_id,
+                        content_id,
+                        version,
+                    ) not in self.obj_chunks_locations:
+                        # Get object location to fetch the chunks url
+                        _, chunks_loc = self.api.object_locate(
+                            account, container, obj_name, version
+                        )
+                    else:
+                        chunks_loc = self.obj_chunks_locations[
+                            (container_id, content_id, version)
+                        ]
                     chunk_urls = {
                         (
                             urlparse(chunk_loc["url"]).netloc,
@@ -422,6 +536,8 @@ class VerifyChunkPlacement(Meta2Filter):
                         ): chunk_loc["url"]
                         for chunk_loc in chunks_loc
                     }
+                    # Reset potential stored object chunks locations
+                    self.obj_chunks_locations = {}
                 except (NoSuchObject, NotFound):
                     self.logger.warning(
                         "Object %s not found account %s, container %s.",
@@ -430,7 +546,6 @@ class VerifyChunkPlacement(Meta2Filter):
                         container,
                     )
                     raise
-
             url = chunk_urls[pos]
             self.logger.debug(
                 "Chunk %s of object %s at position %s identified as misplaced,"
@@ -516,17 +631,17 @@ class VerifyChunkPlacement(Meta2Filter):
             self.created_symlinks += created_symlinks
             self.failed_post += failed_post
 
-        except Exception as exc:
+        except Exception:
             if obj_chunks:
                 obj_name = obj_chunks[0][-2]
                 self.logger.exception(
                     "Tag misplaced chunks of the object %s failed,"
-                    " container %s, account %s: %s.",
+                    " container %s, account %s.",
                     obj_name,
                     container,
                     account,
-                    exc,
                 )
+            raise
 
     def _get_all_chunks(self, meta2db_cur):
         """
@@ -574,8 +689,8 @@ class VerifyChunkPlacement(Meta2Filter):
                 finally:
                     # Close the cursor of the meta2 database local copy
                     cursor.close()
-        except Exception as exc:
-            self.logger.exception("Error while analysing meta2db %s: %s.", db_path, exc)
+        except Exception:
+            self.logger.exception("Error while analysing meta2db %s.", db_path)
             raise
 
     def _copy_meta2_db(self, meta2db):
@@ -599,10 +714,9 @@ class VerifyChunkPlacement(Meta2Filter):
             return True, None
         except Exception as exc:
             self.logger.exception(
-                "Failed to make meta2 local copy cid = %s, meta2db path %s: %s",
+                "Failed to make meta2 local copy cid = %s, meta2db path %s.",
                 meta2db.cid,
                 meta2db.env["path"],
-                exc,
             )
             return False, exc
 
@@ -672,9 +786,8 @@ class VerifyChunkPlacement(Meta2Filter):
 
         except Exception as exc:
             self.logger.exception(
-                "Failed to verify misplaced chunks referenced in %s: %s",
+                "Failed to verify misplaced chunks referenced in %s.",
                 meta2db.env["path"],
-                exc,
             )
             self.errors += 1
             resp = Meta2DBError(
@@ -694,6 +807,7 @@ class VerifyChunkPlacement(Meta2Filter):
             "rebuilt_chunks": self.rebuilt_chunks,
             "failed_rebuild": self.failed_rebuild,
             "empty_db": self.empty_db,
+            "unknown_to_conscience": self.unknown_to_conscience,
         }
 
     def _reset_filter_stats(self):
@@ -706,6 +820,7 @@ class VerifyChunkPlacement(Meta2Filter):
         self.rebuilt_chunks = 0
         self.slave_volume_skipped = 0
         self.successes = 0
+        self.unknown_to_conscience = 0
 
 
 def filter_factory(global_conf, **local_conf):

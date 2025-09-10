@@ -19,7 +19,7 @@ import sqlite3
 import time
 from multiprocessing import Event
 from os.path import exists, isfile, islink, join
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 from oio.common.constants import CHUNK_HEADERS, M2_PROP_OBJECTS
 from oio.common.green import get_watchdog
@@ -103,7 +103,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
         Call back function used only on these tests
         """
         print(
-            "Verify chunks placement into meta2 db failed due to error %s, %s",
+            "Verify chunks placement registered into meta2db failed due to error ",
             status,
             msg,
         )
@@ -554,7 +554,7 @@ class TestVerifyChunkPlacement(BaseTestCase):
         )
         # self._remove_symlinks(chunks, chunks_to_remove[0])
         self.assertEqual(len(chunks_loc), len(chunks) - 1)
-        # # Get the meta2 db
+        # Get the meta2 db
         meta2db_env = self._get_meta2db_env(cname)
         self.app.app_env["volume_id"] = meta2db_env["volume_id"]
         # Initialize the meta2 crawler filter to test
@@ -574,6 +574,93 @@ class TestVerifyChunkPlacement(BaseTestCase):
             # Sometime we get a service busy exception
             self.assertEqual(verifychunkplacement.failed_rebuild, 1)
             self.assertEqual(len(chunks_loc), len(chunks) - 1)
+        self.assertTrue(isfile(meta2db_env["path"]))
+        self.assertFalse(
+            isfile(meta2db_env["path"] + "." + verifychunkplacement.suffix)
+        )
+
+    def test_rebuild_chunk_from_unknown_rawx_service(self):
+        """
+        Test if a chunk from rawx unknown to conscience service
+        is rebuilt by the crawler
+        """
+        if self.nb_rawx < 9:
+            self.skipTest("need at least 9 rawx to run")
+        # Create container
+        cname = self._create_container()
+        # Create the object to test with
+        object_name = "m_chunk-" + random_str(8)
+        data = random_str(1024 * 1024 * 4)
+        chunks, _, _, obj_meta = self.api.object_create_ext(
+            account=self.account,
+            container=cname,
+            obj_name=object_name,
+            data=data,
+            policy="JUSTENOUGH",
+        )
+        self.wait_for_kafka_event(
+            reqid=self.reqid,
+            timeout=5.0,
+            types=(EventTypes.CHUNK_NEW,),
+        )
+
+        # Select chunk to alter in meta2 and remove it from the rawx
+        chunks_to_replace = chunks[0]
+        url = chunks_to_replace["url"]
+        pos = chunks_to_replace["pos"]
+        old = {
+            "type": "chunk",
+            "id": url,
+            "hash": chunks_to_replace["hash"],
+            "size": chunks_to_replace["size"],
+            "pos": pos,
+            "content": obj_meta["id"],
+        }
+        new = old.copy()
+        parsed_url = urlparse(url)
+        new["id"] = urlunparse(parsed_url._replace(netloc="rawx-555555"))
+        self.api.container.container_raw_update(
+            old=[old],
+            new=[new],
+            account=self.account,
+            reference=cname,
+        )
+        # Remove chunk on the rawx in case the original rawx is selected again
+        self.api.blob_client.chunk_delete(url)
+        _, chunks_locs = self.api.object_locate(
+            self.account,
+            cname,
+            object_name,
+            obj_meta["version"],
+        )
+        new_chunk_loc = [
+            urlparse(chunk_loc["url"]).hostname
+            for chunk_loc in chunks_locs
+            if chunk_loc["pos"] == pos
+        ][0]
+        self.assertEqual(new_chunk_loc, "rawx-555555")
+        # Get the meta2 db
+        meta2db_env = self._get_meta2db_env(cname)
+        self.app.app_env["volume_id"] = meta2db_env["volume_id"]
+        # Initialize the meta2 crawler filter to test
+        verifychunkplacement = VerifyChunkPlacement(app=self.app, conf=self.conf)
+        verifychunkplacement.process(meta2db_env, self.func_cb)
+        self.assertEqual(verifychunkplacement.successes, 1)
+        _, chunks_loc = self.api.object_locate(
+            self.account,
+            cname,
+            object_name,
+            obj_meta["version"],
+        )
+        if verifychunkplacement.rebuilt_chunks > 0:
+            self.assertEqual(verifychunkplacement.rebuilt_chunks, 1)
+            self.assertEqual(verifychunkplacement.unknown_to_conscience, 1)
+            self.assertEqual(len(chunks_loc), len(chunks))
+        else:
+            # Sometime we get a service busy exception
+            self.assertEqual(verifychunkplacement.failed_rebuild, 1)
+            self.assertEqual(verifychunkplacement.unknown_to_conscience, 1)
+            self.assertEqual(len(chunks_loc), len(chunks))
         self.assertTrue(isfile(meta2db_env["path"]))
         self.assertFalse(
             isfile(meta2db_env["path"] + "." + verifychunkplacement.suffix)
