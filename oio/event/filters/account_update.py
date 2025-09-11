@@ -28,6 +28,7 @@ from oio.common.exceptions import (
     Forbidden,
     OioException,
     OioTimeout,
+    ServiceBusy,
 )
 from oio.common.kafka import get_retry_delay
 from oio.common.utils import request_id
@@ -227,6 +228,12 @@ class AccountUpdateFilter(Filter):
                         f"Invalid request (type{event.event_type}, job_id="
                         f"{event.job_id}, reqid={headers[REQID_HEADER]}): {exc}"
                     )(env, cb)
+            elif isinstance(exc, ServiceBusy):
+                msg = f"account update failure: {exc}"
+                resp = RetryableEventError(
+                    event=Event(env), body=msg, delay=self.retry_delay
+                )
+                return resp(env, cb)
             else:
                 msg = f"account update failure: {exc}"
                 resp = EventError(event=Event(env), body=msg)
