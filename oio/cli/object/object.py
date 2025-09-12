@@ -690,6 +690,12 @@ class ListObject(ContainerCommandMixin, Lister):
             help="List chunks with objects (only readable with json format)",
             action="store_true",
         )
+        parser.add_argument(
+            "--mpu-marker-only",
+            default=False,
+            help="List mpu marker only",
+            action="store_true",
+        )
         return parser
 
     def _autocontainer_loop(
@@ -787,6 +793,8 @@ class ListObject(ContainerCommandMixin, Lister):
             kwargs["request_attempts"] = parsed_args.attempts
         if parsed_args.chunks:
             kwargs["chunks"] = True
+        if parsed_args.mpu_marker_only:
+            kwargs["mpu_marker_only"] = True
 
         account = self.app.client_manager.account
         if parsed_args.auto:
