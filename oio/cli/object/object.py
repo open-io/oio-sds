@@ -696,6 +696,11 @@ class ListObject(ContainerCommandMixin, Lister):
             help="List mpu marker only",
             action="store_true",
         )
+        parser.add_argument(
+            "--object-version",
+            type=str,
+            help="List all objects with this specific version",
+        )
         return parser
 
     def _autocontainer_loop(
@@ -777,6 +782,8 @@ class ListObject(ContainerCommandMixin, Lister):
             kwargs["marker"] = parsed_args.marker
         if parsed_args.end_marker:
             kwargs["end_marker"] = parsed_args.end_marker
+        if parsed_args.object_version:
+            kwargs["version"] = parsed_args.object_version
         if parsed_args.delimiter:
             kwargs["delimiter"] = parsed_args.delimiter
         if parsed_args.limit:

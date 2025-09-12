@@ -2587,6 +2587,7 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	if (oio_str_parse_bool(OPT("mpu_marker_only"), FALSE)){
 		list_in.flag_mpu_marker_only = 1;
 	}
+	list_in.version = OPT("version");
 	if (OPT("deleted")){
 		list_in.flag_nodeleted = 0;
 	}

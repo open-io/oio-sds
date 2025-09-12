@@ -453,6 +453,7 @@ _pack_list_params(MESSAGE msg, struct list_params_s *p)
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER, p->marker_start);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_VERSIONMARKER, p->version_marker);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_MARKER_END, p->marker_end);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_VERSION, p->version);
 	if (p->maxkeys > 0)
 		metautils_message_add_field_strint64(msg, NAME_MSGKEY_MAX_KEYS, p->maxkeys);
 }

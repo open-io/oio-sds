@@ -246,9 +246,9 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		lp->maxkeys = meta2_batch_maxlen;
 
 	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s delimiter:%s marker:%s "
-			"mpu_marker_only:%d version_marker:%s end:%s max:%"G_GINT64_FORMAT,
+			"version:%s mpu_marker_only:%d version_marker:%s end:%s max:%"G_GINT64_FORMAT,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
-			lp->prefix, lp->delimiter, lp->marker_start,
+			lp->prefix, lp->delimiter, lp->marker_start, lp->version,
 			lp->flag_mpu_marker_only,
 			lp->version_marker, lp->marker_end, lp->maxkeys);
 
@@ -421,20 +421,23 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 		lp->version_marker = NULL;
 	}
 	lp->marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
+	lp->version = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_VERSION);
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
 		lp->maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
 	gchar *marker_start = string_to_ltsv_value(lp->marker_start);
 	gchar *marker_end = string_to_ltsv_value(lp->marker_end);
+	gchar *version = string_to_ltsv_value(lp->version);
 	gchar *prefix = string_to_ltsv_value(lp->prefix);
 	gchar *delimiter = string_to_ltsv_value(lp->delimiter);
 	reply->subject("max:%"G_GINT64_FORMAT"\tmarker:%s\tversion_marker:%s\t"
-			"end:%s\tprefix:%s\tdelimiter:%s", lp->maxkeys, marker_start,
-			lp->version_marker, marker_end, prefix, delimiter);
+			"end:%s\tprefix:%s\tdelimiter:%s\tversion:%s", lp->maxkeys, marker_start,
+			lp->version_marker, marker_end, prefix, delimiter, version);
 	g_free(marker_start);
 	g_free(marker_end);
 	g_free(prefix);
 	g_free(delimiter);
+	g_free(version);
 }
 
 int

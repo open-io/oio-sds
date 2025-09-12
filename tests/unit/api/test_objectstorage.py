@@ -140,6 +140,7 @@ class ObjectStorageTest(unittest.TestCase):
         limit = random.randint(1, 1000)
         name0 = random_str(32)
         name1 = random_str(32)
+        version = random_str(32)
         resp_body = {"objects": [{"name": name0}, {"name": name1}]}
         resp = FakeApiResponse()
         resp.headers = {}
@@ -152,6 +153,7 @@ class ObjectStorageTest(unittest.TestCase):
             prefix=prefix,
             delimiter=delimiter,
             end_marker=end_marker,
+            version=version,
             **self.common_kwargs,
         )
         uri = "%s/container/list" % self.uri_base
@@ -165,6 +167,7 @@ class ObjectStorageTest(unittest.TestCase):
             "end_marker": end_marker,
             "properties": False,
             "chunks": False,
+            "version": version,
         }
         api.container._direct_request.assert_called_once_with(
             "GET", uri, params=params, autocreate=True, path=ANY, **self.common_kwargs

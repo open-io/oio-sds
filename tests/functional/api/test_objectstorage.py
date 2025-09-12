@@ -3514,6 +3514,28 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertIn("truncated", res)
         self.assertListEqual(objects[:1], [x["name"] for x in res["objects"]])
 
+    def test_object_list_version(self):
+        objects = ["a", "c"]
+        self._upload_empty(*objects, version="123")
+        self._upload_empty(*["b"], version="1234")
+        res = self.api.object_list(self.account, self.cname, version="123")
+        self.assertIn("objects", res)
+        self.assertIn("prefixes", res)
+        self.assertIn("truncated", res)
+        self.assertListEqual(objects, [x["name"] for x in res["objects"]])
+        # with prefix too
+        res = self.api.object_list(self.account, self.cname, prefix="a", version="123")
+        self.assertIn("objects", res)
+        self.assertIn("prefixes", res)
+        self.assertIn("truncated", res)
+        # without match
+        self.assertListEqual(objects[:1], [x["name"] for x in res["objects"]])
+        res = self.api.object_list(self.account, self.cname, version="12345")
+        self.assertIn("objects", res)
+        self.assertIn("prefixes", res)
+        self.assertIn("truncated", res)
+        self.assertListEqual([], res["objects"])
+
     def test_object_list_limit(self):
         objects = ["a", "b", "c"]
         self._upload_empty(*objects)

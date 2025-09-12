@@ -705,6 +705,7 @@ class ContainerClient(ProxyClient):
         params=None,
         chunks=False,
         mpu_marker_only=False,
+        version=None,
         **kwargs,
     ):
         """
@@ -721,6 +722,7 @@ class ContainerClient(ProxyClient):
             "delimiter": delimiter,
             "properties": properties,
             "chunks": chunks,
+            "version": version,
         }
         params.update(p_up)
         # As of 4.0.0.a3, to make it false, the 'all' parameter must be absent

@@ -1099,6 +1099,13 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 		lazy_and();
 		g_string_append_static (clause, " SUBSTR(alias, -10, 10) NOT LIKE '%_/_%'");
 	}
+
+	if (lp->version) {
+		lazy_and();
+		g_string_append_static (clause, " version == ?");
+		g_ptr_array_add (params, g_variant_new_string (lp->version));
+	}
+
 	if (headers) {
 		lazy_and();
 		if (headers->next) {

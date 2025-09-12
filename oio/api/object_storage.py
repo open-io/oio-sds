@@ -1350,6 +1350,7 @@ class ObjectStorageApi(object):
         deleted=False,
         chunks=False,
         mpu_marker_only=False,
+        version=None,
         **kwargs,
     ):
         """
@@ -1360,6 +1361,7 @@ class ObjectStorageApi(object):
         :param deleted: if True, list also the deleted objects
         :param chunks: if True, list all chunks of objects
         :param mpu_marker_only: if True, list mpu marker only
+        :param mpu_marker_only: if True, return objects only with this version
 
         :returns: a dict which contains
            * 'objects': the `list` of object descriptions
@@ -1384,6 +1386,7 @@ class ObjectStorageApi(object):
             deleted=deleted,
             chunks=chunks,
             mpu_marker_only=mpu_marker_only,
+            version=version,
             **kwargs,
         )
 
@@ -1418,6 +1421,7 @@ class ObjectStorageApi(object):
                         prefix=obj["name"],
                         limit=1,
                         deleted=True,
+                        version=version,
                         **kwargs,
                     )
                     if (
