@@ -2297,6 +2297,7 @@ class ObjectStorageApi(object):
             "content": content,
         }
 
+    @ensure_request_id
     def object_head(self, account, container, obj, trust_level=0, **kwargs):
         """
         Check for the presence of an object in a container.
@@ -2315,7 +2316,7 @@ class ObjectStorageApi(object):
             elif trust_level == 2:
                 _, chunks = self.object_locate(account, container, obj, **kwargs)
                 for chunk in chunks:
-                    self.blob_client.chunk_head(chunk["url"])
+                    self.blob_client.chunk_head(chunk["url"], reqid=kwargs["reqid"])
             else:
                 raise ValueError("`trust_level` must be between 0 and 2")
         except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
