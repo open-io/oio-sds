@@ -2129,6 +2129,39 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._upload_empty(cname, path)
         self.assertTrue(self.api.object_head(self.account, cname, path))
 
+    def test_object_head_trust_level_1(self):
+        cname = "object-head-" + random_str(6)
+        path = random_str(1023)
+
+        # object doesn't exist
+        self.assertFalse(self.api.object_head(self.account, cname, path, trust_level=1))
+
+        # object exists
+        obj_meta = self._upload_empty(cname, path)[0]
+        storage_method = STORAGE_METHODS.load(obj_meta["chunk_method"])
+        self.assertTrue(self.api.object_head(self.account, cname, path, trust_level=1))
+
+        # One chunk missing
+        if storage_method.expected_chunks > 1:  # exclude mode "SINGLE"
+            with patch(
+                "oio.blob.client.BlobClient.chunk_head",
+                side_effect=[exc.NotFound] + [True] * 20,
+            ):
+                # Object misses one chunk, but is readable
+                self.assertTrue(
+                    self.api.object_head(self.account, cname, path, trust_level=1)
+                )
+
+        # Several chunks missing
+        with patch(
+            "oio.blob.client.BlobClient.chunk_head",
+            side_effect=[exc.NotFound] * 5 + [True] * 20,
+        ):
+            # Object misses one chunk, but is readable
+            self.assertFalse(
+                self.api.object_head(self.account, cname, path, trust_level=1)
+            )
+
     def test_object_head_trust_level_2(self):
         cname = "object-head-" + random_str(6)
         path = random_str(1023)
@@ -2854,7 +2887,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             change_policy=True,
         )
 
-    def test_change_policy_with_unknow_version(self):
+    def test_change_policy_with_unknown_version(self):
         name = "change-policy-" + random_str(6)
         self._create(name)
 
@@ -2871,7 +2904,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             change_policy=True,
         )
 
-    def test_change_policy_with_unknow_object(self):
+    def test_change_policy_with_unknown_object(self):
         name = "change-policy-" + random_str(6)
         self._create(name)
 
@@ -2887,7 +2920,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             change_policy=True,
         )
 
-    def test_change_policy_with_unknow_container(self):
+    def test_change_policy_with_unknown_container(self):
         name = "change-policy-" + random_str(6)
 
         self.assertRaises(

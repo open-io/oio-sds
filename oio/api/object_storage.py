@@ -2315,12 +2315,23 @@ class ObjectStorageApi(object):
         try:
             if trust_level == 0:
                 self.object_get_properties(account, container, obj, **kwargs)
-            elif trust_level == 1:
-                raise NotImplementedError()
-            elif trust_level == 2:
-                _, chunks = self.object_locate(account, container, obj, **kwargs)
+            elif trust_level in (1, 2):
+                obj_meta, chunks = self.object_locate(account, container, obj, **kwargs)
+                storage_method = STORAGE_METHODS.load(obj_meta["chunk_method"])
+                available = 0
                 for chunk in chunks:
-                    self.blob_client.chunk_head(chunk["url"], reqid=kwargs["reqid"])
+                    try:
+                        self.blob_client.chunk_head(chunk["url"], reqid=kwargs["reqid"])
+                        available += 1
+                    except Exception as err:
+                        self.logger.warning(
+                            "Chunk %s not available: %s",
+                            chunk["url"],
+                            err,
+                        )
+                if trust_level == 2 and available < len(chunks):
+                    return False
+                return available >= storage_method.min_chunks_to_read
             else:
                 raise ValueError("`trust_level` must be between 0 and 2")
         except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
