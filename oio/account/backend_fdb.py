@@ -2455,14 +2455,14 @@ class AccountBackendFdb(object):
 
         # Filter the special accounts hosting bucket shards.
         root_container = cname
+        is_container_shard = False
         if account_id.startswith(SHARDING_ACCOUNT_PREFIX):
+            is_container_shard = True
             account_id = account_id[len(SHARDING_ACCOUNT_PREFIX) :]
-            root_container = cname.rsplit("-", 3)[0]
+            root_container, _, shard_time_stamp, _ = cname.rsplit("-", 3)
+            shard_time_stamp = self._get_timestamp(shard_time_stamp)
 
         bucket_space = self.bucket_space[account_id][bname]
-
-        bucket_stats = {}
-
         current_region = tr[bucket_space.pack((REGION_FIELD,))]
         if not current_region.present():  # Bucket doesn't exist
             if container_is_deleted:
@@ -2480,6 +2480,30 @@ class AccountBackendFdb(object):
                 tr.clear(container_space.pack((BUCKET_FIELD,)))
             return
         else:  # Bucket exists
+            if is_container_shard:
+                # Update bucket stats only if the bucket existed before the shard
+                # container. If the shard container is much older, it may be a
+                # ghost container, and the stats should remain unchanged.
+                # This only occurs when deleting a ghost shard container left
+                # behind after the original bucket was deleted and then recreated.
+                bucket_ctime = tr[bucket_space.pack((CTIME_FIELD,))]
+                if bucket_ctime.present():
+                    bucket_ctime_value = self._unmarshal_field_value(
+                        CTIME_FIELD, bucket_ctime.value
+                    )
+                    if bucket_ctime_value > shard_time_stamp:
+                        self.logger.debug(
+                            "Skip bucket stats update after ghost shard "
+                            "container deletion: account: %s, bucket: %s, "
+                            "container: %s",
+                            account_id,
+                            root_container,
+                            cname,
+                        )
+                        return
+            # TODO(FIR): we need to do the same check for container not sharded.
+            # In case of ghost container with the same name as the new bucket.
+            # the bucket stats could be inaccurate (old bucket stats +/- new stats)
             # Check that the region has not changed
             current_region = current_region.decode("utf-8")
             if current_region != region:
@@ -2501,6 +2525,7 @@ class AccountBackendFdb(object):
                 self._increment(tr, bucket_space.pack((CONTAINERS_FIELD,)))
 
         # Update bucket stats
+        bucket_stats = {}
         is_segment = root_container.endswith(MULTIUPLOAD_SUFFIX)
         for key in (BYTES_FIELD, OBJECTS_FIELD):
             if is_segment and key == OBJECTS_FIELD:

@@ -37,6 +37,7 @@ from oio.account.backend_fdb import (
 from oio.account.common_fdb import CommonFdb
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.common.timestamp import Timestamp
+from oio.common.utils import cid_from_name
 from tests.utils import BaseTestCase, random_str
 
 fdb.api_version(CommonFdb.FDB_VERSION)
@@ -80,6 +81,16 @@ class TestAccountBackend(BaseTestCase):
         else:
             value = value.encode("utf-8")
         return value
+
+    def _get_shard_name(self, account, bucket_name, index=0, time_delta=1000000):
+        """Build a valid shard name"""
+        cid = cid_from_name(account, bucket_name)
+        # Offset shard container creation with a timedelta to
+        # ensure it occurs after bucket creation
+        shard_name = (
+            f"{bucket_name}-{cid}-{int(time() * 1_000_000) + time_delta}-{index}"
+        )
+        return shard_name
 
     def _items_info_expected_items_info(self, items_info):
         expected_info_info = {}
@@ -1305,12 +1316,12 @@ class TestAccountBackend(BaseTestCase):
                     "region": "REGION_1",
                     "containers": [
                         {
-                            "name": f"{bname}-shard1",
+                            "name": self._get_shard_name(account, bname, index=0),
                             "objects": {"POL_1": 5, "POL_2": 10},
                             "bytes": {"POL_1": 50, "POL_2": 100},
                         },
                         {
-                            "name": f"{bname}-shard2",
+                            "name": self._get_shard_name(account, bname, index=1),
                             "objects": {"POL_1": 6},
                             "bytes": {"POL_1": 60},
                         },
@@ -1396,12 +1407,18 @@ class TestAccountBackend(BaseTestCase):
                     "region": "REGION_2",
                     "containers": [
                         {
-                            "name": "CONTAINER_3-1",
+                            "name": self._get_shard_name(
+                                account_id,
+                                "CONTAINER_3",
+                                index=0,
+                            ),
                             "objects": {"POL_1": 5, "POL_2": 10},
                             "bytes": {"POL_1": 50, "POL_2": 100},
                         },
                         {
-                            "name": "CONTAINER_3-2",
+                            "name": self._get_shard_name(
+                                account_id, "CONTAINER_3", index=1
+                            ),
                             "objects": {"POL_1": 6},
                             "bytes": {"POL_1": 60},
                         },
@@ -1629,12 +1646,16 @@ class TestAccountBackend(BaseTestCase):
                     "region": "REGION_2",
                     "containers": [
                         {
-                            "name": "CONTAINER_3-1",
+                            "name": self._get_shard_name(
+                                account_id, "CONTAINER_3", index=0
+                            ),
                             "objects": {"POL_1": 3, "POL_2": 4},
                             "bytes": {"POL_1": 50, "POL_2": 100},
                         },
                         {
-                            "name": "CONTAINER_3-2",
+                            "name": self._get_shard_name(
+                                account_id, "CONTAINER_3", index=1
+                            ),
                             "objects": {"POL_1": 5},
                             "bytes": {"POL_1": 60},
                         },
@@ -3640,7 +3661,7 @@ class TestAccountBackend(BaseTestCase):
 
         # Third, create a shard
         shards_account_id = ".shards_" + account_id
-        name3 = "bucket-0"
+        name3 = self._get_shard_name(account_id, bucket_name)
         mtime = Timestamp().timestamp
         self.backend.update_container(
             shards_account_id,
@@ -3916,6 +3937,182 @@ class TestAccountBackend(BaseTestCase):
             },
         )
         self._check_backend(*backend_info)
+
+    def test_delete_ghost_shard_container(self):
+        account = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGION_2"
+        # Create account
+        account_ctime = Timestamp().timestamp
+        self.assertEqual(
+            self.backend.create_account(account, ctime=account_ctime), account
+        )
+        backend_info = (
+            {("accounts",): 1},
+            {
+                (account,): {
+                    ("id",): account,
+                    ("bytes",): 0,
+                    ("objects",): 0,
+                    ("containers",): 0,
+                    ("buckets",): 0,
+                }
+            },
+            {},
+            {},
+            {},
+        )
+        self._check_backend(*backend_info)
+        # Create bucket
+        bkt_ctime = Timestamp().timestamp
+        self.assertTrue(
+            self.backend.create_bucket(bucket_name, account, region, ctime=bkt_ctime)
+        )
+        # Create root container of the bucket
+        ctn_mtime = Timestamp().timestamp
+        self.backend.update_container(
+            account,
+            bucket_name,
+            ctn_mtime,
+            0,
+            0,
+            0,
+            bucket_name=bucket_name,
+            region=region,
+        )
+        # Create sharding containers within the bucket
+        shad_0_mtime = Timestamp().timestamp
+        shard_0 = self._get_shard_name(account, bucket_name, index=0, time_delta=0)
+        self.backend.update_container(
+            SHARDING_ACCOUNT_PREFIX + account,
+            shard_0,
+            shad_0_mtime,
+            0,
+            15,
+            150,
+            bucket_name=bucket_name,
+            region=region,
+            objects_details={"POL_1": 5, "POL_2": 10},
+            bytes_details={"POL_1": 50, "POL_2": 100},
+        )
+        shard_1_mtime = Timestamp().timestamp
+        shard_1 = self._get_shard_name(account, bucket_name, index=1, time_delta=0)
+        self.backend.update_container(
+            SHARDING_ACCOUNT_PREFIX + account,
+            shard_1,
+            shard_1_mtime,
+            0,
+            6,
+            60,
+            bucket_name=bucket_name,
+            region=region,
+            objects_details={"POL_1": 6},
+            bytes_details={"POL_1": 60},
+        )
+        expected_bucket_info = {
+            "account": account,
+            "bytes": 210,
+            "containers": 3,
+            "ctime": self.backend._get_timestamp(bkt_ctime),
+            "mtime": self.backend._get_timestamp(shard_1_mtime),
+            "objects": 21,
+            "region": region,
+        }
+        bucket_info = self.backend.get_bucket_info(bucket_name)
+        self.assertDictEqual(expected_bucket_info, bucket_info)
+        # Delete the bucket
+        self.assertTrue(
+            self.backend.delete_bucket(bucket_name, account, region, force=True)
+        )
+        # Delete root container
+        ctn_dtime = Timestamp().timestamp
+        self.backend.update_container(
+            account,
+            bucket_name,
+            0,
+            ctn_dtime,
+            0,
+            0,
+            bucket_name=bucket_name,
+            region=region,
+        )
+        # Check that the two shards were not deleted, they become ghost containers
+        expected_account_info = {
+            "buckets": 0,
+            "regions": {
+                "REGION_2": {
+                    "buckets": 0,
+                    "containers": 0,
+                    "objects-s3": 0,
+                    "bytes-details": {"POL_1": 110, "POL_2": 100},
+                    "objects-details": {"POL_1": 11, "POL_2": 10},
+                    "features-details": {},
+                    "shards": 2,
+                }
+            },
+            "bytes": 210,
+            "containers": 0,
+            "ctime": self.backend._get_timestamp(account_ctime),
+            "id": account,
+            "mtime": self.backend._get_timestamp(ctn_dtime),
+            "objects": 21,
+            "metadata": {"max-buckets": 100},
+            "shards": 2,
+        }
+        account_info = self.backend.info_account(account)
+        self.assertDictEqual(expected_account_info, account_info)
+        # Recreate the bucket
+        bkt_ctime = Timestamp().timestamp
+        self.assertTrue(
+            self.backend.create_bucket(bucket_name, account, region, ctime=bkt_ctime)
+        )
+        ctn_mtime = Timestamp().timestamp
+        self.backend.update_container(
+            account,
+            bucket_name,
+            ctn_mtime,
+            0,
+            0,
+            0,
+            bucket_name=bucket_name,
+            region=region,
+        )
+        expected_bucket_info = {
+            "account": account,
+            "bytes": 0,
+            "containers": 1,
+            "ctime": self.backend._get_timestamp(bkt_ctime),
+            "mtime": self.backend._get_timestamp(ctn_mtime),
+            "objects": 0,
+            "region": region,
+        }
+        bucket_info = self.backend.get_bucket_info(bucket_name)
+        self.assertDictEqual(expected_bucket_info, bucket_info)
+        # Delete ghost shard container
+        dtime = Timestamp().timestamp
+        self.backend.update_container(
+            SHARDING_ACCOUNT_PREFIX + account,
+            shard_0,
+            0,
+            dtime,
+            0,
+            0,
+            bucket_name=bucket_name,
+            region=region,
+        )
+        dtime = Timestamp().timestamp
+        self.backend.update_container(
+            SHARDING_ACCOUNT_PREFIX + account,
+            shard_1,
+            0,
+            dtime,
+            0,
+            0,
+            bucket_name=bucket_name,
+            region=region,
+        )
+        bucket_info = self.backend.get_bucket_info(bucket_name)
+        self.assertDictEqual(expected_bucket_info, bucket_info)
 
     def test_update_container_without_details(self):
         account_id = "test"
