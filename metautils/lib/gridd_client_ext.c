@@ -231,10 +231,21 @@ retry:
 		return NEWERROR(errno, "poll errno=%d %s", errno, strerror(errno));
 	}
 
+	// Sometimes we get both POLLIN|POLLOUT and POLLERR with errno=0.
+	// Internet says we have to read the data first, in that case.
+	// POLLERR may be triggered by an EOF
+	// (socket closed on the remote side, but all data received anyway).
 	if (pfd.revents & POLLERR) {
 		GError *err = socket_get_error(pfd.fd);
-		g_prefix_error(&err, "%s: ", gridd_client_url(client));
-		gridd_client_fail(client, err);
+		if (err->code == 0) {
+			GRID_INFO("Bug? poll() return POLLERR but %s (reqid=%s)",
+					err->message, oio_ext_get_reqid());
+			gridd_client_react(client);
+			g_clear_error(&err);
+		} else {
+			g_prefix_error(&err, "%s: ", gridd_client_url(client));
+			gridd_client_fail(client, err);
+		}
 	} else if (pfd.revents & (POLLIN|POLLOUT)) {
 		gridd_client_react(client);
 	}
