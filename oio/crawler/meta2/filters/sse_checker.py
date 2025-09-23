@@ -125,14 +125,14 @@ class SSEChecker(Meta2Filter):
             )
 
             # Early get bucket secret
-            bucket_key = fetch_bucket_secret(
+            object_key = fetch_bucket_secret(
                 self.api.kms,
                 self.context.root_account,
                 self.context.root_container,
                 secret_id=0,
             )
             last_scan_time = 0
-            self.logger.debug("bucket_key: %s", bucket_key)
+            self.logger.debug("object_key: %s", object_key)
             for obj in objects_gen:
                 try:
                     obj_name = obj.get("name")
@@ -140,7 +140,7 @@ class SSEChecker(Meta2Filter):
                     # Manifest is not encrypted
                     if obj.get("properties", {}).get(SLO):
                         continue
-                    self._check_sse(obj, obj_name, obj_version, bucket_key)
+                    self._check_sse(obj, obj_name, obj_version, object_key)
                     last_scan_time = ratelimit(
                         last_scan_time, self.max_scanned_objects_per_second
                     )
@@ -179,14 +179,13 @@ class SSEChecker(Meta2Filter):
         return self.app(env, cb)
 
     def _check_sse(self, metadata, obj_name, obj_version, object_key):
-        bucket_secret = None
         decrypter = Decrypter(
             root_key=None,
             account=self.context.root_account,
             container=self.context.root_container,
             obj=obj_name,
             metadata=metadata,
-            bucket_secret=bucket_secret,
+            object_key=object_key,
             api=self.api,
         )
         etag_from_metadata = decrypter.get_decrypted_etag(metadata=metadata)

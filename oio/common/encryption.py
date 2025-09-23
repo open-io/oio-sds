@@ -506,6 +506,7 @@ class Decrypter:
         obj=None,
         metadata=None,
         bucket_secret=None,
+        object_key=None,
         api=None,
     ):
         """
@@ -524,6 +525,7 @@ class Decrypter:
         self.crypto = Crypto()
         self.root_key = root_key
         self.bucket_secret = bucket_secret
+        self.object_key = object_key
         self.body_key = None
         self.iv = {}
         self.iv[USER_METADATA_IVS] = {}
@@ -661,7 +663,9 @@ class Decrypter:
         if key_id.get("ssec", False) or key_id.get("sses3", False):
             # The object is encrypted with ssec or sses3
             # If the key is provided, use it. Otherwise, fetch it from account.
-            if self.bucket_secret:
+            if self.object_key:
+                object_key = self.object_key
+            elif self.bucket_secret:
                 object_key = decode_secret(self.bucket_secret)
             else:
                 object_key = fetch_bucket_secret(
