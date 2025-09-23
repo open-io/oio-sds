@@ -225,8 +225,8 @@ _concat_headers(gchar *key, gchar *value, gpointer data)
 
 static void
 _log_matching(struct http_request_s *rq,
-              struct oio_requri_s *ruri UNUSED,
-              struct path_matching_s **matchings UNUSED)
+		struct oio_requri_s *ruri UNUSED,
+		struct path_matching_s **matchings UNUSED)
 {
 	if (!GRID_TRACE2_ENABLED())
 		return;
@@ -840,8 +840,22 @@ _task_reload_srvtypes (gpointer p UNUSED)
 static void
 _task_push (gpointer p UNUSED)
 {
+	GError *err = NULL;
 	struct lru_tree_s *lru = NULL;
 	GSList *tmp = NULL;
+
+	gboolean _learn(gpointer k, gpointer v, gpointer u) {
+		(void) u;
+		struct service_info_s *si = v;
+		struct service_tag_s *tag_first = service_info_get_tag(
+				si->tags, NAME_TAGNAME_FIRST);
+		/* We don't check the value: the tag is set to TRUE internally by the
+		 * current process, and we trash the list afterwards. */
+		if (tag_first) {
+			service_learn(k);
+		}
+		return FALSE;
+	}
 	gboolean _list (gpointer k, gpointer v, gpointer u) {
 		(void) k, (void) u;
 		tmp = g_slist_prepend(tmp, v);
@@ -856,18 +870,21 @@ _task_push (gpointer p UNUSED)
 	} else {
 		CSURL(cs);
 		if (!cs) {
-			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
+			err = SYSERR("Push error: no/invalid conscience for namespace NS");
 		} else {
 			oio_ext_set_prefixed_random_reqid("task-push-srv-");
-			GError *err = conscience_remote_push_services(NULL, cs, tmp,
+			err = conscience_remote_push_services(NULL, cs, tmp,
 					oio_ext_get_deadline());
-			if (err != NULL) {
-				GRID_WARN("Push error: (%d) %s", err->code, err->message);
-				g_clear_error(&err);
-			}
 		}
 	}
 
+	if (err) {
+		GRID_WARN("Push error: (%d) %s", err->code, err->message);
+	} else {
+		lru_tree_foreach(lru, _learn, NULL);
+	}
+
+	g_clear_error(&err);
 	g_slist_free(tmp);
 	lru_tree_destroy(lru);
 }

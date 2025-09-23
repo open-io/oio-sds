@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -519,7 +519,7 @@ _registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 		gchar *k = service_info_key (si);
 
 		if (!service_is_known (k)) {
-			service_learn (k);
+			// We "learn" the service after it is registered successfully
 			service_tag_set_value_boolean (service_info_ensure_tag (
 						si->tags, NAME_TAGNAME_FIRST), TRUE);
 		}
