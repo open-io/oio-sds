@@ -514,9 +514,6 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 		OIO_JSON_append_bool(gstr, "deleted", ALIASES_get_deleted(a));
 		g_string_append_c(gstr, ',');
 		OIO_JSON_append_gba(gstr, "id", ALIASES_get_content(a));
-		// TODO(adu) Remove this when all clients will only use `id`
-		g_string_append_c(gstr, ',');
-		OIO_JSON_append_gba(gstr, "content", ALIASES_get_content(a));
 
 		if (h) {
 			gchar* policy = NULL;

@@ -819,7 +819,7 @@ class ObjectStorageApi(object):
                     dst_container,
                     obj["name"],
                     obj["version"],
-                    obj["content"],
+                    obj["id"],
                 )
                 storage_method = STORAGE_METHODS.load(obj["chunk_method"])
                 chunks_by_pos = _sort_chunks(
@@ -843,7 +843,7 @@ class ObjectStorageApi(object):
                     self._delete_orphan_chunks(ex.chunks_already_uploaded, **kwargs)
                     ex.reraise()
                 t_beans, c_beans = self._prepare_meta2_raw_update(
-                    chunks, chunks_copies, obj["content"]
+                    chunks, chunks_copies, obj["id"]
                 )
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)

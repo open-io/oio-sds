@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -193,7 +193,7 @@ class TestDrainingFilter(BaseTestCase):
                 )
                 if object_["name"] not in out_of_range_objects:
                     for chunk in chunks:
-                        chunk_urls.append((chunk["url"], object_["content"]))
+                        chunk_urls.append((chunk["url"], object_["id"]))
 
         # Process the draining
         if not meta2db_env:

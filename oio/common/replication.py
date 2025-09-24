@@ -288,7 +288,7 @@ def object_to_event(
     event["url"]["user"] = bucket
     event["url"]["id"] = cid_from_name(account, bucket)
     event["url"]["path"] = obj["name"]
-    event["url"]["content"] = obj["content"]
+    event["url"]["content"] = obj["id"]
     event["url"]["version"] = obj["version"]
     event["request_id"] = reqid if reqid else request_id("repli-")
     event["origin"] = origin
@@ -303,7 +303,7 @@ def object_to_event(
             "ctime": obj["ctime"],
             "mtime": obj["mtime"],
             "deleted": obj["deleted"],
-            "header": obj["content"],
+            "header": obj["id"],
         }
     )
     if not obj["deleted"]:  # Not a delete marker
