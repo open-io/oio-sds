@@ -236,7 +236,7 @@ class Changelocation(ChunkSymlinkFilter):
                         created_symlinks,
                         failed_post,
                     ) = self.api.blob_client.tag_misplaced_chunk(
-                        misplaced_chunk_urls, self.logger
+                        misplaced_chunk_urls, self.logger, reqid
                     )
                     self.created_symlinks += created_symlinks
                     self.failed_post += failed_post

@@ -86,7 +86,7 @@ class VerifyChunkPlacement(Meta2Filter):
         self.suffix = self.NAME + timestamp
         self.obj_chunks_locations = {}
 
-    def _update_srv_data(self):
+    def _update_srv_data(self, reqid=None):
         """
         Update attributes gathering rawx service data (constraints, policy,
         location, etc.)
@@ -98,8 +98,6 @@ class VerifyChunkPlacement(Meta2Filter):
             # Caching the services data  to avoid doing the request each time
             # the function is called. The update will be done within an interval
             # of one hour between two calls
-            # Get a request id for verify chunks placement meta2 crawler
-            reqid = request_id("verify-chunk-placement-")
             self.rawx_srv_data = self.conscience_client.all_services(
                 service_type="rawx",
                 reqid=reqid,
@@ -285,7 +283,7 @@ class VerifyChunkPlacement(Meta2Filter):
                 )
         return to_rebuild
 
-    def _get_misplaced_chunks(self, obj_data, account, container, container_id):
+    def _get_misplaced_chunks(self, obj_data, account, container, container_id, reqid):
         """
         Return the misplaced chunks positions among the list of chunks passed in
         the parameters. In addition to that if a chunk needs to be recovered a restore
@@ -298,6 +296,8 @@ class VerifyChunkPlacement(Meta2Filter):
         :type account: str
         :param container: container name
         :type container: str
+        :param reqid: request id
+        :type reqid: str
         :param container_id: container (cid)
         :type container_id: str
         :return: list of misplaced chunks position
@@ -321,7 +321,7 @@ class VerifyChunkPlacement(Meta2Filter):
             return misplaced_chunks_pos
         # Rebuild only missing position
         rebuilt_chunks = self._rebuild_chunks_if_needed(
-            obj_data, account, container, container_id, content_id
+            obj_data, account, container, container_id, content_id, reqid
         )
         # Add rebuilt chunks to already listed chunks data
         for chunk_data in [*rebuilt_chunks, *obj_data]:
@@ -362,6 +362,7 @@ class VerifyChunkPlacement(Meta2Filter):
                             content_id,
                             version,
                             obj_name,
+                            reqid=reqid,
                         )
                         if rebuilt_chunks:
                             rawx_srv_id = rebuilt_chunks[0][0]
@@ -385,7 +386,7 @@ class VerifyChunkPlacement(Meta2Filter):
         return misplaced_chunks_pos
 
     def _rebuild_chunks_if_needed(
-        self, obj_data, account, container, container_id, content_id
+        self, obj_data, account, container, container_id, content_id, reqid=None
     ):
         """
         Rebuild chunk not pushed if needed
@@ -401,6 +402,8 @@ class VerifyChunkPlacement(Meta2Filter):
         :type container_id: str
         :param content_id: object id
         :type content_id: str
+        :param reqid: request id
+        :type reqid: str
         """
         # Get chunks to rebuild
         chunk_pos_to_rebuild, version, path = self._get_chunk_to_rebuild(obj_data)
@@ -412,6 +415,7 @@ class VerifyChunkPlacement(Meta2Filter):
             content_id,
             version,
             path,
+            reqid,
         )
         return rebuilt_chunks
 
@@ -424,6 +428,7 @@ class VerifyChunkPlacement(Meta2Filter):
         content_id,
         version,
         path,
+        reqid,
     ):
         """Rebuild chunks
 
@@ -441,6 +446,8 @@ class VerifyChunkPlacement(Meta2Filter):
         :type version: str
         :param path: content name
         :type path: str
+        :param reqid: request id
+        :type reqid: str
         """
         rebuilt_chunks = []
         for position in chunk_pos_to_rebuild:
@@ -455,6 +462,7 @@ class VerifyChunkPlacement(Meta2Filter):
                         position,
                         path=path,
                         version=version,
+                        reqid=reqid,
                     )
                     msg = "Chunk of object %s at position %s rebuilt, cid %s."
                     # Get object location to get the new rawx service id
@@ -489,7 +497,7 @@ class VerifyChunkPlacement(Meta2Filter):
                 self.failed_rebuild += 1
         return rebuilt_chunks
 
-    def _find_misplaced_chunks(self, chunks, account, container):
+    def _find_misplaced_chunks(self, chunks, account, container, reqid=None):
         """
         Find misplaced chunks among object chunks.
 
@@ -500,15 +508,18 @@ class VerifyChunkPlacement(Meta2Filter):
         :type account: str
         :param container: container name
         :type container: str
+        :param reqid: request id
+        :type reqid: str
         """
         if len(chunks) == 0:
             return
         # Update the rawx service data if needed
-        self._update_srv_data()
+        self._update_srv_data(reqid=reqid)
         container_id = cid_from_name(account, container)
-        # Fetch misplaced chunks among the list of chunks belonging to the same object
+        # Fetch misplaced chunks among the list of chunks
+        # belonging to the same object
         misplaced_chunks_pos = self._get_misplaced_chunks(
-            chunks, account, container, container_id
+            chunks, account, container, container_id, reqid=reqid
         )
         chunk_urls = {}
         for index, pos in enumerate(misplaced_chunks_pos):
@@ -558,7 +569,7 @@ class VerifyChunkPlacement(Meta2Filter):
             )
             yield url
 
-    def _verify_chunks_from_meta2_db(self, account, container, chunks_data):
+    def _verify_chunks_from_meta2_db(self, account, container, chunks_data, reqid=None):
         """
         Parse meta2 database to identify misplaced chunks and tag them as so.
         Chunks will be grouped by content_id
@@ -570,6 +581,8 @@ class VerifyChunkPlacement(Meta2Filter):
         :param chunks_data: iterator on chunks referenced in the meta2 database
                 [(rawx_srv_id, position, content_id, policy, object name, version), ...]
         :type chunks_data: list
+        :param reqid: request id
+        :type reqid: str
         """
         last_scan_time = 0
         content_id = None
@@ -595,7 +608,7 @@ class VerifyChunkPlacement(Meta2Filter):
                 # following object
                 obj_chunks = chunks[:-1]
                 chunks = chunks[-1:]
-                self._tag_misplaced_chunks(account, container, obj_chunks)
+                self._tag_misplaced_chunks(account, container, obj_chunks, reqid)
                 content_id = None
                 last_scan_time = ratelimit(last_scan_time, self.max_scanned_per_second)
         except StopIteration:
@@ -604,9 +617,9 @@ class VerifyChunkPlacement(Meta2Filter):
             if not self.stop_requested.is_set():
                 # If worker has not been stopped
                 obj_chunks = chunks
-                self._tag_misplaced_chunks(account, container, obj_chunks)
+                self._tag_misplaced_chunks(account, container, obj_chunks, reqid)
 
-    def _tag_misplaced_chunks(self, account, container, obj_chunks):
+    def _tag_misplaced_chunks(self, account, container, obj_chunks, reqid=None):
         """Add non optimal placement tag to misplaced chunks
 
         :param account: account name
@@ -615,10 +628,12 @@ class VerifyChunkPlacement(Meta2Filter):
         :type container: str
         :param obj_chunks: list of chunks
         :type obj_chunks: list
+        :param reqid: request id
+        :type reqid: str
         """
         try:
             misplaced_chunk_urls = self._find_misplaced_chunks(
-                chunks=obj_chunks, account=account, container=container
+                chunks=obj_chunks, account=account, container=container, reqid=reqid
             )
             if self.dry_run_checker:
                 # Show the number of symlinks that would be created
@@ -626,7 +641,7 @@ class VerifyChunkPlacement(Meta2Filter):
                 return
 
             created_symlinks, failed_post = self.api.blob_client.tag_misplaced_chunk(
-                misplaced_chunk_urls, self.logger
+                misplaced_chunk_urls, self.logger, reqid
             )
             self.created_symlinks += created_symlinks
             self.failed_post += failed_post
@@ -675,6 +690,8 @@ class VerifyChunkPlacement(Meta2Filter):
         :param container: container name
         :type container: str
         """
+        # Get a request id for verify chunks placement meta2 crawler
+        reqid = request_id("verify-chunk-placement-")
         try:
             # Connection to meta2 database local copy
             with sqlite3.connect(db_path) as connection:
@@ -685,6 +702,7 @@ class VerifyChunkPlacement(Meta2Filter):
                         account=account,
                         container=container,
                         chunks_data=chunks_data,
+                        reqid=reqid,
                     )
                 finally:
                     # Close the cursor of the meta2 database local copy

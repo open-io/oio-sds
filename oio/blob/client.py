@@ -507,7 +507,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         chunk_url = self.resolve_rawx_url(url, headers=headers, **kwargs)
         return self.http_pool.request(method, chunk_url, headers=headers, **kwargs)
 
-    def tag_misplaced_chunk(self, urls, logger=None):
+    def tag_misplaced_chunk(self, urls, logger=None, reqid=None):
         """
         Tag misplaced chunk by adding a header to the chunk
 
@@ -520,10 +520,12 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         failed_post = 0
         if not logger:
             logger = self.logger
+        if not reqid:
+            reqid = utils.request_id("tag-misplaced-chunk-")
         for url in urls:
             try:
                 headers = {CHUNK_HEADERS["non_optimal_placement"]: True}
-                self.chunk_post(url=url, headers=headers)
+                self.chunk_post(url=url, headers=headers, reqid=reqid)
                 created_symlinks += 1
             except exc.Conflict as err:
                 # Misplaced tag already on the chunk
