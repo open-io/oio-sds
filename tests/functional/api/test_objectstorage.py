@@ -2687,9 +2687,9 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
                 fields={"user": name},
                 reqid=reqid,
                 types=(EventTypes.CONTAINER_STATE,),
-                timeout=5.0,
+                timeout=6.0,
             )
-            self.assertIsNotNone(evt)
+            self.assertIsNotNone(evt, "No update received after 6s")
 
         reqid = request_id("chgpol-chg-")
         self.api.object_change_policy(
@@ -3229,7 +3229,10 @@ class TestObjectRestoreDrained(ObjectStorageApiTestBase):
                 timeout=5.0,
             )
 
-            self.assertIsNotNone(evt)
+            self.assertIsNotNone(
+                evt,
+                "Timeout expired before receiving expected event",
+            )
             self.assertEqual(1, sum(data["type"] == "chunks" for data in evt.data))
 
     def _test_restore_drained(self, data_size):

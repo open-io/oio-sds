@@ -129,7 +129,7 @@ broker_endpoint = {endpoint}
             self.pool = None
         self._service("oio-rawx.target", "start", wait=1)
         self._service("oio-event-agent-delete.target", "start", wait=3)
-        self.wait_for_score(("rawx",), score_threshold=5)
+        self.wait_for_score(("rawx",), score_threshold=10)
         super().tearDown()
 
     def create_objects(self, cname, n_obj=10, reqid=None):
@@ -143,6 +143,7 @@ broker_endpoint = {endpoint}
                 data=b"yes",
                 policy="THREECOPIES",
                 reqid=reqid,
+                max_retries=3,
             )
             self.created_objects.append(name)
         for i in range(n_obj * 3):
@@ -248,6 +249,7 @@ broker_endpoint = {endpoint}
         self.assertTrue(errors.empty())
 
     def test_event_agent_delete_producer_oio_protocol(self):
+        """Check that event is delayed when OioProtocolError exceptions occur"""
         rawx_by_host = self.grouped_services(
             "rawx",
             key=lambda s: s["tags"]["tag.loc"].rsplit(".", 1)[0],
@@ -255,7 +257,6 @@ broker_endpoint = {endpoint}
         if len(rawx_by_host) > 1:
             self.skipTest("Disabled in multi-host environment")
 
-        """Check that event is delayed when OioProtocolError exceptions occur"""
         cname = f"event-agent-delete-producer-oio-protocol-{time.time()}"
         create_reqid = request_id("event-agent-create-chunk-")
         delete_reqid = request_id("event-agent-delete-chunk-")
