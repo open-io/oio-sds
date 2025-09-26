@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,6 +40,7 @@ class ClientManager(object):
         # Various API client classes
         self._account_client = None
         self._xcute_client = None
+        self._xcute_customer_client = None
         self._admin_client = None
         self._conscience_client = None
         self._directory_client = None
@@ -112,6 +113,18 @@ class ClientManager(object):
                 self.client_conf, pool_manager=self.pool_manager, logger=self.logger
             )
         return self._xcute_client
+
+    @property
+    def xcute_customer_client(self):
+        if self._xcute_customer_client is None:
+            conf = self.client_conf.copy()
+            conf["xcute_type"] = "customer"
+            from oio.xcute.client import XcuteClient
+
+            self._xcute_customer_client = XcuteClient(
+                conf, pool_manager=self.pool_manager, logger=self.logger
+            )
+        return self._xcute_customer_client
 
     @property
     def admin(self):

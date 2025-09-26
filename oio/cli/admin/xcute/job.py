@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@
 from datetime import datetime
 
 from oio.cli import Lister, ShowOne, flat_dict_from_dict
-from oio.cli.admin.xcute import XcuteCommand
+from oio.cli.admin.xcute import CustomerCommand, XcuteCommand
 from oio.cli.common.utils import KeyValueAction
 from oio.common.utils import depaginate
 from oio.xcute.common.job import XcuteJobStatus
@@ -34,7 +34,7 @@ class JobList(XcuteCommand, Lister):
     def get_parser(self, prog_name):
         from oio.cli.common.utils import ValueFormatStoreTrueAction
 
-        parser = super(JobList, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "--date",
             help="Filter jobs with the specified job date (%%Y-%%m-%%dT%%H:%%M:%%S)",
@@ -177,13 +177,17 @@ class JobList(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
+class CustomerJobList(CustomerCommand, JobList):
+    pass
+
+
 class JobShow(XcuteCommand, ShowOne):
     """
     Get all information about the job.
     """
 
     def get_parser(self, prog_name):
-        parser = super(JobShow, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument("job_id", metavar="<job_id>", help="ID of the job to show")
         parser.add_argument(
             "--raw", action="store_true", help="Display raw information"
@@ -239,6 +243,10 @@ class JobShow(XcuteCommand, ShowOne):
         return zip(*sorted(flat_dict_from_dict(parsed_args, job_info).items()))
 
 
+class CustomerJobShow(CustomerCommand, JobShow):
+    pass
+
+
 class JobPause(XcuteCommand, Lister):
     """
     Pause the jobs.
@@ -247,7 +255,7 @@ class JobPause(XcuteCommand, Lister):
     columns = ("ID", "Paused")
 
     def get_parser(self, prog_name):
-        parser = super(JobPause, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "job_ids", nargs="+", metavar="<job_id>", help="IDs of the job to pause"
         )
@@ -269,6 +277,10 @@ class JobPause(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
+class CustomerJobPause(CustomerCommand, JobPause):
+    pass
+
+
 class JobResume(XcuteCommand, Lister):
     """
     Resume the jobs.
@@ -277,7 +289,7 @@ class JobResume(XcuteCommand, Lister):
     columns = ("ID", "Resumed")
 
     def get_parser(self, prog_name):
-        parser = super(JobResume, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "job_ids",
             nargs="+",
@@ -302,13 +314,17 @@ class JobResume(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
+class CustomerJobResume(CustomerCommand, JobResume):
+    pass
+
+
 class JobUpdate(XcuteCommand, ShowOne):
     """
     Update job configuration.
     """
 
     def get_parser(self, prog_name):
-        parser = super(JobUpdate, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "job_id", metavar="<job_id>", help="ID of the job to update."
         )
@@ -343,6 +359,10 @@ class JobUpdate(XcuteCommand, ShowOne):
         return zip(*sorted(flat_dict_from_dict(parsed_args, new_job_config).items()))
 
 
+class CustomerJobUpdate(CustomerCommand, JobUpdate):
+    pass
+
+
 class JobAbort(XcuteCommand, Lister):
     """
     Abort the jobs.
@@ -351,7 +371,7 @@ class JobAbort(XcuteCommand, Lister):
     columns = ("ID", "Aborted")
 
     def get_parser(self, prog_name):
-        parser = super(JobAbort, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "job_ids",
             nargs="+",
@@ -376,6 +396,10 @@ class JobAbort(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
+class CustomerJobAbort(CustomerCommand, JobAbort):
+    pass
+
+
 class JobDelete(XcuteCommand, Lister):
     """
     Delete all information about the jobs.
@@ -384,7 +408,7 @@ class JobDelete(XcuteCommand, Lister):
     columns = ("ID", "Deleted")
 
     def get_parser(self, prog_name):
-        parser = super(JobDelete, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "job_ids", nargs="+", metavar="<job_id>", help="IDs of the job to delete"
         )
@@ -404,3 +428,7 @@ class JobDelete(XcuteCommand, Lister):
         self.logger.debug("take_action(%s)", parsed_args)
 
         return self.columns, self._take_action(parsed_args)
+
+
+class CustomerJobDelete(CustomerCommand, JobDelete):
+    pass

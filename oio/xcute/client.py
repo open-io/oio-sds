@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,8 +21,11 @@ class XcuteClient(ServiceClient):
     """Simple client API for the xcute service."""
 
     def __init__(self, conf, **kwargs):
+        xcute_type = conf.get("xcute_type")
+        request_prefix = f"v1.0/xcute-{xcute_type}" if xcute_type else "v1.0/xcute"
+        service_type = f"xcute-{xcute_type}" if xcute_type else "xcute"
         super(XcuteClient, self).__init__(
-            "xcute", conf, request_prefix="v1.0/xcute", **kwargs
+            service_type, conf, request_prefix=request_prefix, **kwargs
         )
 
     def xcute_request(self, job_id, *args, **kwargs):

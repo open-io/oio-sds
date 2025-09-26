@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,14 +17,25 @@
 from oio.cli import ShowOne, flat_dict_from_dict
 
 
-class XcuteCommand(object):
+class XcuteCommand:
     @property
     def logger(self):
         return self.app.client_manager.logger
 
     @property
     def xcute(self):
+        xcute_type = getattr(self, "xcute_type", None)
+        if xcute_type == "customer":
+            return self.app.client_manager.xcute_customer_client
         return self.app.client_manager.xcute_client
+
+
+class CustomerCommand:
+    """Extend an XcuteCommand to make it a customer-related command."""
+
+    def __init__(self, *args, **kwargs):
+        self.xcute_type = "customer"
+        super().__init__(*args, **kwargs)
 
 
 class XcuteJobStartCommand(XcuteCommand, ShowOne):

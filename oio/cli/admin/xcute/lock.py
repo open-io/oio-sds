@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +17,7 @@
 from operator import itemgetter
 
 from oio.cli import Lister, ShowOne
-from oio.cli.admin.xcute import XcuteCommand
+from oio.cli.admin.xcute import CustomerCommand, XcuteCommand
 
 
 class LockList(XcuteCommand, Lister):
@@ -37,6 +38,10 @@ class LockList(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
+class CustomerLockList(CustomerCommand, LockList):
+    pass
+
+
 class LockShow(XcuteCommand, ShowOne):
     """
     Get all information about one lock.
@@ -53,3 +58,7 @@ class LockShow(XcuteCommand, ShowOne):
         lock_info = self.xcute.lock_show(parsed_args.lock)
 
         return [("lock", "job_id"), itemgetter("lock", "job_id")(lock_info)]
+
+
+class CustomerLockShow(CustomerCommand, LockShow):
+    pass
