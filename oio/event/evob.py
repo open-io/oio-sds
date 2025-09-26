@@ -232,6 +232,7 @@ class EventTypes(object):
     MANIFEST_DELETED = "storage.manifest.deleted"
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
+    XCUTE_CUSTOMER_TASKS = "xcute_customer.tasks"
     LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"
     LIFECYCLE_ACTION = "storage.lifecycle.action"
 
@@ -256,6 +257,7 @@ class EventTypes(object):
         DELAYED,
         META2_DELETED,
         XCUTE_TASKS,
+        XCUTE_CUSTOMER_TASKS,
         LIFECYCLE_CHECKPOINT,
         LIFECYCLE_ACTION,
         INTERNAL_BATCH_END,

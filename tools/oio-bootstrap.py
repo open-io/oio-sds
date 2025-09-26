@@ -250,6 +250,26 @@ TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
 WantedBy=${PARENT}
 """
 
+template_systemd_service_xcute_customer = """
+[Unit]
+Description=[OpenIO] Service xcute customer ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+${ENVIRONMENT}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
 template_systemd_service_billing_agent = """
 [Unit]
 Description=[OpenIO] Service billing agent
@@ -782,6 +802,20 @@ stats:
     - {type: system}
 """
 
+template_account_xcute_customer_watch = """
+host: ${IP}
+port: ${PORT}
+type: ${SRVTYPE}
+location: ${LOC}
+checks:
+    - {type: tcp}
+slots:
+    - ${SRVTYPE}
+stats:
+    - {type: http, path: /status, parser: json}
+    - {type: system}
+"""
+
 template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
@@ -1126,6 +1160,10 @@ score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
 [type:xcute]
+score_expr=(1 + (num stat.cpu))
+score_timeout=120
+
+[type:xcute-customer]
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
@@ -1911,6 +1949,33 @@ use = egg:oio#xcute
 #cache_size = 50
 """
 
+template_xcute_customer_event_agent = """
+[event-agent]
+topic = ${QUEUE_NAME}
+namespace = ${NS}
+user = ${USER}
+workers = ${EVENT_WORKERS}
+concurrency = 5
+handlers_conf = ${HANDLER_CONF}
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+broker_endpoint = ${QUEUE_URL}
+group_id = ${GROUP_ID}
+${TCP_CORK_COMMENT}use_tcp_cork = ${TCP_CORK}
+"""
+
+template_xcute_customer_event_agent_handlers = """
+[handler:xcute_customer.tasks]
+pipeline = xcute_customer
+
+[filter:xcute_customer]
+use = egg:oio#xcute_customer
+#cache_size = 50
+xcute_job_reply_topic = oio-xcute-customer-job-reply
+"""
+
 template_billing_account_agent_service = """
 [billing-agent]
 user = ${USER}
@@ -2106,6 +2171,34 @@ workers = 2
 orchestrator_id = orchestrator-${SRVNUM}
 broker_endpoint = ${QUEUE_URL}
 jobs_topic = oio-xcute-job
+"""
+
+template_xcute_customer = """
+[DEFAULT]
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+namespace = ${NS}
+# Let this option empty to connect directly to redis_host
+#redis_sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+#redis_sentinel_name = oio
+redis_host = ${IP}:${REDIS_PORT}
+# Special xcute type (shared for server and orchestrator)
+xcute_type = customer
+
+[xcute-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+graceful_timeout = 2
+workers = 2
+
+[xcute-orchestrator]
+orchestrator_id = orchestrator-customer-${SRVNUM}
+broker_endpoint = ${QUEUE_URL}
+jobs_topic = oio-xcute-customer-job
+reply_topic = oio-xcute-customer-job-reply
+group_id = xcute-customer-orchestrator
 """
 
 template_rdir = """
@@ -3654,6 +3747,21 @@ def generate(options):
 
         break
 
+    # Xcute-customer event-agents
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            queue_name="oio-xcute-customer-job",
+            workers="2",
+            url=url,
+            srv_type="xcute-customer-event-agent",
+            context="xcute-customer",
+            handler_prefix="xcute-customer-event-handlers-",
+            group_id="event-agent-xcute-customer",
+            template_handler=template_xcute_customer_event_agent_handlers,
+            template_agent=template_xcute_customer_event_agent,
+        )
     # -------------------------------------------------------------------------
 
     env = subenv(
@@ -3678,6 +3786,30 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
     with open(watch(env), "w+", encoding="utf8") as f:
         tpl = Template(template_account_xcute_watch)
+        f.write(tpl.safe_substitute(env))
+
+    env = subenv(
+        {
+            "SRVTYPE": "xcute-customer",
+            "SRVNUM": 1,
+            "PORT": next(ports),
+            "REDIS_PORT": 6379,
+            "QUEUE_URL": ENV["KAFKA_QUEUE_URL"],
+            "EXE": "oio-xcute",
+        }
+    )
+    register_service(
+        env,
+        template_systemd_service_xcute_customer,
+        root_target,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context xcute-customer --concurrency=eventlet -p ",
+    )
+    with open(config(env), "w+") as f:
+        tpl = Template(template_xcute_customer)
+        f.write(tpl.safe_substitute(env))
+    with open(watch(env), "w+", encoding="utf8") as f:
+        tpl = Template(template_account_xcute_customer_watch)
         f.write(tpl.safe_substitute(env))
 
     # billing buckets
@@ -3827,6 +3959,8 @@ def generate(options):
         ("oio-tests-out", None),
         ("oio-xcute-job", None),
         ("oio-xcute-job-reply", None),
+        ("oio-xcute-customer-job", None),
+        ("oio-xcute-customer-job-reply", None),
     ]
     if options.get("replication_events"):
         topics_to_declare.append(("oio-replication-delayed", None))

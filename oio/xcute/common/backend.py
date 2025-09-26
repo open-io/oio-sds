@@ -70,7 +70,7 @@ class XcuteBackend(RedisConnection):
             "job_running": (Forbidden, "The job is running"),
         }
 
-        prefix = f"xcute:{self.xcute_type}" if self.xcute_type else "xcute"
+        prefix = f"xcute-{self.xcute_type}" if self.xcute_type else "xcute"
 
         self.key_job_ids = f"{prefix}:job:ids"
         self.key_job_info = f"{prefix}:job:info:%s"

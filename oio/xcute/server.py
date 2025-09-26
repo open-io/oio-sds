@@ -65,13 +65,15 @@ class XcuteServer(WerkzeugApp):
     def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
+        xcute_type = self.conf.get("xcute_type")
         self.backend = XcuteBackend(self.conf, logger=self.logger)
 
+        mountpoint = f"/v1.0/xcute-{xcute_type}" if xcute_type else "/v1.0/xcute"
         url_map = Map(
             [
                 Rule("/status", endpoint="status"),
                 Submount(
-                    "/v1.0/xcute",
+                    mountpoint,
                     [
                         Rule("/job/list", endpoint="job_list", methods=["GET"]),
                         Rule("/job/create", endpoint="job_create", methods=["POST"]),

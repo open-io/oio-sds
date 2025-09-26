@@ -69,6 +69,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         self.logger = logger or get_logger(self.conf)
         self.watchdog = watchdog or get_watchdog()
         self.backend = XcuteBackend(self.conf, logger=self.logger)
+        self.xcute_type = self.conf.get("xcute_type")
 
         self.orchestrator_id = self.conf.get("orchestrator_id")
         if not self.orchestrator_id:
@@ -81,9 +82,10 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         self.kafka_reply_topic = self.conf.get(
             "reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
         )
-        self.group_id = self.conf.get("group_id", self.DEFAULT_ORCHESTRATOR_GROUP_ID)
-
         self.logger.info("Using reply topic: %s", self.kafka_reply_topic)
+
+        self.group_id = self.conf.get("group_id", self.DEFAULT_ORCHESTRATOR_GROUP_ID)
+        self.logger.info("Using group id: %s", self.group_id)
 
         self.kafka_endpoints = self.conf.get("broker_endpoint")
         if not self.kafka_endpoints:
@@ -113,7 +115,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             try:
                 return func(*args, **kwargs), None
             except (RedisConnectionError, RedisTimeoutError) as exc:
-                self.logger.warn("Fail to communicate with redis: %s", exc)
+                self.logger.warning("Fail to communicate with redis: %s", exc)
                 if not self.running:
                     return None, exc
                 sleep(1)
@@ -634,14 +636,17 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 topic = f"{topic}-{job.topic_suffix}"
             self.kafka_producer.send(topic, payload, flush=True)
         except Exception as exc:
-            self.logger.warn("[job_id=%s] Fail to send job: %s", job_id, exc)
+            self.logger.warning("[job_id=%s] Fail to send job: %s", job_id, exc)
             return False
         return True
 
     def make_payload(self, job_id, job_type, job_config, tasks):
+        event_type = EventTypes.XCUTE_TASKS
+        if self.xcute_type == "customer":
+            event_type = EventTypes.XCUTE_CUSTOMER_TASKS
         return json.dumps(
             {
-                "event": EventTypes.XCUTE_TASKS,
+                "event": event_type,
                 "data": {
                     "job_id": job_id,
                     "job_type": job_type,
@@ -685,7 +690,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 self.backend.incr_total_tasks, job_id, total_marker, tasks_incr
             )
             if exc is not None:
-                self.logger.warn(
+                self.logger.warning(
                     "[job_id=%s] Job has not been updated with total tasks: %s",
                     job_id,
                     exc,
