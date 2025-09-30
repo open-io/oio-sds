@@ -42,6 +42,7 @@ class OioObjectChangePolicy:
         containers,
         object_name,
         version,
+        dry_run=False,
     ):
         self.api = ObjectStorageApi(namespace, logger=logger)
         self.logger = logger
@@ -55,10 +56,11 @@ class OioObjectChangePolicy:
         self._containers = containers
         self._obj_name = object_name
         self._version = version
+        self.dry_run = dry_run
 
     @property
     def _request_id(self):
-        return request_id("oio-object-change-policy")
+        return request_id("oio-object-change-policy-")
 
     @property
     def progress(self):
@@ -84,12 +86,12 @@ class OioObjectChangePolicy:
             region=region,
             **kwargs,
         )
-        need_to_parse_buckets = False
-        # Container list returns buckets located
+        need_to_parse_container = False
+        # Container list returns containers located
         # on local and other regions
         if self.region not in res["regions"]:
             self.logger.debug(
-                f"Account={account} does not have buckets "
+                f"Account={account} does not have containers "
                 f"on the specified region={self.region}"
             )
         else:
@@ -97,14 +99,14 @@ class OioObjectChangePolicy:
                 self.object_policy, 0
             )
             if total_bytes_by_policy and total_bytes_by_policy > 0:
-                need_to_parse_buckets = True
+                need_to_parse_container = True
             else:
                 self.logger.debug(
-                    f"The buckets of account={account}, "
+                    f"The containers of account={account}, "
                     f"region={self.region} do not have objects with "
                     f"the specified policy: {self.object_policy}"
                 )
-        if not need_to_parse_buckets:
+        if not need_to_parse_container:
             return {"listing": [], "truncated": False}
         return res
 
@@ -145,18 +147,20 @@ class OioObjectChangePolicy:
             for container in containers:
                 yield account, container[0]
 
-    def _change_policy(self, account, container, obj_prop):
+    def _change_policy(self, account, container, obj_name, obj_version):
         """Change the policy of the specified object
 
         :param account: account name
         :type account: str
         :param container: container name
         :type container: str
-        :param obj_prop: object properties
-        :type obj_prop: dict
+        :param obj_name: object name
+        :type obj_name: str
+        :param obj_version: object version
+        :type obj_version: str
         """
-        obj_name = obj_prop["name"]
-        obj_version = obj_prop["version"]
+        if self.dry_run:
+            return
         try:
             # Initiate policy transition to prepare for
             # the effective policy change by transition event agent
@@ -182,6 +186,7 @@ class OioObjectChangePolicy:
     def process(self, marker=(None, None)):
         """Change object policy if needed"""
         for account, container in self._get_containers(marker=marker):
+            obj_per_container = 0
             self.logger.debug(
                 "Fetching container info for account=%s container=%s",
                 account,
@@ -215,11 +220,23 @@ class OioObjectChangePolicy:
                         versions=True,
                         reqid=reqid,
                     )
-                for obj in obj_list:
-                    if obj.get("policy", None) != self.object_policy:
-                        # Object does not have the specified policy
-                        continue
-                    self._change_policy(account, container, obj_prop=obj)
+                try:
+                    for obj in obj_list:
+                        if obj.get("policy", None) != self.object_policy:
+                            # Object does not have the specified policy
+                            continue
+                        obj_name = obj["name"]
+                        obj_version = obj["version"]
+                        obj_per_container += 1
+                        self._change_policy(account, container, obj_name, obj_version)
+                finally:
+                    self.logger.info(
+                        "%d objects transitionned for container %s, account %s",
+                        obj_per_container,
+                        container,
+                        account,
+                    )
+
             except (NoSuchAccount, NoSuchContainer, NotFound) as exc:
                 self.logger.error(
                     "Unable to process container account=%s, container=%s, reason: %s",
@@ -257,13 +274,24 @@ def make_arg_parser():
         help="Account(s) name",
     )
     parser.add_argument(
-        "--buckets",
+        "--containers",
         nargs="+",
-        metavar="<bucket_name>",
-        help="Bucket(s) name",
+        metavar="<container_name>",
+        help="Container name(s). Required if the initial attempt successfully"
+        " updated the account object statistics, and all objects were marked "
+        "as in transition with the target policy (incrementing the new policy "
+        "count and decrementing the previous policy count), but not all "
+        "objects completed the transition successfully.",
     )
     parser.add_argument("--key", help="Object name", default=None)
     parser.add_argument("--version", help="Object version", default=None)
+
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Display the number of objects per container that would change "
+        "storage policy but do nothing (default=False)",
+    )
 
     return parser
 
@@ -284,16 +312,16 @@ def main():
         container_marker = parts[1] if parts[1] else None
         marker = (account_marker, container_marker)
     accounts = args.accounts
-    containers = args.buckets
+    containers = args.containers
     if containers:
         containers = [[container] for container in containers]
         if not accounts or (accounts and len(accounts) != 1):
-            logger.error("Buckets requires one account name.")
+            logger.error("Containers requires one account name.")
             return
     object_name = args.key
     if object_name:
         if not containers or (containers and len(containers) != 1):
-            logger.error("Key requires one bucket name")
+            logger.error("Key requires one container name")
             return
     version = args.version
     if version:
@@ -315,6 +343,7 @@ def main():
         containers=containers,
         object_name=object_name,
         version=version,
+        dry_run=args.dry_run,
     )
     try:
         change_policy.process(marker=marker)
