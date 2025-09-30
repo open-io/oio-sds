@@ -36,13 +36,6 @@ workers = 2
 
 [xcute-orchestrator]
 orchestrator_id = orchestrator-1
-# Beanstalkd
-beanstalkd_workers_tube = oio-xcute
-beanstalkd_reply_tube = oio-xcute.reply
-beanstalkd_reply_addr = beanstalk://127.0.0.1:6014
-# Kafka
 broker_endpoint = kafka://localhost:19092
 jobs_topic = oio-xcute-job
 reply_topic = oio-xcute-job-reply
-# refresh_time_beanstalkd_workers = 30
-# max_jobs_per_beanstalkd = 1024

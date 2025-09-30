@@ -31,7 +31,6 @@ from optparse import OptionParser
 from oio.common.configuration import parse_options, read_conf
 from oio.common.logger import get_logger
 from oio.common.wsgi import Application, ServiceLogger
-from oio.xcute.orchestrator import XcuteOrchestrator as BeanstalkOrchestrator
 from oio.xcute.orchestrator_kafka import XcuteOrchestrator as KafkaOrchestrator
 from oio.xcute.server import create_app
 
@@ -68,11 +67,8 @@ if __name__ == "__main__":
 
     orchestrator = None
     if orchestrator_conf is not None:
-        orchestrator_class = BeanstalkOrchestrator
-        if orchestrator_conf.get("broker_endpoint") is not None:
-            orchestrator_class = KafkaOrchestrator
         orchestrator_logger = get_logger(orchestrator_conf, verbose=options["verbose"])
-        orchestrator = orchestrator_class(
+        orchestrator = KafkaOrchestrator(
             orchestrator_conf,
             logger=orchestrator_logger,
             watchdog=get_watchdog(called_from_main_application=True),

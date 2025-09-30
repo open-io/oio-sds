@@ -29,29 +29,7 @@ While the job is running, you can interrupt it.
 
 ### Server/orchestrator
 
-Sample configuration for the server/orchestrator:
-
-```ini
-# cat /etc/oio/sds/OPENIO/xcute-0/xcute-0.conf
-# OpenIO managed
-[DEFAULT]
-log_level = INFO
-syslog_prefix = OIO,OPENIO,xcute,0
-redis_sentinel_hosts = 172.30.1.244:6012,172.30.3.73:6012,172.30.3.131:6012
-redis_sentinel_name = OPENIO-master-1
-namespace = OPENIO
-
-[xcute-server]
-bind_addr = 172.30.1.244
-bind_port = 6400
-workers = 1
-
-[xcute-orchestrator]
-orchestrator_id = 7d1c892f-99c7-5366-86d1-fd3753578e78
-beanstalkd_workers_tube = oio-xcute
-beanstalkd_reply_tube = oio-xcute.reply
-beanstalkd_reply_addr = beanstalk://172.30.1.244:6014
-```
+Sample configuration for the server/orchestrator in `etc/xcute.conf-sample`
 
 ### Worker
 
@@ -73,7 +51,7 @@ use = egg:oio#xcute
 
 ### Create a job
 
-Here are the jobs you can create.
+Here are examples of the jobs you can create.
 
 ```shell
 > openio-admin xcute rawx rebuild [SERVICE_ID]

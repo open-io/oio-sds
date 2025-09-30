@@ -24,7 +24,6 @@ from oio.common.kafka import (
 )
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, ratelimit, request_id
-from oio.event.beanstalk import Beanstalk
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -100,36 +99,6 @@ class XcuteWorker(object):
 
     def reply(self, job_id, task_ids, task_results, task_errors, *extra):
         raise NotImplementedError()
-
-
-class BeanstalkXcuteWorker(XcuteWorker):
-    def __init__(self, conf, logger=None, watchdog=None):
-        super().__init__(conf, logger=logger, watchdog=watchdog)
-        self.beanstalkd_replies = {}
-
-    def reply(self, job_id, task_ids, task_results, task_errors, *extra):
-        beanstalkd_reply_info = extra[0]
-        beanstalkd_reply_addr = beanstalkd_reply_info["addr"]
-        beanstalkd_reply_tube = beanstalkd_reply_info["tube"]
-
-        beanstalkd_reply_info = (beanstalkd_reply_addr, beanstalkd_reply_tube)
-        beanstalkd_reply = self.beanstalkd_replies.get(beanstalkd_reply_info)
-        if not beanstalkd_reply:
-            beanstalkd_reply = Beanstalk.from_url(beanstalkd_reply_addr)
-            beanstalkd_reply.use(beanstalkd_reply_tube)
-            beanstalkd_reply.watch(beanstalkd_reply_tube)
-
-            self.beanstalkd_replies[beanstalkd_reply_info] = beanstalkd_reply
-
-        reply_payload = json.dumps(
-            {
-                "job_id": job_id,
-                "task_ids": task_ids,
-                "task_results": task_results,
-                "task_errors": task_errors,
-            }
-        )
-        beanstalkd_reply.put(reply_payload)
 
 
 class KafkaXcuteWorker(XcuteWorker):
