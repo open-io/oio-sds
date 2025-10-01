@@ -243,7 +243,7 @@ class LifecycleActions(Filter):
                 "No policies for storage_class transition %s", target_storage_class
             )
         target_policy = None
-        for pol, size in reversed(policies):
+        for pol, size in policies:
             if int(context.size) >= size:
                 target_policy = pol
                 break
