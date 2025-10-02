@@ -108,6 +108,10 @@ class EarlyDeleteDetection(Filter):
             err_resp = EventError(event=event, body="When is missing in event")
             return err_resp(env, cb)
 
+        # Delete marker should be ignored
+        if not event.data:
+            return self.app(env, cb)
+
         mtime = None
         ttime = None
         policy = None
@@ -115,7 +119,8 @@ class EarlyDeleteDetection(Filter):
         for entry in event.data:
             entry_type = entry.get("type")
             if entry_type == "aliases":
-                mtime = int(entry.get("mtime", 0))
+                mtime = entry.get("mtime")
+                mtime = int(mtime) if mtime is not None else None
             elif entry_type == "properties" and entry.get("key") == "ttime":
                 ttime = int(entry.get("value", 0))
             elif entry_type == "contents_headers":

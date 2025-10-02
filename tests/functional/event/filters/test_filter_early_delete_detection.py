@@ -53,6 +53,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
         policy=None,
         mpu_size=None,
         when=18200000000,
+        delete_marker=False,
     ):
         event = {
             "event": EventTypes.CONTENT_DELETED,
@@ -74,13 +75,10 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                 headers["mime-type"] = f"binary/octet-stream;swift_bytes={mpu_size}"
             event["data"].append(headers)
 
+        aliases = {"type": "aliases", "name": "magic", "version": 1759397659443254}
         if mtime:
-            event["data"].append(
-                {
-                    "type": "aliases",
-                    "mtime": mtime,
-                }
-            )
+            aliases["mtime"] = mtime
+        event["data"].append(aliases)
         if ttime:
             event["data"].append(
                 {
@@ -89,6 +87,9 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                     "value": f"{ttime}",
                 }
             )
+        if delete_marker:
+            # delete-marker should have an empty data field
+            event["data"] = []
         return event
 
     def test_no_account(self):
@@ -122,6 +123,15 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             mock_cb,
         )
         mock_cb.assert_called_once_with(500, "Unable to extract object age", delay=None)
+
+    def test_delete_marker(self):
+        mock_cb = Mock()
+        event_filter = EarlyDeleteDetection(self.app, self.conf)
+        event_filter.process(
+            self._create_event(account="foo", container="bar", delete_marker=True),
+            mock_cb,
+        )
+        mock_cb.assert_not_called()
 
     def test_no_policy(self):
         mock_cb = Mock()
