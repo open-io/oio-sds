@@ -615,7 +615,7 @@ class TestContainerSharding(CliTestCase):
     def test_abort_no_sharding_yet(self):
         opts = self.get_format_opts(format_="json")
         output = self.openio(
-            "container-sharding abort " + self.NAME + opts, expected_returncode=1
+            "container-sharding abort " + self.NAME + opts, expected_returncode=0
         )
         result = self.json_loads(output)
         self.assertEqual(self.NAME, result.get("container"))

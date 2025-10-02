@@ -15,14 +15,18 @@
 
 
 import time
+from datetime import datetime, timedelta
 from logging import getLogger
 
 from oio.cli import Lister, ShowOne
 from oio.common.constants import (
+    FINISHED_SHARDING_STATE_NAME,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_QUEUE,
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TIMESTAMP,
+    NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
+    NEW_SHARD_STATE_CLEANING_UP,
     SHARDING_STATE_NAME,
 )
 from oio.common.easy_value import convert_size, int_value
@@ -46,6 +50,15 @@ class ContainerShardingCommandMixin(object):
             help="Interpret container as a CID",
             action="store_true",
         )
+        parser.add_argument(
+            "--grace-delay",
+            type=int,
+            default=960,
+            help=(
+                "Delay in seconds after which we consider there is no "
+                "sharding activity on the container"
+            ),
+        )
 
     def account_and_container(self, parsed_args, **kwargs):
         """
@@ -60,6 +73,73 @@ class ContainerShardingCommandMixin(object):
             self.app.client_manager._account = acct
             return acct, cont
         return self.app.client_manager.account, parsed_args.container
+
+    def show_shard(self, reqid, acct, cont, cs, cid):
+        """
+        Returns shard metadata along with two boolean values indicating
+        whether the shard is orphan and whether its ranges matches.
+
+        :param reqid: request id to use in request
+        :type reqid: str
+        :param acct: account name
+        :type acct: str
+        :param cont: container name
+        :type cont: str
+        :param cs: container sharding instance
+        :type cs: ContainerSharding
+        :param cid: container id
+        :type cid: str
+        """
+        obsto = self.app.client_manager.storage
+        logger = self.app.client_manager.logger
+        raw_meta = obsto.container_get_properties(acct, cont, reqid=reqid)
+        root_cid, shard = cs.meta_to_shard(raw_meta)
+        healthy = False
+        is_orphan = False
+        # meta_to_shard() does not work on root containers
+        if not shard:
+            shard = {"cid": cid_from_name(acct, cont)}
+        else:
+            try:
+                registered = list(
+                    cs.show_shards(
+                        None,
+                        None,
+                        root_cid=root_cid,
+                        marker=shard["lower"],
+                        no_paging=False,
+                        reqid=reqid,
+                    )
+                )
+                matching = [c for c in registered if c["cid"] == cid]
+                # Check if the shard is an orphan
+                is_orphan = len(matching) != 1
+                # Check if ranges are identical
+                healthy = (
+                    not is_orphan
+                    and matching[0]["lower"] == shard["lower"]
+                    and matching[0]["upper"] == shard["upper"]
+                )
+            except Exception as exc:
+                logger.warning("Could not check %s: %s", cid, exc)
+                raise
+        return raw_meta, shard, healthy, is_orphan
+
+    def sharding_blocked(self, cs, raw_meta, delay=960):
+        """
+        Return True if sharding is in an unfinished state
+        and that state hasn't changed for specified delay.
+        """
+        sharding_timestamp = int_value(
+            raw_meta["system"].get(M2_PROP_SHARDING_TIMESTAMP), 0
+        )
+        timestamp_s = sharding_timestamp / 1000000
+        timestamp_dt = datetime.fromtimestamp(timestamp_s)
+        # Current time
+        now = datetime.now()
+        # Check if timestamp is older than 15 minutes ago
+        has_state_updated = now - timestamp_dt > timedelta(seconds=delay)
+        return has_state_updated and cs.sharding_in_progress(raw_meta)
 
 
 class AbortSharding(ContainerShardingCommandMixin, ShowOne):
@@ -99,58 +179,65 @@ class AbortSharding(ContainerShardingCommandMixin, ShowOne):
 
     def take_action(self, parsed_args):
         logger = self.app.client_manager.logger
-        obsto = self.app.client_manager.storage
+        reqid = self.app.request_id("CLI-sharding-abort-")
+        acct, cont = self.account_and_container(parsed_args, reqid=reqid)
         cs = ContainerSharding(
             self.app.client_manager.sds_conf,
             logger=logger,
             pool_manager=self.app.client_manager.pool_manager,
         )
-        reqid = self.app.request_id("CLI-sharding-abort-")
-        acct, cont = self.account_and_container(parsed_args, reqid=reqid)
         cid = cid_from_name(acct, cont)
-        raw_meta = obsto.container_get_properties(acct, cont, reqid=reqid)
-        root_cid, shard = cs.meta_to_shard(raw_meta)
-        healthy = True
-        # meta_to_shard() does not work on root containers
-        if not shard:
-            shard = {"cid": cid_from_name(acct, cont)}
-        else:
-            try:
-                registered = list(
-                    cs.show_shards(
-                        None,
-                        None,
-                        root_cid=root_cid,
-                        marker=shard["lower"],
-                        no_paging=False,
-                        reqid=reqid,
-                    )
-                )
-                matching = [c for c in registered if c["cid"] == cid]
-                healthy = (
-                    len(matching) == 1
-                    and matching[0]["lower"] == shard["lower"]
-                    and matching[0]["upper"] == shard["upper"]
-                )
-            except Exception as exc:
-                logger.warning("Could not check %s: %s", cid, exc)
+        raw_meta, shard, healthy, is_orphan = self.show_shard(
+            reqid, acct, cont, cs, cid
+        )
         if M2_PROP_SHARDING_QUEUE in raw_meta["system"]:
             shard["sharding"] = {
                 "queue": raw_meta["system"][M2_PROP_SHARDING_QUEUE],
                 "timestamp": raw_meta["system"][M2_PROP_SHARDING_TIMESTAMP],
             }
         aborted = drained = False
-        if not healthy or parsed_args.force:
+        forced_op = parsed_args.force
+        if not self.sharding_blocked(cs, raw_meta, parsed_args.grace_delay):
+            logger.warning(
+                "Container %s is not blocked, to proceed with the abort "
+                "operation anyway, set the grace delay to 0.",
+                cid,
+            )
+            return self.columns, (acct, cont, aborted, drained)
+        proceed_abort = True
+        has_previous_range = shard.get("upper.previous") or shard.get("lower.previous")
+        next_step_msg = None
+        if is_orphan:
+            next_step_msg = "Container %s is an orphan, need to removed "
+            "try 'container-sharding is-orphan --autoremove'"
+        else:
+            if has_previous_range:  # "upper.previous" and "lower.previous" are present
+                if healthy:
+                    next_step_msg = "Shard %s is saved in the root container "
+                    "and the range is correct but some entries may need to be "
+                    "cleaned, try 'container-sharding clean'"
+                    proceed_abort = False
+
+            else:  # "upper.previous" and "lower.previous" are missing
+                sharding_state = int_value(
+                    raw_meta["system"].get(M2_PROP_SHARDING_STATE), 0
+                )
+                if sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
+                    next_step_msg = "Shard %s is saved in the root container "
+                    "and the range is correct but some entries may need to be "
+                    "cleaned, try 'container-sharding clean'"
+                    proceed_abort = False
+
+        if proceed_abort or forced_op:
             aborted = cs.abort_sharding(shard, reqid=reqid)
             if aborted and "sharding" in shard:
                 drained = cs.drain_sharding_queue(shard)
         else:
-            logger.warning(
-                "Container %s seems healthy (or was not checked). "
-                "After checking, try 'container-sharding clean', "
-                "or add --force to run the operation anyway.",
-                cid,
-            )
+            if next_step_msg:
+                logger.warning(
+                    next_step_msg,
+                    cid,
+                )
             self.success = False
         return self.columns, (acct, cont, aborted, drained)
 
@@ -159,8 +246,6 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
     """
     Remove from the container the objects which are outside of the shard range.
     """
-
-    log = getLogger(__name__ + ".CleanContainerSharding")
 
     def get_parser(self, prog_name):
         parser = super(CleanContainerSharding, self).get_parser(prog_name)
@@ -180,22 +265,100 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
             action="store_true",
             help="Trigger a VACUUM after cleaning the shard (even partially).",
         )
+        parser.add_argument(
+            "--force",
+            default=False,
+            help=(
+                "Force sharding clean, even if the checks fail "
+                "or if they say the sharding is ok."
+            ),
+            action="store_true",
+        )
         return parser
 
     def take_action(self, parsed_args):
-        self.log.debug("take_action(%s)", parsed_args)
+        logger = self.app.client_manager.logger
+        reqid = self.app.request_id("CLI-sharding-clean-")
+        acct, cont = self.account_and_container(parsed_args, reqid=reqid)
+        cs = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=logger,
+            pool_manager=self.app.client_manager.pool_manager,
+        )
+        cid = cid_from_name(acct, cont)
+        raw_meta, shard, healthy, is_orphan = self.show_shard(
+            reqid, acct, cont, cs, cid
+        )
+        sharding_state = int_value(raw_meta["system"].get(M2_PROP_SHARDING_STATE), 0)
+        if not self.sharding_blocked(cs, raw_meta, parsed_args.grace_delay):
+            logger.warning(
+                "Container %s is not blocked, to proceed with the clean "
+                "operation anyway, set the grace delay to 0.",
+                cid,
+            )
+            return ("Status",), [("Ok",)]
+        # Run clean operation only if the sharding state is in
+        # finished state or applying saved write or cleaning up
+        # or it is a forced operation
+        if (
+            sharding_state
+            not in (
+                *FINISHED_SHARDING_STATE_NAME,
+                NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
+                NEW_SHARD_STATE_CLEANING_UP,
+            )
+            and not parsed_args.force
+        ):
+            logger.warning(
+                "Container %s is in an unfinished state, try to abort before cleaning",
+                cid,
+            )
+            return ("Status",), [("Ok",)]
+        proceed_clean = True
+        has_previous_range = shard.get("upper.previous") or shard.get("lower.previous")
+        next_step_msg = None
+        if is_orphan:
+            next_step_msg = "Container %s is an orphan and need to be removed "
+            "try 'container-sharding is-orphan --autoremove'"
+        else:
+            if cs.sharding_in_progress(raw_meta):
+                if (
+                    has_previous_range
+                ):  # "upper.previous" and "lower.previous" are present
+                    if not healthy:
+                        next_step_msg = (
+                            "Container %s has been checked and it is not healthy. "
+                            "It is recommended to abort the sharding."
+                        )
+                        proceed_clean = False
 
-        container_sharding = ContainerSharding(
-            self.app.client_manager.sds_conf, logger=self.app.client_manager.logger
-        )
-        container_sharding.clean_container(
-            self.app.client_manager.account,
-            parsed_args.container,
-            vacuum=parsed_args.vacuum,
-            attempts=parsed_args.attempts,
-            timeout=self.app.options.timeout,
-            reqid=self.app.request_id("CLI-sharding-clean-"),
-        )
+                else:  # "upper.previous" and "lower.previous" are missing
+                    if sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
+                        next_step_msg = "The container %s is in an unfinished state"
+                        "try to abort before cleaning."
+                        proceed_clean = False
+                    else:  # sharding state is NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+                        if self.sharding_blocked(cs, raw_meta, parsed_args.grace_delay):
+                            logger.warning(
+                                "Container %s is applying saved writes, to "
+                                "proceed with the clean operation anyway, set "
+                                "the grace delay to 0.",
+                                cid,
+                            )
+                            proceed_clean = False
+
+        if proceed_clean or parsed_args.force:
+            logger.debug("take_action(%s)", parsed_args)
+            cs.clean_container(
+                self.app.client_manager.account,
+                parsed_args.container,
+                vacuum=parsed_args.vacuum,
+                attempts=parsed_args.attempts,
+                timeout=self.app.options.timeout,
+                reqid=reqid,
+            )
+        else:
+            logger.warning(next_step_msg, cid)
         return ("Status",), [("Ok",)]
 
 
@@ -721,15 +884,6 @@ class IsOrphanShard(ContainerShardingCommandMixin, ShowOne):
             "--autoremove",
             action="store_true",
             help="Delete the container if it is an orphan shard",
-        )
-        parser.add_argument(
-            "--grace-delay",
-            type=int,
-            default=960,
-            help=(
-                "Delay in seconds after which we consider there is no "
-                "sharding activity on the container"
-            ),
         )
 
         return parser
