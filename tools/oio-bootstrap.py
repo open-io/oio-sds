@@ -3113,12 +3113,15 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
     # proxy
+    port_proxy_server = port_proxy
+    if options.get("use_supermetaproxy", False):
+        port_proxy_server = options.get("legacy_proxy_port", 4000)
     env = subenv(
         {
             "SERVICE_ID": "proxy-1",
             "SRVTYPE": "proxy",
             "SRVNUM": 1,
-            "PORT": port_proxy,
+            "PORT": port_proxy_server,
             "EXE": "oio-proxy",
             "LOC": ENV["LOC_PROXYD"],
         }
