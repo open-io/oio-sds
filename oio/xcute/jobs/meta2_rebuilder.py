@@ -33,7 +33,7 @@ class Meta2RebuildTask(XcuteTask):
 
         self.meta2 = Meta2Database(conf, logger=logger)
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
         container_id = task_payload["container_id"]
 
         rebuilt = self.meta2.rebuild(container_id, raise_error=True, reqid=reqid)

@@ -76,7 +76,7 @@ class RawxDecommissionTask(XcuteTask):
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
         chunk_id = task_payload["chunk_id"]
         chunk_url = "http://{}/{}".format(self.service_id, chunk_id)
         try:

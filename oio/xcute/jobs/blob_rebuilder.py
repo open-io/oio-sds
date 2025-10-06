@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ class RawxRebuildTask(XcuteTask):
             self.conf, logger=self.logger, watchdog=self.watchdog
         )
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
         container_id = task_payload["container_id"]
         content_id = task_payload["content_id"]
         path = task_payload["path"]

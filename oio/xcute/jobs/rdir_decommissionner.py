@@ -38,7 +38,7 @@ class RdirDecommissionTask(XcuteTask):
         self.min_dist = job_params["min_dist"]
         self.replicas = job_params["replicas"]
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
         hosted_service_type = task_payload["service_type"]
         hosted_service_id = task_payload["service_id"]
 

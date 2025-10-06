@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ class TesterTask(XcuteTask):
 
         self.error_percentage = job_params["error_percentage"]
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
         msg = task_payload["msg"]
 
         self.logger.info("[reqid=%s] Hello: %s", reqid, msg)

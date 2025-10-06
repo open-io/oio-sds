@@ -41,7 +41,7 @@ class XcuteTask(object):
     def params_have_changed(self, job_params):
         return job_params != self.job_params
 
-    def process(self, task_id, task_payload):
+    def process(self, task_id, task_payload, reqid, job_id):
         raise NotImplementedError()
 
 

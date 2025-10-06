@@ -36,7 +36,7 @@ class Meta2DecommissionTask(XcuteTask):
 
         self.meta2 = Meta2Database(conf, logger=logger)
 
-    def process(self, _task_id, task_payload, reqid=None):
+    def process(self, _task_id, task_payload, reqid=None, job_id=None):
         container_id = task_payload["container_id"]
 
         moved = self.meta2.move(

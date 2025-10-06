@@ -74,7 +74,9 @@ class XcuteWorker(object):
                 reqid = job_id + request_id(f"-{job_type[:10]}-")
                 reqid = reqid[:STRLEN_REQID]
                 try:
-                    task_result = task.process(task_id, task_payload, reqid=reqid)
+                    task_result = task.process(
+                        task_id, task_payload, reqid=reqid, job_id=job_id
+                    )
                     task_results.update(task_result)
                 except Exception as exc:
                     self.logger.warning(

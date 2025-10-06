@@ -100,7 +100,7 @@ class Meta2RelocationTask(XcuteTask):
                     break
         return misplaced
 
-    def process(self, task_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
         account = task_payload["account"]
         container = task_payload["container"]
         resp = Counter()
