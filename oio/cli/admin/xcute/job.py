@@ -21,7 +21,6 @@ from oio.cli.admin.xcute import CustomerCommand, XcuteCommand
 from oio.cli.common.utils import KeyValueAction
 from oio.common.utils import depaginate
 from oio.xcute.common.job import XcuteJobStatus
-from oio.xcute.jobs import JOB_TYPES
 
 
 class JobList(XcuteCommand, Lister):
@@ -51,7 +50,7 @@ class JobList(XcuteCommand, Lister):
         )
         parser.add_argument(
             "--type",
-            choices=JOB_TYPES.keys(),
+            choices=self.job_types.keys(),
             help="Filter jobs with the specified job type",
         )
         parser.add_argument(

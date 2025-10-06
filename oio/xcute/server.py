@@ -40,7 +40,7 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.xcute.common.backend import XcuteBackend
-from oio.xcute.jobs import JOB_TYPES
+from oio.xcute.jobs import CUSTOMER_JOB_TYPES, INTERNAL_JOB_TYPES
 
 
 def handle_exceptions(func):
@@ -69,6 +69,9 @@ class XcuteServer(WerkzeugApp):
         self.backend = XcuteBackend(self.conf, logger=self.logger)
 
         mountpoint = f"/v1.0/xcute-{xcute_type}" if xcute_type else "/v1.0/xcute"
+        self.job_types = INTERNAL_JOB_TYPES
+        if xcute_type == "customer":
+            self.job_types = CUSTOMER_JOB_TYPES
         url_map = Map(
             [
                 Rule("/status", endpoint="status"),
@@ -128,7 +131,7 @@ class XcuteServer(WerkzeugApp):
         job_type = req.args.get("type")
         if not job_type:
             raise HTTPBadRequest("Missing job type")
-        job_class = JOB_TYPES.get(job_type)
+        job_class = self.job_types.get(job_type)
         if job_class is None:
             raise HTTPBadRequest("Unknown job type")
         put_on_hold_if_locked = boolean_value(req.args.get("put_on_hold_if_locked"))
@@ -174,7 +177,7 @@ class XcuteServer(WerkzeugApp):
 
         job_info = self.backend.get_job_info(job_id)
         job_type = job_info["job"]["type"]
-        job_class = JOB_TYPES.get(job_type)
+        job_class = self.job_types.get(job_type)
         if job_class is None:
             raise HTTPBadRequest("Unknown job type")
 

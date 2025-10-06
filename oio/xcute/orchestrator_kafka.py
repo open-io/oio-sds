@@ -41,7 +41,7 @@ from oio.event.evob import EventTypes, get_kafka_metadata_from_event
 from oio.event.kafka_consumer import KafkaOffsetHelperMixin, KafkaRejectorMixin
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.job import XcuteJobStatus
-from oio.xcute.jobs import JOB_TYPES
+from oio.xcute.jobs import CUSTOMER_JOB_TYPES, INTERNAL_JOB_TYPES
 
 
 class XcuteReplyListener(KafkaConsumer, KafkaRejectorMixin):
@@ -70,6 +70,11 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         self.watchdog = watchdog or get_watchdog()
         self.backend = XcuteBackend(self.conf, logger=self.logger)
         self.xcute_type = self.conf.get("xcute_type")
+        self.job_types = INTERNAL_JOB_TYPES
+        self.event_type = EventTypes.XCUTE_TASKS
+        if self.xcute_type == "customer":
+            self.job_types = CUSTOMER_JOB_TYPES
+            self.event_type = EventTypes.XCUTE_CUSTOMER_TASKS
 
         self.orchestrator_id = self.conf.get("orchestrator_id")
         if not self.orchestrator_id:
@@ -216,7 +221,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         main_reqid = job_id + request_id(f"-{job_type[:10]}-")
         main_reqid = main_reqid[:STRLEN_REQID]
 
-        job_class = JOB_TYPES[job_type]
+        job_class = self.job_types[job_type]
         job = job_class(
             self.conf, job_id=job_id, logger=self.logger, watchdog=self.watchdog
         )
@@ -641,12 +646,9 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         return True
 
     def make_payload(self, job_id, job_type, job_config, tasks):
-        event_type = EventTypes.XCUTE_TASKS
-        if self.xcute_type == "customer":
-            event_type = EventTypes.XCUTE_CUSTOMER_TASKS
         return json.dumps(
             {
-                "event": event_type,
+                "event": self.event_type,
                 "data": {
                     "job_id": job_id,
                     "job_type": job_type,

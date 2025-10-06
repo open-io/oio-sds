@@ -15,9 +15,14 @@
 # License along with this library.
 
 from oio.cli import ShowOne, flat_dict_from_dict
+from oio.xcute.jobs import CUSTOMER_JOB_TYPES, INTERNAL_JOB_TYPES
 
 
 class XcuteCommand:
+    def __init__(self, *args, **kwargs):
+        self.job_types = INTERNAL_JOB_TYPES
+        super().__init__(*args, **kwargs)
+
     @property
     def logger(self):
         return self.app.client_manager.logger
@@ -36,6 +41,7 @@ class CustomerCommand:
     def __init__(self, *args, **kwargs):
         self.xcute_type = "customer"
         super().__init__(*args, **kwargs)
+        self.job_types = CUSTOMER_JOB_TYPES
 
 
 class XcuteJobStartCommand(XcuteCommand, ShowOne):

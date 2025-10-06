@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,13 +16,14 @@
 
 from .blob_mover import RawxDecommissionJob
 from .blob_rebuilder import RawxRebuildJob
+from .bucket_lister import BucketListerJob
 from .meta2_decommissioner import Meta2DecommissionJob
 from .meta2_rebuilder import Meta2RebuildJob
 from .meta2_relocator import Meta2RelocationJob
 from .rdir_decommissionner import RdirDecommissionJob
 from .tester import TesterJob
 
-JOB_TYPES = {
+INTERNAL_JOB_TYPES = {
     Meta2DecommissionJob.JOB_TYPE: Meta2DecommissionJob,
     Meta2RebuildJob.JOB_TYPE: Meta2RebuildJob,
     Meta2RelocationJob.JOB_TYPE: Meta2RelocationJob,
@@ -31,3 +32,9 @@ JOB_TYPES = {
     RdirDecommissionJob.JOB_TYPE: RdirDecommissionJob,
     TesterJob.JOB_TYPE: TesterJob,
 }
+
+CUSTOMER_JOB_TYPES = {
+    BucketListerJob.JOB_TYPE: BucketListerJob,
+}
+
+JOB_TYPES = INTERNAL_JOB_TYPES | CUSTOMER_JOB_TYPES
