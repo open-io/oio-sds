@@ -23,13 +23,34 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
     """
 
     JOB_CLASS = BucketListerJob
+
+    DEFAULT_TECHNICAL_ACCOUNT = "AUTH_demo"
     DEFAULT_TECHNICAL_BUCKET = "xcute-customer-technical-bucket"
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
+        default_policy = self.app.client_manager.conscience.info()["options"][
+            "storage_policy"
+        ]
         parser.add_argument(
             dest="bucket",
             help="Customer bucket to list",
+        )
+        parser.add_argument(
+            dest="replication_configuration",
+            help="Replication configuration to use while listing all objects.",
+        )
+        parser.add_argument(
+            "--storage-policy",
+            dest="policy_manifest",
+            help=f"Policy to use for the manifests (default: {default_policy})",
+            default=default_policy,
+        )
+        parser.add_argument(
+            "--technical-account",
+            dest="technical_account",
+            help=f"Technical account (default: {self.DEFAULT_TECHNICAL_ACCOUNT})",
+            default=self.DEFAULT_TECHNICAL_ACCOUNT,
         )
         parser.add_argument(
             "--technical-bucket",
@@ -44,6 +65,9 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             # Account comes from the common parser
             "account": self.app.client_manager.account,
             "bucket": parsed_args.bucket,
+            "technical_account": parsed_args.technical_account,
             "technical_bucket": parsed_args.technical_bucket,
+            "replication_configuration": parsed_args.replication_configuration,
+            "policy_manifest": parsed_args.policy_manifest,
         }
         return {"params": job_params}

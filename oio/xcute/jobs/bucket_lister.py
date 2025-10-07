@@ -13,12 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 from collections import Counter
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.container.sharding import ContainerSharding
-from oio.xcute.common.job import XcuteTask
-from oio.xcute.jobs.common import XcuteUsageTargetJob
+from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
 class BucketListerTask(XcuteTask):
@@ -26,21 +26,51 @@ class BucketListerTask(XcuteTask):
         super().__init__(conf, job_params, logger=logger, watchdog=watchdog)
 
         self.api = ObjectStorageApi(conf["namespace"], watchdog=watchdog, logger=logger)
+        self.namespace = conf["namespace"]
+        self.policy_manifest = job_params["policy_manifest"]
         self.customer_account = job_params["account"]
         self.customer_bucket = job_params["bucket"]
+        self.technical_account = job_params["technical_account"]
         self.technical_bucket = job_params["technical_bucket"]
 
-    def process(self, task_id, task_payload, reqid=None):
-        listing = self.api.object_list(
-            account=self.customer_account,
-            container=self.customer_bucket,
-            marker=task_payload["lower"],
-            end_marker=task_payload["upper"],
-            properties=True,
-        )
+    def process(self, task_id, task_payload, reqid=None, job_id=None):
+        def objects_generator(resp: Counter):
+            listing = self.api.object_list(
+                account=self.customer_account,
+                container=self.customer_bucket,
+                versions=True,
+                marker=task_payload["lower"],
+                end_marker=task_payload["upper"],
+                properties=True,
+                reqid=reqid,
+            )
+            for obj in listing["objects"]:
+                line = (
+                    json.dumps(
+                        {
+                            "name": obj["name"],
+                            "version": obj["version"],
+                        }
+                    )
+                    + "\n"
+                )
+                resp["nb_objects"] += 1
+                yield line.encode("utf-8")
+
         resp = Counter()
-        for obj in listing["objects"]:
-            resp["to_replicate"] += 1
+        self.api.object_create_ext(
+            self.technical_account,
+            self.technical_bucket,
+            data=objects_generator(resp),
+            policy=self.policy_manifest,
+            obj_name=(
+                f"listing/{self.customer_account}/{self.customer_bucket}/"
+                f"{job_id}/{task_id}.jsonl"
+            ),
+            # Transmit the counters as metadata of the object for further processing
+            # (values should be converted as strings to be accepted).
+            properties_callback=lambda **_: {k: str(v) for k, v in resp.items()},
+        )
 
         return resp
 
@@ -57,7 +87,12 @@ class BucketListerJob(XcuteJob):
         sanitized_job_params, _ = super().sanitize_params(job_params)
         sanitized_job_params["account"] = job_params["account"]
         sanitized_job_params["bucket"] = job_params["bucket"]
+        sanitized_job_params["technical_account"] = job_params["technical_account"]
         sanitized_job_params["technical_bucket"] = job_params["technical_bucket"]
+        sanitized_job_params["replication_configuration"] = optimize_replication_conf(
+            job_params["replication_configuration"]
+        )
+        sanitized_job_params["policy_manifest"] = job_params["policy_manifest"]
         return sanitized_job_params, f"{job_params['account']}/{job_params['bucket']}"
 
     def __init__(self, conf, logger=None, **kwargs):
