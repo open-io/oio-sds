@@ -32,6 +32,7 @@ from oio.common.constants import CONTAINER_HEADERS, OBJECT_HEADERS, REQID_HEADER
 from oio.common.decorators import handle_container_not_found, handle_object_not_found
 from oio.common.green import get_watchdog
 from oio.common.storage_functions import _sort_chunks
+from oio.common.utils import GeneratorIO
 from tests.unit.api import FakeApiResponse, FakeStorageApi
 from tests.utils import random_str
 
@@ -383,7 +384,6 @@ class ObjectStorageTest(unittest.TestCase):
         )
         self.api._object_create.assert_called_once()
         call_args = self.api._object_create.call_args
-        from oio.common.utils import GeneratorIO
 
         self.assertIs(call_args[0][0], self.account)
         self.assertIs(call_args[0][1], self.container)
@@ -401,7 +401,6 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertIs(call_args[0][0], self.account)
         self.assertIs(call_args[0][1], self.container)
         self.assertIs(call_args[0][2], name)
-        from io import IOBase
 
         self.assertIsInstance(call_args[0][3], IOBase)
 

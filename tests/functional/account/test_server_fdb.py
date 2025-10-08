@@ -18,6 +18,7 @@ import copy
 import os
 import re
 import time
+from importlib import import_module
 from pathlib import Path
 
 import fdb
@@ -79,8 +80,7 @@ class TestAccountServerBase(BaseTestCase):
 
     @classmethod
     def _monkey_patch(cls):
-        import eventlet
-
+        eventlet = import_module("eventlet")
         eventlet.patcher.monkey_patch(os=False, thread=False)
 
     def _create_account(self, account_id):
@@ -1343,7 +1343,7 @@ class TestIamServer(TestAccountServerBase):
         condition = {"NotIpAddress": {"aws:SourceIp": ["203.0.113.0/24"]}}
         self._test_put_and_get_user_policy_Ip_condition(condition)
 
-    def test_put_and_get_user_policy_with_NotIpAddress_and_IpAdress(self):
+    def test_put_and_get_user_policy_with_NotIpAddress_and_IpAddress(self):
         condition = {
             "NotIpAddress": {"aws:SourceIp": ["203.0.113.0/24"]},
             "IpAddress": {"aws:SourceIp": ["203.0.113.1/24"]},

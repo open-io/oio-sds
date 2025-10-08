@@ -367,7 +367,7 @@ class TestContentFactory(BaseTestCase):
         )
 
     def test_strange_paths(self):
-        answers = dict()
+        answers = {}
         for cname in strange_paths:
             content = self._new_content(self.stgpol, b"nobody cares", cname)
             answers[cname] = content
@@ -378,16 +378,16 @@ class TestContentFactory(BaseTestCase):
         obj_set = {k["name"] for k in listing["objects"]}
         try:
             # Ensure the saved path is the one we gave the object
-            for cname in answers:
-                self.assertEqual(cname, answers[cname].path)
+            for cname, content in answers.items():
+                self.assertEqual(cname, content.path)
                 fullpath = encode_fullpath(
                     self.account,
                     self.container_name,
                     cname,
-                    answers[cname].version,
-                    answers[cname].content_id,
+                    content.version,
+                    content.content_id,
                 )
-                self.assertEqual(answers[cname].full_path, fullpath)
+                self.assertEqual(content.full_path, fullpath)
             # Ensure all objects appear in listing
             for cname in strange_paths:
                 self.assertIn(cname, obj_set)

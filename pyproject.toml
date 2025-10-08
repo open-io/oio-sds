@@ -73,6 +73,15 @@ zk = [
   "kazoo~=2.10.0",
 ]
 
+[tool.pylint]
+# Please keep this section event if the default config uses ruff
+
+[tool.pylint.classes]
+defining-attr-methods = ["__init__", "__new__", "setUp", "asyncSetUp", "__post_init__", "init", "init_db"]
+
+[tool.pylint."messages control"]
+disable = ["broad-except", "missing-module-docstring"]
+
 [tool.pytest.ini_options]
 addopts = [
   "--timer-top-n=10",
@@ -89,8 +98,13 @@ extend-include = ["bin/*", "tools/**/*.py"]
 exclude = ["tools/oio-bootstrap.py", "bin/encryption_tool/README.md", "confgen.py"]
 
 [tool.ruff.lint]
-extend-select = ["E", "I"]
-ignore = ["D203", "D212"]
+# E: pycodestyle (errors)
+# I: isort
+# PLC: pylint (convention)
+# PLE: pylint (errors)
+extend-select = ["E", "I", "PLC", "PLE"]
+# FIXME(FVE): PLC0415 -> `import` should be at the top-level of a file
+ignore = ["D203", "D212", "PLC0415"]
 
 [tool.ruff.lint.per-file-ignores]
 "{tests,tools}/**" = ["D"]

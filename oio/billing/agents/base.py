@@ -183,7 +183,7 @@ class IBillingAgent:
                 if self.publish_retries >= 0 and attempt > self.publish_retries:
                     raise
                 self.logger.warning(
-                    "Failed to publish to queue (attempt=%d), reason: {exc}",
+                    "Failed to publish to queue (attempt=%d), reason: %s",
                     attempt,
                     exc,
                 )
@@ -277,9 +277,9 @@ class IBillingAgent:
                     except MalformedBucket as exc:
                         code = 400
                         self.logger.warning("Malformed bucket: %s", exc)
-                    except Exception as exc:
+                    except Exception:
                         code = 500
-                        self.logger.exception("Failed to process bucket", exc)
+                        self.logger.exception("Failed to process bucket")
                     finally:
                         if code not in bucket_metrics:
                             self.logger.warning("Code %s is not recognized", code)

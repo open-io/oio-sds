@@ -16,6 +16,7 @@
 import math
 import os
 from datetime import datetime
+from importlib import import_module
 
 import pytest
 from mock import MagicMock as Mock
@@ -89,8 +90,7 @@ class TestBillingAgent(BaseTestCase):
 
     @classmethod
     def _monkey_patch(cls):
-        import eventlet
-
+        eventlet = import_module("eventlet")
         eventlet.patcher.monkey_patch(os=False, thread=False)
 
     def test_bucket_to_sample(self):

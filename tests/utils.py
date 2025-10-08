@@ -23,6 +23,7 @@ import sys
 import unittest
 from collections import defaultdict
 from functools import wraps
+from importlib import __import__ as late_import
 from subprocess import check_call
 from urllib.parse import urlencode
 
@@ -402,9 +403,9 @@ class CommonTestCase(unittest.TestCase):
     def admin(self):
         """Get a client for admin operations (especially sqliterepo)."""
         if not self._admin:
-            from oio.directory.admin import AdminClient
+            mod = late_import("oio.directory.admin", fromlist=["AdminClient"])
 
-            self._admin = AdminClient(
+            self._admin = mod.AdminClient(
                 self.conf, pool_manager=self.http_pool, logger=self.logger
             )
         return self._admin
@@ -446,9 +447,9 @@ class CommonTestCase(unittest.TestCase):
     @property
     def rdir(self):
         if self._rdir_client is None:
-            from oio.rdir.client import RdirClient
+            mod = late_import("oio.rdir.client", fromlist=["RdirClient"])
 
-            self._rdir_client = RdirClient(
+            self._rdir_client = mod.RdirClient(
                 self.conf,
                 directory_client=self.storage.directory,
                 logger=self.logger,
@@ -458,9 +459,9 @@ class CommonTestCase(unittest.TestCase):
     @property
     def storage(self):
         if self._storage_api is None:
-            from oio.api.object_storage import ObjectStorageApi
+            mod = late_import("oio.api.object_storage", fromlist=["ObjectStorageApi"])
 
-            self._storage_api = ObjectStorageApi(
+            self._storage_api = mod.ObjectStorageApi(
                 self.ns,
                 pool_manager=self.http_pool,
                 watchdog=self.watchdog,
@@ -472,9 +473,9 @@ class CommonTestCase(unittest.TestCase):
     @property
     def container_sharding(self):
         if self._container_sharding is None:
-            from oio.container.sharding import ContainerSharding
+            mod = late_import("oio.container.sharding", fromlist=["ContainerSharding"])
 
-            self._container_sharding = ContainerSharding(
+            self._container_sharding = mod.ContainerSharding(
                 self.conf,
                 logger=self.logger,
                 pool_manager=self.http_pool,

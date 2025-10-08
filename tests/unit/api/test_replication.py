@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@ from oio.api import io
 from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common import exceptions as exc
 from oio.common import green
+from oio.common.constants import CHUNK_HEADERS
 from oio.common.decorators import ensure_headers
 from oio.common.green import Timeout
 from oio.common.storage_method import STORAGE_METHODS
@@ -355,8 +356,6 @@ class TestReplication(unittest.TestCase):
             algo_new.assert_called_once_with("sha256")
 
     def test_write_no_checksum_algo(self):
-        from oio.common.constants import CHUNK_HEADERS
-
         headers = {CHUNK_HEADERS["chunk_hash"]: EMPTY_BLAKE3}
         with patch("oio.api.replication.get_hasher", wraps=get_hasher) as gh:
             self._test_write_checksum_algo(

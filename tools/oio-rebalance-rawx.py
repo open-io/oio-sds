@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,8 +15,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-from __future__ import print_function
 
 import argparse
 import subprocess
@@ -38,7 +37,7 @@ def move_rawx(volume, target_use, user, namespace, conf):
         result = result_err
     result = result.decode("utf-8")
     if proc.returncode != 0:
-        raise Exception("Mover failed on rawx " + volume)
+        raise Exception(f"Mover failed on rawx {volume}")
     return result
 
 
@@ -58,7 +57,7 @@ def main():
     all_rawx = cs.all_services("rawx", full=True)
     # Sort rawx by disk usage
     all_rawx.sort(key=lambda c: c["tags"]["stat.space"])
-    dic = dict()
+    dic = {}
     sum_size = 0
     nrawx = 0
     for rawx in all_rawx:
@@ -75,26 +74,19 @@ def main():
     av = sum_size / nrawx
     # Lock rawx, run blob-mover and unlock rawx
     target_use = str(int(av))
-    for addr in dic:
+    for addr, volume in dic.items():
         infos_srv = {"addr": addr, "type": "rawx"}
-        print("Lock rawx at " + addr)
+        print(f"Lock rawx at {addr}")
         if not args.dry_run:
             cs.lock_score(infos_srv)
-        print(
-            "Run mover on rawx at "
-            + addr
-            + " to get disk usage under "
-            + str(target_use)
-        )
+        print(f"Run mover on rawx at {addr} to get disk usage under {target_use}")
         if not args.dry_run:
             try:
-                output = move_rawx(
-                    dic[addr], target_use, args.user, args.namespace, conf
-                )
+                output = move_rawx(volume, target_use, args.user, args.namespace, conf)
                 print(output)
             except Exception as err:
-                print("ERROR: " + str(err))
-        print("Unlock rawx at " + addr)
+                print(f"ERROR: {err}")
+        print(f"Unlock rawx at {addr}")
         if not args.dry_run:
             cs.unlock_score(infos_srv)
     # Delete mover configuration file
