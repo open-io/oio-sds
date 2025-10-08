@@ -17,8 +17,7 @@
 import os
 import re
 from configparser import ConfigParser
-
-import pkg_resources
+from importlib import metadata
 
 DEFAULT_HANDLER = "egg:oio#default"
 
@@ -250,7 +249,7 @@ class EggLoader(_Loader):
 
     def get_context(self, obj_type, name=None, global_conf=None):
         entry_point, protocol, ep_name = self.find_egg_ep(obj_type, name=name)
-        distribution = pkg_resources.get_distribution(self.spec)
+        distribution = metadata.distribution(self.spec)
         return LoaderContext(
             entry_point,
             obj_type,
@@ -267,9 +266,9 @@ class EggLoader(_Loader):
             name = "main"
         entries = []
         for protocol in obj_type.egg_protocols:
-            pkg_resources.require(self.spec)
-            entry = pkg_resources.get_entry_info(self.spec, protocol, name)
-            if entry is not None:
+            entry = metadata.entry_points(group=protocol, name=name)
+            if entry:
+                entry = entry[0]
                 entries.append((entry.load(), protocol, entry.name))
                 break
         if not entries:
