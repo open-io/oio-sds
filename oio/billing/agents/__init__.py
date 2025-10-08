@@ -25,10 +25,17 @@ def _create_early_delete_billing_agent(conf, logger):
     return EarlyDeleteAgent(conf, logger=logger)
 
 
+def _create_restore_billing_agent(conf, logger):
+    from .restore_agent import RestoreAgent
+
+    return RestoreAgent(conf, logger=logger)
+
+
 def agent_factory(conf, logger):
     agents = {
         "account": _create_account_billing_agent,
         "early-delete": _create_early_delete_billing_agent,
+        "restore": _create_restore_billing_agent,
     }
     agent_type = conf.get("agent_type", "account")
 

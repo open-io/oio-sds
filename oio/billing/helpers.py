@@ -152,9 +152,7 @@ class BillingAdjustmentClient(_BillingClient):
 class RestoreBillingClient(_BillingClient):
     PREFIX = "ArchiveRestore"
 
-    def __init__(self, conf, logger=None):
-        super().__init__(conf, logger=logger)
-
+    @catch_service_errors
     def list_restore(self):
         """List accounts and buckets which have restore awaiting for billing
 
@@ -164,6 +162,7 @@ class RestoreBillingClient(_BillingClient):
         for account, bucket, storage_class in self._list_keys():
             yield account, bucket, storage_class
 
+    @catch_service_errors
     def add_restore(
         self, account, bucket, storage_class, requests=0, transfer=0, storage=0
     ):
@@ -190,6 +189,7 @@ class RestoreBillingClient(_BillingClient):
             },
         )
 
+    @catch_service_errors
     def reset_restore(self, account, bucket, storage_class):
         """
         Get and reset the volume of data due for specified storage class

@@ -17,8 +17,8 @@ import math
 from mock import MagicMock, patch
 
 from oio.billing.agents import agent_factory
-from oio.billing.agents.early_delete_agent import EarlyDeleteAgent
-from oio.billing.helpers import BillingAdjustmentClient
+from oio.billing.agents.restore_agent import RestoreAgent
+from oio.billing.helpers import RestoreBillingClient
 from oio.common.redis_conn import RedisConnection
 from tests.utils import BaseTestCase
 
@@ -50,9 +50,9 @@ class FakeChannel:
         pass
 
 
-class TestEarlyDeleteAgent(BaseTestCase):
+class TestRestoreAgent(BaseTestCase):
     CONF = {
-        "agent_type": "early-delete",
+        "agent_type": "restore",
         # Billing message
         "reseller_prefix": "AUTH_",
         "default_storage_class": "STANDARD",
@@ -71,7 +71,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
         cls._redis_client = RedisConnection(host="127.0.0.1:6379")
 
     def _cleanup_redis(self):
-        pattern = f"{BillingAdjustmentClient.PREFIX}/*"
+        pattern = f"{RestoreBillingClient.PREFIX}/*"
         pipeline = self._redis_client.conn.pipeline()
         for entry in self._redis_client.conn.scan_iter(match=pattern):
             pipeline.delete(entry)
@@ -85,8 +85,8 @@ class TestEarlyDeleteAgent(BaseTestCase):
         ).upper()
         conf = self.CONF.copy()
         self.agent = agent_factory(conf, self.logger)
-        self.assertIsInstance(self.agent, EarlyDeleteAgent)
-        self.adjustment_client = BillingAdjustmentClient(conf, self.logger)
+        self.assertIsInstance(self.agent, RestoreAgent)
+        self.restore_client = RestoreBillingClient(conf, self.logger)
 
     def tearDown(self):
         self._cleanup_redis()
@@ -96,14 +96,19 @@ class TestEarlyDeleteAgent(BaseTestCase):
         expects = []
         for a in range(2):
             for b in range(2):
-                for i, sc in enumerate(("STANDARD_IA", "DEEP_ARCHIVE")):
-                    e = (f"acc{a}", f"buck{b}", sc, 100 * (a + b + i), a + b + i)
-                    self.adjustment_client.add_adjustment(*e)
+                for i, sc in enumerate(
+                    (
+                        "GLACIER",
+                        "DEEP_ARCHIVE",
+                    )
+                ):
+                    e = (f"acc{a}", f"buck{b}", sc, 1, 100 * (a + b + i), a + b + i)
+                    self.restore_client.add_restore(*e)
                     expects.append(e)
         mock_stats = self.agent.statsd = MagicMock()
         channel = FakeChannel()
         with patch(
-            "oio.billing.agents.early_delete_agent.EarlyDeleteAgent._amqp_connect"
+            "oio.billing.agents.restore_agent.RestoreAgent._amqp_connect"
         ) as mock_amqp_connect:
             with patch.object(
                 self.agent,
@@ -124,7 +129,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
             [
                 c.args
                 for c in mock_stats.timing.call_args_list
-                if c.args[0] == "openio.billing.early-deletion.scan.500.duration"
+                if c.args[0] == "openio.billing.restore.scan.500.duration"
             ],
         )
         self.assertEqual(
@@ -132,7 +137,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
             [
                 c.args
                 for c in mock_stats.timing.call_args_list
-                if c.args[0] == "openio.billing.early-deletion.send.500.duration"
+                if c.args[0] == "openio.billing.restore.send.500.duration"
             ],
         )
 
@@ -143,7 +148,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
             [
                 c.args[1]
                 for c in mock_stats.gauge.call_args_list
-                if c.args[0] == "openio.billing.early-deletion.scan.buckets.200"
+                if c.args[0] == "openio.billing.restore.scan.buckets.200"
             ][0],
         )
         # Ignored
@@ -152,7 +157,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
             [
                 c.args[1]
                 for c in mock_stats.gauge.call_args_list
-                if c.args[0] == "openio.billing.early-deletion.scan.buckets.204"
+                if c.args[0] == "openio.billing.restore.scan.buckets.204"
             ][0],
         )
         # Missing info
@@ -161,7 +166,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
             [
                 c.args[1]
                 for c in mock_stats.gauge.call_args_list
-                if c.args[0] == "openio.billing.early-deletion.scan.buckets.400"
+                if c.args[0] == "openio.billing.restore.scan.buckets.400"
             ][0],
         )
         # Error
@@ -170,7 +175,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
             [
                 c.args[1]
                 for c in mock_stats.gauge.call_args_list
-                if c.args[0] == "openio.billing.early-deletion.scan.buckets.500"
+                if c.args[0] == "openio.billing.restore.scan.buckets.500"
             ][0],
         )
 
@@ -184,7 +189,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
                 [
                     c.args
                     for c in mock_stats.timing.call_args_list
-                    if c.args[0] == "openio.billing.early-deletion.scan.200.duration"
+                    if c.args[0] == "openio.billing.restore.scan.200.duration"
                 ]
             ),
         )
@@ -195,7 +200,7 @@ class TestEarlyDeleteAgent(BaseTestCase):
                 [
                     c.args
                     for c in mock_stats.timing.call_args_list
-                    if c.args[0] == "openio.billing.early-deletion.send.200.duration"
+                    if c.args[0] == "openio.billing.restore.send.200.duration"
                 ]
             ),
         )
