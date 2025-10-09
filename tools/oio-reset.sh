@@ -155,12 +155,12 @@ $cmd_openio cluster wait -vvv --debug -d 60 -u -n "$COUNT" rawx meta2 meta0 meta
 # We cannot use cluster wait command for internal rawx as the conscience does not know them
 # To check that the internal rawx are up we send requests to internal rawx to see if we get responses
 # Expected addresses for two internal rawx services running on port 6033 and 6035
-# INTERNAl_RAWX_ADDRS = ["http://127.0.0.1:6033", "http://127.0.0.1:6335"]
-INTERNAl_RAWX_ADDRS=$($cmd_openio cluster list rawx --tags | awk '{split($4, a, ":"); split($(NF-1), b, "=") ; print "http://"a[1] ":" b[2]}' | tail -n +4 | head -n -1)
+# INTERNAL_RAWX_ADDRS = ["http://127.0.0.1:6033", "http://127.0.0.1:6335"]
+INTERNAL_RAWX_ADDRS=$($cmd_openio cluster list rawx --tags -f value -c Addr -c Tags | awk '{split($1,a,":"); split($NF,b,"internal_port="); print "http://"a[1]":"b[2]}')
 MAX_WAITING="60"
 for i in $(seq 1 "$MAX_WAITING"); do
     ALL_INTERNAL_RAWX_UP=true
-    for internal_addr in $INTERNAl_RAWX_ADDRS;
+    for internal_addr in $INTERNAL_RAWX_ADDRS;
     do
         RESP_CODE=$(curl --write-out %{http_code} --silent --output /dev/null -X GET "$internal_addr/info")
         if [[ $RESP_CODE -eq 000 ]]; then
