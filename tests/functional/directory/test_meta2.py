@@ -15,10 +15,18 @@
 # License along with this library.
 
 import random
+import time
 
 from mock import Mock, patch
 
-from oio.common.exceptions import DisusedUninitializedDB, RemainsDB, UninitializedDB
+from oio.common.constants import OIO_DB_DISABLED, OIO_DB_ENABLED
+from oio.common.exceptions import (
+    DisusedUninitializedDB,
+    NoSuchObject,
+    RemainsDB,
+    ServiceBusy,
+    UninitializedDB,
+)
 from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
 from tests.utils import BaseTestCase, random_str
@@ -256,7 +264,7 @@ class TestMeta2Database(BaseTestCase):
         for _ in range(0, 5):
             self.api.object_get_properties(self.account, self.reference, "test2")
 
-    def test_move_with_unitialized_base(self):
+    def test_move_with_uninitialized_base(self):
         self.api.container_create(self.account, self.reference)
         base = cid_from_name(self.account, self.reference)
         # Simulate non initialized base
@@ -286,7 +294,7 @@ class TestMeta2Database(BaseTestCase):
         self.assertIsInstance(moved[0]["err"], UninitializedDB)
         self.assertNotIsInstance(moved[0]["err"], DisusedUninitializedDB)
 
-    def test_move_with_unitialized_disused_base(self):
+    def test_move_with_uninitialized_disused_base(self):
         self.api.container_create(self.account, self.reference)
         base = cid_from_name(self.account, self.reference)
         # Simulate non initialized base
@@ -348,3 +356,59 @@ class TestMeta2Database(BaseTestCase):
         self.assertEqual(src, moved[0]["src"])
         self.assertIsNotNone(moved[0]["err"])
         self.assertIsInstance(moved[0]["err"], RemainsDB)
+
+    def test_status_disabled_until(self):
+        """
+        Check the 'disabled' status blocks object operations,
+        but allows them after 'status.until' is reached.
+        """
+        self.api.container_create(self.account, self.reference)
+        self.clean_later(self.reference)
+
+        # Disable container operations
+        disabled_until = time.time() + 1.0
+        self.api.container_set_properties(
+            self.account,
+            self.reference,
+            system={
+                "sys.status": str(OIO_DB_DISABLED),
+                "sys.status.until": str(disabled_until),
+            },
+        )
+        cprops = self.api.container_get_properties(
+            self.account, self.reference, force_master=True
+        )
+        self.assertEqual(cprops["system"]["sys.status"], str(OIO_DB_DISABLED))
+        self.assertEqual(cprops["system"]["sys.status.until"], str(disabled_until))
+
+        # Make sure object operations are disabled
+        self.assertRaisesRegex(
+            ServiceBusy,
+            ".*Invalid status: disabled.*",
+            self.api.object_get_properties,
+            self.account,
+            self.reference,
+            "_",
+        )
+
+        # Wait a bit, and make sure operations are enabled again
+        time.sleep(disabled_until - time.time() + 0.5)
+        self.assertRaises(
+            NoSuchObject,
+            self.api.object_get_properties,
+            self.account,
+            self.reference,
+            "_",
+        )
+
+        self.api.object_create(
+            self.account, self.reference, data=b"", obj_name="creation-allowed-again"
+        )
+
+        cprops = self.api.container_get_properties(
+            self.account, self.reference, force_master=True
+        )
+        self.assertNotIn(
+            "sys.status.until", cprops["system"], "Expiration date should be removed"
+        )
+        self.assertEqual(cprops["system"]["sys.status"], str(OIO_DB_ENABLED))

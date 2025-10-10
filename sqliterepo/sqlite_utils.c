@@ -396,6 +396,24 @@ sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3)
 			(gint64)ADMIN_STATUS_ENABLED);
 }
 
+gboolean
+sqlx_admin_status_clean_expired(struct sqlx_sqlite3_s *sq3)
+{
+	if (!sqlx_admin_status_expired(sq3))
+		return FALSE;
+
+	sqlx_admin_set_status(sq3, ADMIN_STATUS_ENABLED);
+	sqlx_admin_del(sq3, SQLX_ADMIN_STATUS_UNTIL);
+	return TRUE;
+}
+
+gboolean
+sqlx_admin_status_expired(struct sqlx_sqlite3_s *sq3)
+{
+	gint64 status_until = sqlx_admin_get_i64(sq3, SQLX_ADMIN_STATUS_UNTIL, 0);
+	return status_until > 0 && status_until <= oio_ext_real_seconds();
+}
+
 const gchar*
 sqlx_admin_status2str(gint64 status)
 {

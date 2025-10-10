@@ -673,7 +673,7 @@ GError * KV_decode_object(struct json_object *jobj, gchar ***out) {
 	json_object_object_foreach(jobj, key, val) {
 		if (!json_object_is_type(val, json_type_string)) {
 			if (!json_object_is_type(val, json_type_null)) {
-				err = BADREQ ("Invalid property '%s'", key);
+				err = BADREQ ("Invalid property '%s': must be string or null", key);
 				break;
 			}
 			g_ptr_array_add(v, g_strdup(key));

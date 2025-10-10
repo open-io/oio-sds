@@ -1145,7 +1145,7 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 
 	reply->send_reply(CODE_TEMPORARY, "Dump done");
 
-	/* forward the dump to the target */
+	/* Forward the dump to the target */
 	const gchar *local_addr = election_manager_get_local(
 			sqlx_repository_get_elections_manager(repo));
 	if ((err = peer_restore(
@@ -1509,8 +1509,10 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
+	const enum sqlx_open_type_e how =
+			(oio_ext_is_admin()? SQLX_OPEN_URGENT : 0)
+			| (flags & FLAG_LOCAL)?
+			(SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
 	if (err)
 		goto label_exit;
@@ -1656,7 +1658,7 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	struct db_properties_s *db_properties = NULL;
 
 	/* Extraction */
-	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
+	if ((err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -1667,17 +1669,18 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	err = KV_decode_buffer (body, length, &pairs);
 	EXTRA_ASSERT((err != NULL) ^ (pairs != NULL));
 
-	if (NULL != err) {
+	if (err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
 	/* check the format */
-	for (gchar **p=pairs; !err && *p && *(p+1); p+=2) {
+	for (gchar **p = pairs; !err && *p && *(p + 1); p += 2) {
 		if (!(flags & FLAG_NOCHECK)
 				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_SYS)
 				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER)) {
-			err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name");
+			err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name: '%s' has no "
+				  SQLX_ADMIN_PREFIX_SYS" or "SQLX_ADMIN_PREFIX_USER" prefix", *p);
 			break;
 		}
 	}
@@ -1685,8 +1688,10 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 		goto label_exit;
 
 	/* Open */
-	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
-			? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
+	const enum sqlx_open_type_e how =
+			(oio_ext_is_admin()? SQLX_OPEN_URGENT : 0)
+			| (flags & FLAG_LOCAL)?
+			(SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
 	if (err)
 		goto label_exit;

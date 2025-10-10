@@ -45,7 +45,10 @@ License along with this library.
 #endif
 
 #ifndef SQLX_ADMIN_STATUS
+/** Integer value telling if the database is enabled, frozen or disabled. */
 #define SQLX_ADMIN_STATUS SQLX_ADMIN_PREFIX_SYS "status"
+/** Epoch value after which the database is considered enabled again. */
+#define SQLX_ADMIN_STATUS_UNTIL SQLX_ADMIN_STATUS ".until"
 #endif
 
 #ifndef SQLX_ADMIN_NAMESPACE
@@ -58,11 +61,6 @@ License along with this library.
 
 #ifndef SQLX_ADMIN_USERNAME
 #define SQLX_ADMIN_USERNAME SQLX_ADMIN_PREFIX_SYS "user.name"
-#endif
-
-// Deprecated since oio-sds 4.4.0
-#ifndef SQLX_ADMIN_USERTYPE
-#define SQLX_ADMIN_USERTYPE SQLX_ADMIN_PREFIX_SYS "user.type"
 #endif
 
 #ifndef SQLX_ADMIN_BASENAME
@@ -204,6 +202,14 @@ guint sqlx_admin_save_lazy_tnx (struct sqlx_sqlite3_s *sq3);
 /* application-level */
 void sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status);
 gint64 sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3);
+
+/* If the database status has expired, clean the expiration date,
+ * set the status to enabled. */
+gboolean sqlx_admin_status_clean_expired(struct sqlx_sqlite3_s *sq3);
+
+/* Tell if the status of the database has expired
+ * (false if there is no expiration). */
+gboolean sqlx_admin_status_expired(struct sqlx_sqlite3_s *sq3);
 
 /* Get a (static) string representing the status of the database. */
 const gchar* sqlx_admin_status2str(gint64 status);

@@ -414,6 +414,11 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             help="Set container status",
         )
         parser.add_argument(
+            "--status-until",
+            type=int,
+            help="Set status expiration (seconds since Epoch). 0 means unset.",
+        )
+        parser.add_argument(
             "--lifecycle-bypass-time",
             choices=self.time_bypass_value.keys(),
             help="Apply time factor (reducing day duration) for lifecycle actions",
@@ -428,7 +433,7 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
     def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
-        super(SetContainer, self).take_action_container(parsed_args)
+        super().take_action_container(parsed_args)
         reqid = self.app.request_id(prefix="CLI-container-set-")
         properties = parsed_args.property
         system = {}
@@ -453,6 +458,8 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             )
         if parsed_args.status is not None:
             system["sys.status"] = self.status_value[parsed_args.status]
+        if parsed_args.status_until is not None:
+            system["sys.status.until"] = str(parsed_args.status_until)
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.account,
@@ -839,6 +846,10 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                 key = f"objects.{key[len(M2_PROP_OBJECTS + '.') :]}"
                 if parsed_args.formatter == "table":
                     value = convert_size(int(value))
+            elif key == "sys.status.until":
+                key = "status.until"
+                if parsed_args.formatter == "table":
+                    value = convert_timestamp(value) if value else "Unset"
             else:
                 continue
             info[key] = value

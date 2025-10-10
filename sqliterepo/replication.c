@@ -726,6 +726,9 @@ _sqlx_transaction_validate(struct sqlx_repctx_s *ctx)
 	 * in the admin table. */
 	sqlx_admin_ensure_versions (ctx->sq3);
 
+	/* Clean the status expiration date, if needed. */
+	sqlx_admin_status_clean_expired(ctx->sq3);
+
 	/* Ensure any operation happening during the request handler on the
 	 * admin table, will be stored in the replication context and will
 	 * trigger an increment in the version numbers. */

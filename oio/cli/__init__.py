@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -63,9 +63,13 @@ def add_common_parser_options(parser):
     parser.add_argument(
         "--admin-flag",
         "--admin",
+        "--urgent",
         dest="admin_mode",
         action="store_true",
-        help="Add 'admin mode' flag to all requests to oio-proxy.",
+        help=(
+            "Add 'admin mode' flag to all requests to oio-proxy. "
+            "This flag can bypass some securities and declare the request as urgent."
+        ),
     )
     parser.add_argument(
         "-a",

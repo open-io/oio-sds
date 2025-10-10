@@ -1287,7 +1287,7 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 		else if (flags == ADMIN_STATUS_DISABLED)
 			mode = SQLX_OPEN_DISABLED;
 
-		if (!(mode & expected_status)) {
+		if (!(mode & expected_status) && !sqlx_admin_status_expired(*result)) {
 			err = NEWERROR(CODE_CONTAINER_FROZEN,
 					"Invalid status: %s", sqlx_admin_status2str(flags));
 		}
