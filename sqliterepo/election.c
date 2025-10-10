@@ -3801,7 +3801,7 @@ _member_react_CHECKING_MASTER(struct election_member_s *member,
 			return;
 
 			/* Actions
-			 * The acction is ~ the same for every completion event. This is
+			 * The action is ~ the same for every completion event. This is
 			 * intentional and is used to have a pretty transition log for
 			 * the election FSM. */
 		case EVT_GETVERS_OK:
@@ -4182,7 +4182,7 @@ _member_react_SLAVE(struct election_member_s *member, enum event_type_e evt)
 	 * induced by explicit actions (expirations, requests to leave) are
 	 * not considered as lead by the platform entropy. The others are
 	 * considered as a result of the global entropy.
-	 * When not a result of the entropy, we do not alter the unstability
+	 * When not a result of the entropy, we do not alter the instability
 	 * timestamp to avoid making the client consider this election is
 	 * pending for too long. */
 	switch (evt) {
