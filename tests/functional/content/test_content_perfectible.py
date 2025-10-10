@@ -346,5 +346,8 @@ class TestPerfectibleLocalContent(TestPerfectibleContent):
         cls._cls_set_proxy_config(config)
         super(TestPerfectibleLocalContent, cls).tearDownClass()
 
+    def test_create_just_enough_rawx(self):
+        self.skipTest("Too buggy when run with proxy.srv_local.prepare=1")
+
     def test_upload_warn_dist(self):
         self.skipTest("Too buggy when run with proxy.srv_local.prepare=1")
