@@ -166,6 +166,13 @@ class ArchiveRestore(Filter):
             data_transfer=data_transfer,
         )
 
+        if data_transfer:
+            # Send stat for restore processing time
+            self.statsd.timing(
+                f"openio.restore.{object_storage_class.upper()}.process",
+                base_time - restore_prop.request_date,
+            )
+
     def _emit_restore_request_invoice(
         self, account, bucket, storage_class, size, duration, data_transfer=False
     ):

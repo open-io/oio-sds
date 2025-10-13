@@ -23,7 +23,6 @@ from oio.common.constants import (
 )
 from oio.common.kafka import KafkaSender
 from oio.common.properties import RestoreProperty
-from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
 from oio.event.evob import EventTypes
 from oio.event.filters.archive_restore import ArchiveRestore
@@ -55,12 +54,13 @@ class TestArchiveRestore(BaseTestCase):
         super().setUp()
         self.patcher = patch("oio.event.filters.archive_restore.RestoreBillingClient")
         self.mock = self.patcher.start()
+        self.statsd_mock = Mock()
 
         self.mock.return_value = self.mock
         self.app = _App(
             {
                 "api": self.storage,
-                "statsd_client": get_statsd(),
+                "statsd_client": self.statsd_mock,
             }
         )
         self.account = f"archive-restore-acct-{random_str(4)}"
@@ -200,7 +200,7 @@ class TestArchiveRestore(BaseTestCase):
         mock_cb = Mock()
         reqid = request_id("delay-event-")
 
-        now = datetime(2025, 6, 5, 16, 43, 1)
+        now = datetime(2025, 6, 5, 16, 43, 1, tzinfo=timezone.utc)
         expected_restore_duration = 3 * 24 + 8
 
         with patch(
@@ -259,6 +259,9 @@ class TestArchiveRestore(BaseTestCase):
                 restore.expiry_date,
             )
             self.assertFalse(restore.ongoing)
+            self.statsd_mock.timing.assert_called_with(
+                "openio.restore.DEEP_ARCHIVE.process", 19861.0
+            )
 
     def test_delay_event_update_expiry(self):
         _, size, _, meta = self._create_object("my-object")
@@ -335,6 +338,7 @@ class TestArchiveRestore(BaseTestCase):
                 restore.expiry_date,
             )
             self.assertFalse(restore.ongoing)
+            self.statsd_mock.timing.assert_not_called()
 
     def test_delay_event_restore_previously_restored(self):
         _, size, _, meta = self._create_object("my-object")
@@ -410,6 +414,9 @@ class TestArchiveRestore(BaseTestCase):
                 restore.expiry_date,
             )
             self.assertFalse(restore.ongoing)
+            self.statsd_mock.timing.called_once_with(
+                "openio.restore.DEEP_ARCHIVE.process", 1.0
+            )
 
     def test_restore_event_processing(self):
         reqid = request_id("delay-event-")
