@@ -231,7 +231,7 @@ class OioObjectChangePolicy:
                         self._change_policy(account, container, obj_name, obj_version)
                 finally:
                     self.logger.info(
-                        "%d objects transitionned for container %s, account %s",
+                        "%d objects transitioned for container %s, account %s",
                         obj_per_container,
                         container,
                         account,

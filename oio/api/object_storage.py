@@ -46,7 +46,7 @@ from oio.common.fullpath import encode_fullpath
 from oio.common.green import sleep
 from oio.common.logger import get_logger
 from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
-from oio.common.storage_method import STORAGE_METHODS
+from oio.common.storage_method import STORAGE_METHODS, parse_chunk_method
 from oio.common.utils import (
     GeneratorIO,
     cid_from_name,
@@ -1172,6 +1172,15 @@ class ObjectStorageApi(object):
                 f"match provided policy ({policy})"
             )
         kwargs["version"] = meta["version"]
+        extra_params = {}
+        # Precise the oca and cca when creating the new object
+        if "chunk_method" in meta:
+            chunk_method = meta["chunk_method"]
+            _, params = parse_chunk_method(chunk_method)
+            if "cca" in params:
+                extra_params["chunk_checksum_algo"] = params["cca"]
+            if "oca" in params:
+                extra_params["object_checksum_algo"] = params["oca"]
         return self.object_create_ext(
             account,
             container,
@@ -1179,6 +1188,7 @@ class ObjectStorageApi(object):
             data=stream,
             policy=policy,
             change_policy=True,
+            **extra_params,
             **kwargs,
         )
 

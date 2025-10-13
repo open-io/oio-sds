@@ -2577,7 +2577,9 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         mc_size = self.chunk_size * stg_met.min_chunks_to_read
         return max((data_size - 1) // mc_size + 1, 1) * stg_met.expected_chunks
 
-    def _test_change_policy(self, data_size, old_policy, new_policy, versioning=False):
+    def _test_change_policy(
+        self, data_size, old_policy, new_policy, versioning=False, oca=None, cca=None
+    ):
         if "EC" in (old_policy, new_policy) and self.nb_rawx < 9:
             self.skipTest("need at least 9 rawx to run")
         elif "THREECOPIES" in (old_policy, new_policy) and self.nb_rawx < 3:
@@ -2595,12 +2597,22 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         expected_size = 0
         expected_count_by_policy = {}
         expected_size_by_policy = {}
+        extra_params = {}
+        if cca:
+            extra_params["chunk_checksum_algo"] = cca
+        if oca:
+            extra_params["object_checksum_algo"] = oca
         if versioning:
             self.api.container_set_properties(
                 self.account, name, system={"sys.m2.policy.version": "-1"}
             )
             _, _, _, obj_meta = self.api.object_create_ext(
-                self.account, name, obj_name=name, data=random_data(42), policy="SINGLE"
+                self.account,
+                name,
+                obj_name=name,
+                data=random_data(42),
+                policy="SINGLE",
+                **extra_params,
             )
             self.created.append((name, name, obj_meta["version"]))
             expected_count += 1
@@ -2621,6 +2633,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             policy=old_policy,
             properties={"test": "it works"},
             reqid=reqid,
+            **extra_params,
         )
         self.created.append((name, name, obj_meta["version"]))
         expected_count += 1
@@ -2794,6 +2807,11 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
     def test_change_content_chunksize_bytes_policy_twocopies_to_ec(self):
         self._test_change_policy(self.chunk_size, "TWOCOPIES", "EC")
+
+    def test_change_policy_single_to_ec_blake3_checksum_algo(self):
+        self._test_change_policy(
+            self.chunk_size, "SINGLE", "EC", oca="blake3", cca="blake3"
+        )
 
     def test_change_content_2xchunksize_bytes_policy_threecopies_to_ec(self):
         self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "EC")
