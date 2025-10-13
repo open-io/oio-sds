@@ -447,11 +447,11 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				ssize_t rc = metautils_syscall_read(
 						client->fd, d, (4 - client->reply->len));
 				if (rc == 0) {
-					return NEWERROR(CODE_NETWORK_ERROR,
-							"EOF while reading response size from %s: (%d) %s",
-							gridd_client_url(client), errno, strerror(errno));
+					GRID_WARN("EOF while reading response size from %s, "
+							"will retry until deadline (errno=%d %s, reqid=%s)",
+							gridd_client_url(client), errno, strerror(errno), oio_ext_get_reqid());
 				}
-				if (rc < 0) {
+				else if (rc < 0) {
 					return (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) ?
 						NULL : NEWERROR(CODE_NETWORK_ERROR,
 								"ERROR while reading response size from %s:"
@@ -459,8 +459,10 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 								errno, strerror(errno));
 				}
 
-				EXTRA_ASSERT(rc > 0);
-				g_byte_array_append(client->reply, d, rc);
+				EXTRA_ASSERT(rc >= 0);
+				if (rc > 0) {
+					g_byte_array_append(client->reply, d, rc);
+				}
 
 				if (client->reply->len < 4)  /* size still incomplete */
 					return NULL;
@@ -485,22 +487,23 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				errno = 0;
 				ssize_t rc = metautils_syscall_read(client->fd, d, dmax);
 				if (rc == 0) {
-					return NEWERROR(CODE_NETWORK_ERROR,
-							"EOF while reading response from %s "
-							"(got %u bytes, expected %"G_GUINT32_FORMAT"): "
-							"(%d) %s",
-							gridd_client_url(client), client->reply->len,
-							client->size + 4, errno, strerror(errno));
+					GRID_WARN("EOF while reading response from %s: "
+							"got %u bytes, expected %"G_GUINT32_FORMAT", "
+							"will retry until deadline (errno=%d %s, reqid=%s)",
+							gridd_client_url(client), client->size + 4, client->reply->len,
+							errno, strerror(errno), oio_ext_get_reqid());
 				}
-				if (rc < 0) {
+				else if (rc < 0) {
 					return (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) ?
 						NULL : NEWERROR(CODE_NETWORK_ERROR,
 								"ERROR while reading response from %s: (%d) %s",
 								gridd_client_url(client), errno, strerror(errno));
 				}
 
-				EXTRA_ASSERT(rc > 0);
-				g_byte_array_append(client->reply, d, rc);
+				EXTRA_ASSERT(rc >= 0);
+				if (rc > 0) {
+					g_byte_array_append(client->reply, d, rc);
+				}
 			}
 
 			EXTRA_ASSERT (client->reply->len <= client->size + 4);
@@ -804,7 +807,7 @@ gridd_client_start(struct gridd_client_s *client)
 	const gint64 now = oio_ext_monotonic_time ();
 	client->tv_start = client->tv_connect = now;
 
-	/* Compute now the deadline of each step, then ppatch it with the
+	/* Compute now the deadline of each step, then patch it with the
 	 * threadlocal deadline */
 	client->deadline_connect = now + client->delay_connect;
 	client->deadline_single = now + client->delay_single;
