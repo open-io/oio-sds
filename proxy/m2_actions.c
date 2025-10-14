@@ -4381,15 +4381,6 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //
 //    "x-oio-force-versioning: -1"
 //
-// The following header tells that the object must be created
-// as if the versioning was enabled and unlimited
-// (this prevents the automatic garbage collection):
-//
-// .. code-block:: text
-//
-//    "x-oio-simulate-versioning: 1"
-//
-//
 // Sample response:
 //
 // .. code-block:: http
@@ -4736,12 +4727,6 @@ static enum http_rc_e action_m2_content_delete (struct req_args_s *args,
 // .. code-block:: text
 //
 //    "x-oio-force-versioning: -1"
-//
-// You can delete this object as if the versioning is enabled
-//
-// .. code-block:: text
-//
-//    "x-oio-simulate-versioning: 1"
 //
 // Unreference object from container
 //

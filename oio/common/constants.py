@@ -25,7 +25,6 @@ FORCEMASTER_HEADER = HEADER_PREFIX + "force-master"
 ENDUSERREQUEST_HEADER = HEADER_PREFIX + "end-user-request"
 FORCEVERSIONING_HEADER = HEADER_PREFIX + "force-versioning"
 SHARD_HEXID_HEADER = HEADER_PREFIX + "shard-hexid"
-SIMULATEVERSIONING_HEADER = HEADER_PREFIX + "simulate-versioning"
 PERFDATA_HEADER = HEADER_PREFIX + "perfdata"
 PERFDATA_HEADER_PREFIX = PERFDATA_HEADER + "-"
 REGION_HEADER = HEADER_PREFIX + "region"
@@ -240,7 +239,7 @@ M2_PROP_DRAINING_STATE = "sys.m2.draining.state"
 M2_PROP_DRAINING_TIMESTAMP = "sys.m2.draining.timestamp"
 # Lifecycle time bypass flag for testing purpose only.
 M2_PROP_LIFECYCLE_TIME_BYPASS = "sys.m2.lifecycle.time_bypass"
-# Lifecyle custom budget
+# Lifecycle custom budget
 M2_PROP_LIFECYCLE_CUSTOM_BUDGET = "sys.m2.lifecycle.custom_budget"
 
 # HTTP Content-Type

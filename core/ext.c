@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -187,7 +187,6 @@ struct oio_ext_local_s {
 	guint8 upgrade_to_tls;
 	gchar *user_agent;
 	gchar *force_versioning;
-	guint8 simulate_versioning;
 	/** Request originates from a redirect from a root container. */
 	guint8 is_shard_redirection;
 	/** If the caller sets a region, the backend service must check it is
@@ -402,16 +401,6 @@ void oio_ext_set_force_versioning(const gchar *force_versioning) {
 		g_free(l->force_versioning);
 	}
 	l->force_versioning = g_strdup(force_versioning);
-}
-
-gboolean oio_ext_has_simulate_versioning(void) {
-	const struct oio_ext_local_s *l = _local_ensure ();
-	return BOOL(l->simulate_versioning);
-}
-
-void oio_ext_set_simulate_versioning(const gboolean simulate_versioning) {
-	struct oio_ext_local_s *l = _local_ensure();
-	l->simulate_versioning = BOOL(simulate_versioning);
 }
 
 gboolean oio_ext_is_shard_redirection(void) {

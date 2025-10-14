@@ -105,7 +105,6 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_admin);
 M2V2_DECLARE_FILTER(meta2_filter_extract_force_master);
 M2V2_DECLARE_FILTER(meta2_filter_extract_user_agent);
 M2V2_DECLARE_FILTER(meta2_filter_extract_force_versioning);
-M2V2_DECLARE_FILTER(meta2_filter_extract_simulate_versioning);
 M2V2_DECLARE_FILTER(meta2_filter_extract_find_shards_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_prepare_shard_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_region);

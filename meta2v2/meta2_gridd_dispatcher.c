@@ -55,7 +55,6 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_set_shared_properties(NULL);
-	oio_ext_set_simulate_versioning(FALSE);
 	oio_ext_set_user_agent(NULL);
 	oio_ext_allow_long_timeout(FALSE);
 
@@ -91,7 +90,6 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_force_master(FALSE);
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_user_agent(NULL);
-	oio_ext_set_simulate_versioning(FALSE);
 	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_set_shared_properties(NULL);
 	oio_ext_allow_long_timeout(FALSE);
@@ -298,7 +296,6 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
-	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
@@ -321,7 +318,6 @@ static gridd_filter M2V2_POLICY_TRANSITION_FILTERS[] =
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
-	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
@@ -398,7 +394,6 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_extract_header_flags32,
 	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
-	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,

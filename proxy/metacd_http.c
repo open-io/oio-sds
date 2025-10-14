@@ -290,12 +290,6 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		PROXYD_HEADER_END_USER_REQUEST);
 	oio_ext_set_end_user_request(oio_str_parse_bool(end_user_request, FALSE));
 
-	/* Load the optional 'simulate_versioning' flag */
-	const char *simulate_versioning = g_tree_lookup(
-			rq->tree_headers, PROXYD_HEADER_SIMULATE_VERSIONING);
-	oio_ext_set_simulate_versioning(
-			oio_str_parse_bool(simulate_versioning, FALSE));
-
 	/* Set sharding request to FALSE.
 	 * Only a root container redirect set to TRUE. */
 	oio_ext_set_is_shard_redirection(FALSE);
@@ -430,7 +424,7 @@ _task_expire_services_known (gpointer p UNUSED)
 		GRID_INFO("Forgot %u services, in %.6fs",
 				count, duration/(double)G_TIME_SPAN_SECOND);
 	} else if (duration > G_TIME_SPAN_SECOND) {
-		GRID_WARN("No known service expired, but analyzis took %.6fs",
+		GRID_WARN("No known service expired, but analysis took %.6fs",
 				duration/(double)G_TIME_SPAN_SECOND);
 	}
 }
@@ -445,7 +439,7 @@ _task_expire_services_down (gpointer p UNUSED)
 		GRID_INFO("Re-enabled %u services in %.6fs",
 				count, duration/(double)G_TIME_SPAN_SECOND);
 	} else if (duration > G_TIME_SPAN_SECOND) {
-		GRID_WARN("No service re-enabled, but analyzis took %.6fs",
+		GRID_WARN("No service re-enabled, but analysis took %.6fs",
 				duration/(double)G_TIME_SPAN_SECOND);
 	}
 }

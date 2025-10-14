@@ -257,8 +257,6 @@ m2db_get_container_shard_count(struct sqlx_sqlite3_s *sq3,
 gint64
 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
-	if (oio_ext_has_simulate_versioning())
-		return -1;
 	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, def);
 }
 

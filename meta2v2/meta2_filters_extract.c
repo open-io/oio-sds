@@ -420,21 +420,6 @@ meta2_filter_extract_region(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_simulate_versioning(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[1024];
-	TRACE_FILTER();
-	EXTRACT_OPT(NAME_MSGKEY_SIM_VER);
-	const char *simulate_versioning = meta2_filter_ctx_get_param(
-			ctx, NAME_MSGKEY_SIM_VER);
-	oio_ext_set_simulate_versioning(
-			oio_str_parse_bool(simulate_versioning, FALSE));
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_find_shards_params(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

@@ -128,10 +128,6 @@ extern "C" {
 /** Hexadecimal ID of the shard the request was redirected to */
 #define PROXYD_HEADER_SHARD_HEXID PROXYD_HEADER_PREFIX "shard-hexid"
 
-# ifndef PROXYD_HEADER_SIMULATE_VERSIONING
-#  define PROXYD_HEADER_SIMULATE_VERSIONING PROXYD_HEADER_PREFIX "simulate-versioning"
-# endif
-
 /* Version Id of the object being manipulated */
 #define PROXYD_HEADER_VERSION_ID PROXYD_HEADER_PREFIX "version-id"
 
