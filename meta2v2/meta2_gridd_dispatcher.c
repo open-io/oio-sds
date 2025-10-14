@@ -101,7 +101,6 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 static gridd_filter M2V2_CREATE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_region,
 	meta2_filter_extract_sharding_info,
@@ -123,7 +122,6 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 static gridd_filter M2V2_DESTROY_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -141,7 +139,6 @@ static gridd_filter M2V2_EMPTY_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_force_master,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
@@ -158,7 +155,6 @@ static gridd_filter M2V2_PURGE_CONTENT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_string_maxvers,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -175,7 +171,6 @@ static gridd_filter M2V2_PURGE_CONTAINER_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_string_maxvers,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -192,7 +187,6 @@ static gridd_filter M2V2_PURGE_CONTAINER_FILTERS[] =
 static gridd_filter M2V2_FLUSH_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -209,7 +203,6 @@ static gridd_filter M2V2_FLUSH_FILTERS[] =
 static gridd_filter M2V2_DRAIN_CONTAINER_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_extract_limit,
@@ -296,7 +289,6 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -318,7 +310,6 @@ static gridd_filter M2V2_POLICY_TRANSITION_FILTERS[] =
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -337,7 +328,6 @@ static gridd_filter M2V2_APPEND_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -370,7 +360,6 @@ static gridd_filter M2V2_GET_FILTERS[] =
 static gridd_filter M2V2_DRAIN_CONTENT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -394,7 +383,6 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_extract_header_flags32,
 	meta2_filter_extract_header_optional_async_replication,
 	meta2_filter_extract_force_versioning,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -411,7 +399,6 @@ static gridd_filter M2V2_TRUNCATE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_string_size,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -428,7 +415,6 @@ static gridd_filter M2V2_TRUNCATE_FILTERS[] =
 static gridd_filter M2V2_PROPSET_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -462,7 +448,6 @@ static gridd_filter M2V2_PROPGET_FILTERS[] =
 static gridd_filter M2V2_PROPDEL_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -479,7 +464,6 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 static gridd_filter M2V2_RAW_DEL_filters[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_check_url_cid,
@@ -496,7 +480,6 @@ static gridd_filter M2V2_RAW_DEL_filters[] =
 static gridd_filter M2V2_RAW_ADD_filters[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -513,7 +496,6 @@ static gridd_filter M2V2_RAW_ADD_filters[] =
 static gridd_filter M2V2_RAW_SUBST_filters[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -597,7 +579,6 @@ static gridd_filter M2V2_GET_SHARDS_IN_RANGE_FILTERS[] =
 static gridd_filter M2V2_PREPARE_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_extract_prepare_shard_params,
@@ -615,7 +596,6 @@ static gridd_filter M2V2_MERGE_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -632,7 +612,6 @@ static gridd_filter M2V2_MERGE_SHARDING_FILTERS[] =
 static gridd_filter M2V2_UPDATE_SHARD_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -647,7 +626,6 @@ static gridd_filter M2V2_UPDATE_SHARD_FILTERS[] =
 static gridd_filter M2V2_LOCK_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -663,7 +641,6 @@ static gridd_filter M2V2_REPLACE_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -682,7 +659,6 @@ static gridd_filter M2V2_CLEAN_SHARDING_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_urgentflag,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -715,7 +691,6 @@ static gridd_filter M2V2_SHOW_SHARDING_FILTERS[] =
 static gridd_filter M2V2_ABORT_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
 	meta2_filter_fill_subject,
@@ -730,7 +705,6 @@ static gridd_filter M2V2_ABORT_SHARDING_FILTERS[] =
 static gridd_filter M2V2_CREATE_LIFECYCLE_VIEWS_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
@@ -744,7 +718,6 @@ static gridd_filter M2V2_CREATE_LIFECYCLE_VIEWS_FILTERS[] =
 static gridd_filter M2V2_APPLY_LIFECYCLE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_lifecycle_action_params,
 	meta2_filter_fill_subject,
@@ -762,7 +735,6 @@ static gridd_filter M2V2_APPLY_LIFECYCLE_FILTERS[] =
 static gridd_filter M2V2_CHECKPOINT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_suffix,
 	meta2_filter_fill_subject,
