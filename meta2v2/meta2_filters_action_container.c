@@ -938,8 +938,7 @@ meta2_filter_action_clean_sharding(struct gridd_filter_ctx_s *ctx,
 		beans = meta2_filter_ctx_get_input_udata(ctx);
 		err = meta2_backend_clean_locally_sharding(m2b, url, beans, &truncated);
 	} else {
-		gboolean urgent = meta2_filter_ctx_get_param(
-				ctx, NAME_MSGKEY_URGENT) != NULL;
+		gboolean urgent = oio_ext_is_admin();
 		err = meta2_backend_clean_sharding(m2b, url, urgent, &truncated);
 	}
 	if (err) {

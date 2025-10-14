@@ -2693,7 +2693,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 
 	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
 
-	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, NULL, FALSE, FALSE, FALSE, DL()); }
+	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, NULL, FALSE, FALSE, DL()); }
 	err = gridd_request_replicated_with_retry (args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
@@ -3267,6 +3267,7 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 	gboolean truncated = FALSE;
 	GSList *beans = NULL;
 	gboolean local = _request_get_flag(args, "local");
+	/* FIXME(FVE): ensure SDK passes admin flag, remove urgent flag */
 	gboolean urgent = _request_get_flag(args, "urgent");
 
 	err = _load_simplified_shard_ranges(j, &beans);
@@ -3280,9 +3281,10 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 			 * request.
 			 */
 			oio_ext_allow_long_timeout(TRUE);
+			if (urgent)
+				oio_ext_set_admin(TRUE);
 			PACKER_VOID(_pack) {
-				return m2v2_remote_pack_CLEAN_SHARDING(args->url, beans,
-						local, urgent, DL());
+				return m2v2_remote_pack_CLEAN_SHARDING(args->url, beans, local, DL());
 			};
 			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
 					m2v2_boolean_truncated_extract);

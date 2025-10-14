@@ -201,14 +201,6 @@ meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_urgentflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _extract_header_flag(NAME_MSGKEY_URGENT, ctx, reply);
-}
-
-int
 meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

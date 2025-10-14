@@ -74,13 +74,13 @@ version_debug(GTree *current, GTree *expected, GTree *post)
 }
 
 static gchar *
-_prepare_statement(Table_t *t, gboolean is_admin)
+_prepare_statement(Table_t *t, gboolean is_admin_table)
 {
 	GString *gstr = g_string_sized_new(256);
 	g_string_append_static(gstr, "REPLACE INTO ");
 	g_string_append_len(gstr, (char*)t->name.buf, t->name.size);
 	g_string_append_static(gstr, " (");
-	if (!is_admin)
+	if (!is_admin_table)
 		g_string_append_static(gstr, "ROWID,");
 
 	for (int i=0; i < t->header.list.count; i++) {
@@ -91,7 +91,7 @@ _prepare_statement(Table_t *t, gboolean is_admin)
 	}
 
 	g_string_append_static(gstr, ") VALUES (");
-	if (!is_admin)
+	if (!is_admin_table)
 		g_string_append_static(gstr, " ?,");
 
 	for (int i=0; i < t->header.list.count; i++) {
@@ -112,14 +112,14 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	/* if there is no table header, we won't be able to generate a valid
+	/* If there is no table header, we won't be able to generate a valid
 	 * UPDATE/REPLACE statement. The current table at best only carries
 	 * DELETE commands (with only a ROWID) */
 	if (table->header.list.count <= 0)
 		return NULL;
 
-	gboolean is_admin = !(g_strcmp0((char*)table->name.buf, ADMIN));
-	sql = _prepare_statement(table, is_admin);
+	gboolean is_admin_table = !(g_strcmp0((char*)table->name.buf, ADMIN));
+	sql = _prepare_statement(table, is_admin_table);
 	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
 	g_free(sql);
 
@@ -135,7 +135,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
 
-			if (!is_admin)
+			if (!is_admin_table)
 				sqlite3_bind_int64(stmt, 1, rowid);
 			/* Now apply all the field values */
 			for (j=0; j<row->fields->list.count ;j++) {
@@ -145,7 +145,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 
 				field = row->fields->list.array[j];
 				asn_INTEGER2long(&(field->pos), &lpos);
-				pos = lpos + (is_admin? 1 : 2);
+				pos = lpos + (is_admin_table? 1 : 2);
 				switch (field->value.present) {
 					case RowFieldValue_PR_NOTHING:
 					case RowFieldValue_PR_n:
@@ -1584,8 +1584,7 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
-	gboolean urgent = metautils_message_extract_flag(reply->request,
-			NAME_MSGKEY_URGENT, FALSE);
+	gboolean urgent = oio_ext_is_admin();
 	gboolean extra_counters = metautils_message_extract_flag(reply->request,
 			NAME_MSGKEY_EXTRA_COUNTERS, FALSE);
 

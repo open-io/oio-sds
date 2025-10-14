@@ -282,7 +282,13 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	}
 	CLIENT_CTX2(ctx, args, dirtype, seq, suffix, how, NULL, NULL);
 
-	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, suffix, local, urgent, extra_counters, DL()); }
+	/* FIXME(FVE): ensure SDK passes admin flag, remove urgent flag */
+	if (urgent)
+		oio_ext_set_admin(TRUE);
+
+	PACKER_VOID(_pack) {
+		return sqlx_pack_PROPGET(_u, suffix, local, extra_counters, DL());
+	}
 	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
