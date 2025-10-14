@@ -76,7 +76,6 @@ M2V2_DECLARE_FILTER(meta2_filter_check_url_cid);
 M2V2_DECLARE_FILTER(meta2_filter_check_ns_name);
 M2V2_DECLARE_FILTER(meta2_filter_check_optional_ns_name);
 M2V2_DECLARE_FILTER(meta2_filter_check_backend);
-M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
 M2V2_DECLARE_FILTER(meta2_filter_check_events_not_stalled);
 /** Check that the requested region matches the region we are in. */
 M2V2_DECLARE_FILTER(meta2_filter_check_region);

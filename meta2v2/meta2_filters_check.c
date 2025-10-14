@@ -101,28 +101,6 @@ meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-
-	if (oio_ext_is_admin()) {
-		if (GRID_DEBUG_ENABLED())
-			GRID_DEBUG("admin mode is on");
-		return FILTER_OK;
-	}
-	if (oio_ns_mode_worm) {
-		if (GRID_DEBUG_ENABLED())
-			GRID_DEBUG("NS wormed!");
-		meta2_filter_ctx_set_error(
-				ctx, NEWERROR(CODE_METHOD_NOTALLOWED, "NS wormed!"));
-		return FILTER_KO;
-	}
-	TRACE_FILTER();
-	return FILTER_OK;
-}
-
-int
 meta2_filter_check_region(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

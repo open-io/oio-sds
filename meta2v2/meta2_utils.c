@@ -2216,11 +2216,6 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		g_clear_error(&err);
 	}
 
-	if (latest && args->worm_mode) {
-		err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
-		goto cleanup;
-	}
-
 	_patch_beans_defaults(beans);
 	_patch_beans_with_time(beans, latest, FALSE);
 
@@ -2257,7 +2252,6 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		/* TODO need to recompute the container's size */
 	}
 
-cleanup:
 	if (latest)
 		_bean_clean(latest);
 
@@ -2477,11 +2471,6 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		}
 		else if (VERSIONS_SUSPENDED(max_versions)) {
 suspended:
-			if (args->worm_mode) {
-				err = NEWERROR(CODE_CONTENT_EXISTS,
-						"NS wormed! Cannot overwrite.");
-			}
-
 			// JFS: do not alter the size to manage the alias being removed,
 			// this will be done by the real purge of the latest.
 			purge_latest = TRUE;
@@ -2664,11 +2653,6 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 		goto label_end;
 	}
 
-	if (args->worm_mode) {
-		err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
-		goto label_end;
-	}
-
 	current_mime_type = CONTENTS_HEADERS_get_mime_type(current_header);
 	err = _real_delete_and_save_deleted_beans(args->sq3,
 			beans_to_delete, NULL, current_header,
@@ -2738,11 +2722,6 @@ m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
 	 */
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
 	GSList *beans_to_delete = NULL;
-
-	if (args->worm_mode) {
-		err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
-		goto label_end;
-	}
 
 	/* Extract new beans */
 	for (GSList *l = new_beans; l; l = l->next) {

@@ -886,14 +886,6 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_NS_STORAGE_POLICY*
 
-### ns.worm
-
-> Is the NS in a WORM (for Write Once, Read Many --but never delete).
-
- * default: **FALSE**
- * type: gboolean
- * cmake directive: *OIO_NS_WORM*
-
 ### proxy.bulk.max.create_many
 
 > In a proxy, sets how many containers can be created at once.

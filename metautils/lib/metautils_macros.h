@@ -139,7 +139,6 @@ License along with this library.
 #define NAME_MSGKEY_NS_STATE      "STT"
 #define NAME_MSGKEY_SHARD_COMMAND "SHRD"
 #define NAME_MSGKEY_SIM_VER       "SIM_VER"
-#define NAME_MSGKEY_WORMED        "WRM"
 
 #define NAME_MSGKEY_PREFIX_PROPERTY        "P:"
 #define NAME_MSGKEY_PREFIX_SHARED_PROPERTY "SP:"

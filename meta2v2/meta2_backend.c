@@ -1766,7 +1766,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
-		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (oio_ext_get_force_versioning()) {
@@ -1816,7 +1815,6 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
-		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_change_alias_policy(&args, in,
@@ -1902,7 +1900,6 @@ meta2_backend_restore_drained(struct meta2_backend_s *m2b,
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
-		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_restore_drained(&args, in,
@@ -1932,9 +1929,6 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	if (!in)
 		return NEWERROR(CODE_BAD_REQUEST, "No bean");
-	else if (oio_ns_mode_worm && !oio_ext_is_admin())
-		return NEWERROR(CODE_METHOD_NOTALLOWED,
-				"NS wormed! Cannot modify object.");
 
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
@@ -2020,7 +2014,6 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
-		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in,
@@ -2153,8 +2146,8 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 			for (; !err && beans; beans = beans->next) {
 				gpointer original_bean = beans->data;
 				gpointer shortened_chunk = NULL;
-				gpointer bean_1st_format = NULL;
-				gpointer bean_2nd_format = NULL;
+				gpointer bean_first_format = NULL;
+				gpointer bean_second_format = NULL;
 
 				if (unlikely(original_bean == NULL)) {
 					continue;
@@ -2165,20 +2158,20 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 					shortened_chunk = _bean_dup(original_bean);
 					m2v2_shorten_chunk_id(shortened_chunk);
 					if (meta2_flag_store_chunk_ids) {
-						bean_1st_format = original_bean;
-						bean_2nd_format = shortened_chunk;
+						bean_first_format = original_bean;
+						bean_second_format = shortened_chunk;
 					} else {
-						bean_1st_format = shortened_chunk;
-						bean_2nd_format = original_bean;
+						bean_first_format = shortened_chunk;
+						bean_second_format = original_bean;
 					}
 				} else {
-					bean_1st_format = original_bean;
+					bean_first_format = original_bean;
 				}
 				// No error is raised when deleting a non-existent bean,
 				// therefore try deleting with both formats
-				err = _db_delete_bean(sq3, bean_1st_format);
-				if (!err && bean_2nd_format) {
-					err = _db_delete_bean(sq3, bean_2nd_format);
+				err = _db_delete_bean(sq3, bean_first_format);
+				if (!err && bean_second_format) {
+					err = _db_delete_bean(sq3, bean_second_format);
 				}
 
 				_bean_clean(shortened_chunk);
@@ -2229,32 +2222,32 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 					l0 = l0->next, l1 = l1->next) {
 				gpointer original_bean = l0->data;
 				gpointer shortened_chunk = NULL;
-				gpointer bean_1st_format = NULL;
-				gpointer bean_2nd_format = NULL;
+				gpointer bean_first_format = NULL;
+				gpointer bean_second_format = NULL;
 
 				// Prepare two beans to try with original and shortened chunk
 				if (DESCR(original_bean) == &descr_struct_CHUNKS) {
 					shortened_chunk = _bean_dup(original_bean);
 					m2v2_shorten_chunk_id(shortened_chunk);
 					if (meta2_flag_store_chunk_ids) {
-						bean_1st_format = original_bean;
-						bean_2nd_format = shortened_chunk;
+						bean_first_format = original_bean;
+						bean_second_format = shortened_chunk;
 					} else {
-						bean_1st_format = shortened_chunk;
-						bean_2nd_format = original_bean;
+						bean_first_format = shortened_chunk;
+						bean_second_format = original_bean;
 					}
 				} else {
-					bean_1st_format = original_bean;
+					bean_first_format = original_bean;
 				}
 
 				// First attempt with the first chunk format
-				err = _db_substitute_bean(sq3, bean_1st_format, l1->data);
+				err = _db_substitute_bean(sq3, bean_first_format, l1->data);
 				if (err != NULL && err->code == CODE_CONTENT_NOTFOUND
-						&& bean_2nd_format) {
+						&& bean_second_format) {
 					// Second attempt with the second chunk format
 					// if the first attempt finds nothing
 					g_clear_error(&err);
-					err = _db_substitute_bean(sq3, bean_2nd_format, l1->data);
+					err = _db_substitute_bean(sq3, bean_second_format, l1->data);
 				}
 
 				_bean_clean(shortened_chunk);
@@ -2735,17 +2728,14 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	if (err)
 		goto end;
 
-	gboolean must_check_alias = m2b->flag_precheck_on_generate && (
-			 VERSIONS_DISABLED(pdata.max_versions) ||
-			(VERSIONS_SUSPENDED(pdata.max_versions) &&
-			 oio_ns_mode_worm &&
-			 !oio_ext_is_admin()));
+	gboolean must_check_alias = m2b->flag_precheck_on_generate &&
+			 VERSIONS_DISABLED(pdata.max_versions);
 	if (must_check_alias) {
 		err = m2b_open_if_needed(m2b, url,
 				_mode_masterslave(0)|M2V2_OPEN_ENABLED, &sq3);
 		if (!err) {
-			/* If the versioning is not supported, or the namespace is
-			 * is WORM mode, we check the content is not present */
+			/* If the versioning is not supported,
+			 * we check the content is not present */
 			err = check_alias_doesnt_exist2(sq3, url);
 			if (append) {
 				if (err) {

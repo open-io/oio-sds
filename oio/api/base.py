@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -73,7 +73,7 @@ class HttpApi(object):
         :type pool_manager: `urllib3.PoolManager`
         :param endpoint: base of the URL that will requested
         :type endpoint: `str`
-        :keyword admin_mode: allow talking to a slave/worm namespace
+        :keyword admin_mode: give the requests a high priority
         :type admin_mode: `bool`
 
         :keyword perfdata: optional dictionary that will be filled with
@@ -132,7 +132,7 @@ class HttpApi(object):
         :type method: `str`
         :param url: URL to request
         :type url: `str`
-        :keyword admin_mode: allow operations on slave or worm namespaces
+        :keyword admin_mode: give the request a high priority
         :type admin_mode: `bool`
         :keyword deadline: deadline for the request, in monotonic time.
             Supersedes `read_timeout`.

@@ -352,7 +352,7 @@ class VerifyChunkPlacement(Meta2Filter):
                             container,
                             account,
                         )
-                        rebuilt_chunks = self._rebuid_chunks(
+                        rebuilt_chunks = self._rebuild_chunks(
                             [pos],
                             account,
                             container,
@@ -405,7 +405,7 @@ class VerifyChunkPlacement(Meta2Filter):
         """
         # Get chunks to rebuild
         chunk_pos_to_rebuild, version, path = self._get_chunk_to_rebuild(obj_data)
-        rebuilt_chunks = self._rebuid_chunks(
+        rebuilt_chunks = self._rebuild_chunks(
             chunk_pos_to_rebuild,
             account,
             container,
@@ -417,7 +417,7 @@ class VerifyChunkPlacement(Meta2Filter):
         )
         return rebuilt_chunks
 
-    def _rebuid_chunks(
+    def _rebuild_chunks(
         self,
         chunk_pos_to_rebuild,
         account,

@@ -434,11 +434,6 @@
 				"def": "NONE",
 				"descr": "" },
 
-			{ "type": "bool", "name": "oio_ns_mode_worm",
-				"key": "ns.worm",
-				"def": false,
-				"descr": "Is the NS in a WORM (for Write Once, Read Many --but never delete)." },
-
 			{ "type": "monotonic", "name": "main_log_level_reset_delay",
 				"key": "common.verbosity.reset_delay",
 				"def": "5m", "min": "1s", "max": "1h",

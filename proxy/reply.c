@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2024 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -191,8 +191,6 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_NOT_ALLOWED:
 		case CODE_CONTAINER_DRAINING:
 			return _reply_forbidden_error(args, err);
-		case CODE_METHOD_NOTALLOWED:
-			return _reply_method_error(args, err, NULL);
 		case CODE_POLICY_NOT_SUPPORTED:
 			return _reply_format_error(args, err);
 	}
@@ -224,10 +222,6 @@ _reply_forbidden_error (struct req_args_s *args, GError * err)
 enum http_rc_e
 _reply_method_error (struct req_args_s *args, GError *err, char *allowed)
 {
-	if (!allowed && err && strcasestr(err->message, "worm")) {
-		// Namespace in WORM mode, do not allow DELETE
-		allowed = "GET, HEAD, PUT";
-	}
 	// RFC 7231 requires the Allow header, but say it can be empty
 	EXTRA_ASSERT(allowed != NULL);
 	args->rp->add_header("Allow", g_strdup(allowed));

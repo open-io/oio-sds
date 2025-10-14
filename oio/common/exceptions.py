@@ -367,7 +367,6 @@ class NotFound(ClientException):
 class MethodNotAllowed(ClientException):
     """
     Request method is not allowed.
-    May be raised when the namespace is in WORM mode and user tries to delete.
     """
 
     def __init__(self, http_status=405, status=None, message=None):

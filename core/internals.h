@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2024 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -148,11 +148,11 @@ enum {
 	CODE_NOT_ALLOWED = 403,
 	CODE_NOT_FOUND = 404,
 
-	/* Used when in WORM mode and trying to delete */
+	/* Not used anymore */
 	CODE_METHOD_NOTALLOWED = 405,
 
-	/*  */
-	CODE_USER_NOTFOUND,
+	/* Note: ensure this constant keeps code 406, or tests will fail */
+	CODE_USER_NOTFOUND = 406,
 	CODE_USER_INUSE,
 	CODE_USER_EXISTS,
 
