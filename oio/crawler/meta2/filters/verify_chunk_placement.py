@@ -138,9 +138,7 @@ class VerifyChunkPlacement(Meta2Filter):
                         storage_constraints,
                     )
                 except Exception:
-                    self.logger.exception(
-                        "Failed to fetch policy data of %s: %s.", policy
-                    )
+                    self.logger.exception("Failed to fetch policy data of %s.", policy)
                     continue
             self.last_services_update = now
 
