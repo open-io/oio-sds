@@ -84,6 +84,8 @@ disable = ["broad-except", "missing-module-docstring"]
 
 [tool.pytest.ini_options]
 addopts = [
+  "-l",
+  "--tb=short",
   "--timer-top-n=10",
 ]
 log_level = "DEBUG"
