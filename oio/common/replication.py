@@ -13,6 +13,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+from typing import Any, Dict, List, Tuple
 
 import xmltodict
 
@@ -96,7 +97,7 @@ def optimize_replication_conf(configuration):
     return optimized
 
 
-def _tagging_obj_to_dict(tag_obj: dict) -> dict:
+def _tagging_obj_to_dict(tag_obj: Dict[str, Any]) -> Dict[str, List[str]]:
     """
     Transform a Tagging object structure (parsed from an XML document)
     to a dictionary of lists (there may be multiple values for the same tag
@@ -105,13 +106,13 @@ def _tagging_obj_to_dict(tag_obj: dict) -> dict:
     tagset = tag_obj["Tagging"]["TagSet"]
     if not isinstance(tagset["Tag"], list):
         tagset["Tag"] = [tagset["Tag"]]
-    tags: dict = {}
+    tags: Dict[str, List[str]] = {}
     for tag in tagset["Tag"]:
         tags.setdefault(tag["Key"], []).append(tag["Value"])
     return tags
 
 
-def _match_prefix_criteria(rule, key):
+def _match_prefix_criteria(rule: Dict[str, Any], key: str) -> Tuple[bool, bool]:
     if "Prefix" in rule:
         # For backward compatibility
         prefix = rule.get("Prefix", "")
@@ -128,7 +129,7 @@ def _match_prefix_criteria(rule, key):
     return key.startswith(prefix), True
 
 
-def _get_tags_criteria(rule):
+def _get_tags_criteria(rule: Dict[str, Any]) -> List[Dict[str, str]]:
     filter = rule.get("Filter", {})
     tag = filter.get("Tag")
     if tag is not None:
@@ -137,13 +138,18 @@ def _get_tags_criteria(rule):
     return and_filter.get("Tags", [])
 
 
-def _replicate_deletion_marker_enabled(rule):
+def _replicate_deletion_marker_enabled(rule: Dict[str, Any]) -> bool:
     config = rule.get("DeleteMarkerReplication", {})
     status = config.get("Status", "Disabled")
     return status == "Enabled"
 
 
-def _object_matches(rule, key, obj_tags={}, is_delete=False):
+def _object_matches(
+    rule: Dict[str, Any],
+    key: str,
+    obj_tags: Dict[str, List[str]] = {},
+    is_delete: bool = False,
+):
     """
     Check if an object matches the filters of the specified replication rule.
     :return : Tuple(match, continue)
@@ -168,16 +174,16 @@ def _object_matches(rule, key, obj_tags={}, is_delete=False):
 
 
 def get_destination_for_object(
-    configuration,
-    key,
-    metadata={},
-    xml_tags=None,
-    is_deletion=False,
-    ensure_replicated=False,
-):
+    configuration: str,
+    key: str,
+    metadata: Dict[str, str] = {},
+    xml_tags: str = None,
+    is_deletion: bool = False,
+    ensure_replicated: bool = False,
+) -> Tuple[str, str]:
     """
     Compute the replication destinations for an object according to its
-    metadata.
+    metadata
     :param configuration: async replication configuration
     :param key: object key
     :param metadata: object metadata
@@ -186,7 +192,7 @@ def get_destination_for_object(
     :param ensure_replicated: indicated the object must have been
     replicated. (Used for metadata updates)
     :returns: String representing the list of destination buckets
-                the object must be replicated (";" separated) to and the role
+              the object must be replicated (";" separated) to and the role
     """
     if not configuration:
         return None, None

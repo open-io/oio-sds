@@ -24,13 +24,10 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Tuple
 
-import xmltodict
-
 from oio.cli import Command
 from oio.common.constants import (
     OBJECT_REPLICATION_COMPLETED,
     OBJECT_REPLICATION_PENDING,
-    OBJECT_REPLICATION_REPLICA,
 )
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import NoSuchObject
@@ -40,148 +37,12 @@ from oio.common.kafka import (
     KafkaSender,
 )
 from oio.common.kafka_http import KafkaClusterHealth, OioUnhealthyKafkaClusterError
+from oio.common.replication import get_destination_for_object
 from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
 
 OBJECT_TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
 REPLICATION_ROLE_RE = re.compile(r"arn:aws:iam::([a-zA-Z0-9]+):role/([a-zA-Z0-9\_-]+)")
-
-
-def _tagging_obj_to_dict(tag_obj: Dict[str, Any]) -> Dict[str, List[str]]:
-    """
-    Transform a Tagging object structure (parsed from an XML document)
-    to a dictionary of lists (there may be multiple values for the same tag
-    key).
-    """
-    tagset = tag_obj["Tagging"]["TagSet"]
-    if not isinstance(tagset["Tag"], list):
-        tagset["Tag"] = [tagset["Tag"]]
-    tags: Dict[str, List[str]] = {}
-    for tag in tagset["Tag"]:
-        tags.setdefault(tag["Key"], []).append(tag["Value"])
-    return tags
-
-
-def _match_prefix_criteria(rule: Dict[str, Any], key: str) -> Tuple[bool, bool]:
-    if "Prefix" in rule:
-        # For backward compatibility
-        prefix = rule.get("Prefix", "")
-        return key.startswith(prefix), False
-
-    filter = rule.get("Filter", {})
-    if not filter:
-        return True, False
-    prefix = filter.get("Prefix")
-    if prefix is not None:
-        return key.startswith(prefix), False
-    and_filter = filter.get("And", {})
-    prefix = and_filter.get("Prefix", "")
-    return key.startswith(prefix), True
-
-
-def _get_tags_criteria(rule: Dict[str, Any]) -> List[Dict[str, str]]:
-    filter = rule.get("Filter", {})
-    tag = filter.get("Tag")
-    if tag is not None:
-        return [tag]
-    and_filter = filter.get("And", {})
-    return and_filter.get("Tags", [])
-
-
-def _replicate_deletion_marker_enabled(rule: Dict[str, Any]) -> bool:
-    config = rule.get("DeleteMarkerReplication", {})
-    status = config.get("Status", "Disabled")
-    return status == "Enabled"
-
-
-def _object_matches(
-    rule: Dict[str, Any],
-    key: str,
-    obj_tags: Dict[str, List[str]] = {},
-    is_delete: bool = False,
-):
-    """
-    Check if an object matches the filters of the specified replication rule.
-    :return : Tuple(match, continue)
-    """
-    match, check_tags = _match_prefix_criteria(rule, key)
-    if not match:
-        return False, True
-
-    if check_tags:
-        exp_tags = _get_tags_criteria(rule)
-        for tag in exp_tags:
-            exp_key = tag.get("Key")
-            exp_val = tag.get("Value")
-            obj_tag_value = obj_tags.get(exp_key, [])
-            if exp_val not in obj_tag_value:
-                return False, True
-    # Rule match, deal with deletion marker
-    if is_delete and not _replicate_deletion_marker_enabled(rule):
-        return False, False
-
-    return True, False
-
-
-def get_replication_destinations(
-    configuration: str,
-    key: str,
-    metadata: Dict[str, str] = {},
-    xml_tags: str = None,
-    is_deletion: bool = False,
-    ensure_replicated: bool = False,
-) -> Tuple[List[str], str]:
-    """
-    Compute the replication destinations for an object according to its
-    metadata
-    :param configuration: async replication configuration
-    :param key: object key
-    :param metadata: object metadata
-    :param xml_tags: object tags if any
-    :param is_deletion: indicate if the object is being delete
-    :param ensure_replicated: indicated the object must have been
-    replicated. (Used for metadata updates)
-    :returns: List of destination buckets the object must be replicated to
-                and role
-    """
-    if not configuration:
-        return [], None
-
-    # Ensure we are not dealing with a replica
-    replication_status = metadata.get("s3api-replication-status", "")
-    if replication_status == OBJECT_REPLICATION_REPLICA:
-        return [], None
-
-    # Ensure we are dealing with an already replicated object if required
-    if ensure_replicated and not replication_status:
-        return [], None
-
-    conf = json.loads(configuration)
-    category = "deletions" if is_deletion else "replications"
-    rules_per_destination = conf.get(category, {})
-
-    # Retrieve object tags if required
-    tags = {}
-    if conf.get("use_tags", False):
-        if not xml_tags:
-            xml_tags = metadata.get("s3api-tagging")
-
-        tags = _tagging_obj_to_dict(xmltodict.parse(xml_tags)) if xml_tags else {}
-
-    dest_buckets = []
-    ruleset = conf.get("rules", {})
-    for destination, rules in rules_per_destination.items():
-        for rule_name in rules:
-            rule = ruleset.get(rule_name)
-            if not rule:
-                continue
-            r_match, r_continue = _object_matches(rule, key, tags, is_deletion)
-            if r_match:
-                dest_buckets.append(destination)
-            if not r_continue:
-                break
-    role = conf.get("role")
-    return dest_buckets, role
 
 
 class ReplicationRecovery(Command):
@@ -288,17 +149,13 @@ class ReplicationRecovery(Command):
             if until and obj["version"] > until:
                 continue
 
-            dest_buckets, role = get_replication_destinations(
+            destinations, role = get_destination_for_object(
                 replication_conf,
                 key,
                 metadata=metadata,
                 is_deletion=is_delete_marker,
             )
-            dest_buckets = [
-                dest[13:] if dest.startswith("arn:aws:s3:::") else dest
-                for dest in dest_buckets
-            ]
-            if not dest_buckets:
+            if not destinations:
                 if pending:
                     self.log.error(
                         "No destination for the pending %s %s (%d)",
@@ -312,12 +169,12 @@ class ReplicationRecovery(Command):
                 self.nb_objects_recovered += 1
             else:
                 self.nb_delete_markers_recovered += 1
-            yield obj, dest_buckets, role, is_delete_marker
+            yield obj, destinations, role, is_delete_marker
 
     def object_to_event(
         self,
         obj: Dict[str, Any],
-        dest_buckets: List[str],
+        destinations: str,
         role: str,
         namespace: str,
         account: str,
@@ -380,7 +237,7 @@ class ReplicationRecovery(Command):
                         }
                     )
         event["repli"] = {}
-        event["repli"]["destinations"] = ";".join(dest_buckets)
+        event["repli"]["destinations"] = destinations
         event["repli"]["replicator_id"] = replicator_id
         event["repli"]["src_project_id"] = src_project_id
         if (
@@ -665,14 +522,14 @@ class ReplicationRecovery(Command):
         counter = 0
         total_messages = 0
         try:
-            for obj, dest_buckets, role, is_delete_marker in objects_to_replicate:
+            for obj, destinations, role, is_delete_marker in objects_to_replicate:
                 object_event = self.object_to_event(
-                    obj, dest_buckets, role, namespace, account, bucket, event_type
+                    obj, destinations, role, namespace, account, bucket, event_type
                 )
                 self.send_event(
                     conf,
                     obj,
-                    dest_buckets,
+                    destinations,
                     object_event,
                     dry_run,
                     is_delete_marker,
