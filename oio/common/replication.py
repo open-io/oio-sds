@@ -21,13 +21,18 @@ from oio.common.constants import OBJECT_REPLICATION_REPLICA
 ARN_AWS_PREFIX = "arn:aws:"
 DEST_BUCKET_PREFIX = ARN_AWS_PREFIX + "s3:::"
 
+DEFAULT_USE_STORAGE_CLASS = False
+DEFAULT_DELETE_MARKER_REPLICATION_VALUE = "Disabled"
+
 
 def optimize_replication_conf(configuration):
+    if isinstance(configuration, str):
+        configuration = json.loads(configuration)
+
     rules = {}
     replications = {}
     deletions = {}
     use_tags_all_rules = False
-
     dest_priorities = {}
 
     for rule in configuration["Rules"]:
@@ -40,7 +45,10 @@ def optimize_replication_conf(configuration):
         bucket = destination["Bucket"]
         priority = rule.get("Priority", -1)
         dest_rules = replications.setdefault(bucket, [])
-        deletion_marker = rule["DeleteMarkerReplication"]["Status"] == "Enabled"
+        status_delete_marker = rule.get("DeleteMarkerReplication", {}).get(
+            "Status", DEFAULT_DELETE_MARKER_REPLICATION_VALUE
+        )
+        deletion_marker = status_delete_marker == "Enabled"
         dest_rules.append((rule_id, priority, deletion_marker))
 
         rule_filter = rule.get("Filter", {})
@@ -80,7 +88,9 @@ def optimize_replication_conf(configuration):
         "replications": replications,
         "deletions": deletions,
         "use_tags": use_tags_all_rules,
-        "use_storage_class": configuration["UseStorageClass"],
+        "use_storage_class": configuration.get(
+            "UseStorageClass", DEFAULT_USE_STORAGE_CLASS
+        ),
     }
 
     return optimized
