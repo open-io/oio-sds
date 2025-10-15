@@ -5080,12 +5080,12 @@ static enum http_rc_e
 action_m2_content_policy_transition(struct req_args_s *args,struct json_object *jargs)
 {
 	GError *err = NULL;
-	struct json_object *jpolicy = NULL, *jskip_data_move = NULL, *jforce_event_emit = NULL;
+	struct json_object *jpolicy = NULL, *jskip_data_move = NULL, *jinternal_transition = NULL;
 
 	struct oio_ext_json_mapping_s m[] = {
 		{"policy", &jpolicy, json_type_string, 1},
 		{"skip_data_move", &jskip_data_move, json_type_boolean, 0},
-		{"force_event_emit", &jforce_event_emit, json_type_boolean, 0},
+		{"internal_transition", &jinternal_transition, json_type_boolean, 0},
 
 		{NULL, NULL, 0, 0}
 	};
@@ -5097,10 +5097,10 @@ action_m2_content_policy_transition(struct req_args_s *args,struct json_object *
 
 	const gchar *policy = json_object_get_string(jpolicy);
 	gboolean skip_data_move = json_object_get_boolean(jskip_data_move);
-	gboolean force_event_emit = json_object_get_boolean(jforce_event_emit);
+	gboolean internal_transition = json_object_get_boolean(jinternal_transition);
 	PACKER_VOID(_pack) {
 		return m2v2_remote_pack_POLICY_TRANSITION(args->url, policy,
-			skip_data_move, force_event_emit, DL());
+			skip_data_move, internal_transition, DL());
 	};
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
@@ -5111,14 +5111,17 @@ action_m2_content_policy_transition(struct req_args_s *args,struct json_object *
 // POST /v3.0/{NS}/content/transition?acct={account}&ref={container}&path={file path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Trigger an asynchrous policy transition from the current policy to the one specified
-// Container stats are updated before data is moved
+// Container stats are updated before data is moved.
+//
+// "internal_transition" allows to make a transition without modifying/adding the ttime.
+// This also allows to resend the event when the transition is identical.
 //
 // .. code-block:: json
 //
 //    {
 //      "policy": "new_policy",
 //      "skip_data_move": False,
-//      "force_event_emit": False
+//      "internal_transition": False
 //    }
 //
 // .. code-block:: http

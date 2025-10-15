@@ -123,13 +123,13 @@ class TestFilterPolicyTransition(BaseTestCase):
 
         self.assertIsNone(evt)
 
-    def test_transition_force_event_emit(self):
+    def test_transition_internal_transition(self):
         # Stop processing events
         self.logger.debug("Stopping the event system")
         self._service("oio-event.target", "stop", wait=8)
 
         def check_event_transition(**kwargs):
-            reqid = request_id("pol-chg-force-event-emit")
+            reqid = request_id("pol-chg-internal-transition")
             self.storage.object_request_transition(
                 self.account,
                 self.container,
@@ -157,6 +157,6 @@ class TestFilterPolicyTransition(BaseTestCase):
             # First time to set target policy and emit the event
             check_event_transition()
             # Second time to re emit the event
-            check_event_transition(force_event_emit=True)
+            check_event_transition(internal_transition=True)
         finally:
             self._service("oio-event.target", "start", wait=3)

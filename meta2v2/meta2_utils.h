@@ -355,7 +355,7 @@ GError* m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 
 GError* m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct namespace_info_s* nsinfo, gboolean* updated, gboolean* send_event,
-		const gchar *new_policy, gboolean force_event_emit);
+		const gchar *new_policy, gboolean internal_transition);
 
 /* --- Low level ----------------------------------------------------------- */
 

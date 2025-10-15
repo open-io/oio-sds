@@ -1836,7 +1836,7 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 GError*
 meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
 		struct oio_url_s *url, const gchar* new_policy,
-		gboolean skip_data_move, gboolean force_event_emit)
+		gboolean skip_data_move, gboolean internal_transition)
 {
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1855,7 +1855,7 @@ meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			err = m2db_transition_policy(
-				sq3, url, m2->nsinfo, &should_update, &emit_event, new_policy, force_event_emit);
+				sq3, url, m2->nsinfo, &should_update, &emit_event, new_policy, internal_transition);
 		}
 		err = sqlx_transaction_end(repctx, err);
 		if (!err) {

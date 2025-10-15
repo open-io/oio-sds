@@ -198,7 +198,7 @@ class OioChangeStoragePolicy:
                 policy=self.new_storage_policy,
                 version=obj_version,
                 reqid=self._main_request_id,
-                force_event_emit=True,
+                internal_transition=True,
             )
         except OioException as exc:
             self.logger.error(

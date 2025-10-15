@@ -308,7 +308,7 @@ m2v2_remote_pack_CHANGE_POLICY(struct oio_url_s *url, GSList *beans, gint64 dl)
 
 GByteArray*
 m2v2_remote_pack_POLICY_TRANSITION(struct oio_url_s *url, const gchar* policy,
-	gboolean skip_data_move, gboolean force_event_emit, gint64 dl)
+	gboolean skip_data_move, gboolean internal_transition, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(
 		NAME_MSGNAME_M2V2_POLICY_TRANSITION, url, NULL, dl);
@@ -316,8 +316,8 @@ m2v2_remote_pack_POLICY_TRANSITION(struct oio_url_s *url, const gchar* policy,
 	if	(skip_data_move) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_SKIP_DATA_MOVE, "1");
 	}
-	if	(force_event_emit) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_EVENT_EMIT, "1");
+	if	(internal_transition) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_INTERNAL_TRANSITION, "1");
 	}
 	return message_marshall_gba_and_clean(msg);
 }
