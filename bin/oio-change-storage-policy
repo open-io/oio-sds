@@ -38,10 +38,11 @@ class OioChangeStoragePolicy:
         logger,
         storage_policy,
         new_storage_policy,
-        accounts,
-        containers,
-        object_name,
-        version,
+        ignore_pending_transition=False,
+        accounts=None,
+        containers=None,
+        object_name=None,
+        version=None,
         dry_run=False,
     ):
         self.api = ObjectStorageApi(namespace, logger=logger)
@@ -95,17 +96,33 @@ class OioChangeStoragePolicy:
                 f"on the specified region={self.region}"
             )
         else:
-            total_bytes_by_policy = res["regions"][self.region]["bytes-details"].get(
-                self.object_policy, 0
+            objects_count = res["regions"][self.region]["objects-details"].get(
+                self.storage_policy
             )
-            if total_bytes_by_policy and total_bytes_by_policy > 0:
-                need_to_parse_container = True
-            else:
+            if objects_count is None:
                 self.logger.debug(
                     f"The containers of account={account}, "
                     f"region={self.region} do not have objects with "
                     f"the specified storage policy: {self.storage_policy}"
                 )
+            elif objects_count <= 0:
+                # Unless the account is refreshed, storage policies no longer used
+                # in the account remain visible in the stats (with a counter at 0).
+                # But since transitions immediately change the storage policy stats
+                # before modifying the data, it is possible to have a transition
+                # in progress (potentially blocked) while the counter indicates 0.
+                # So also check the containers of the accounts with a counter of 0
+                # to make sure that there are no more transitions in progress.
+                if self._ignore_pending_transition:
+                    self.logger.debug(
+                        f"The containers of account={account}, "
+                        f"region={self.region} no longer has objects with "
+                        f"the specified storage policy: {self.storage_policy}"
+                    )
+                else:
+                    need_to_parse_container = True
+            else:  # objects_count > 0
+                need_to_parse_container = True
         if not need_to_parse_container:
             return {"listing": [], "truncated": False}
         return res
@@ -222,8 +239,17 @@ class OioChangeStoragePolicy:
                     )
                 try:
                     for obj in obj_list:
-                        if obj.get("policy", None) != self.storage_policy:
-                            # Object does not have the specified policy
+                        if obj["deleted"]:
+                            # Delete marker does not have storage policy
+                            continue
+                        if obj["policy"] != self.storage_policy:
+                            # Object does not have the specified storage policy
+                            continue
+                        if (
+                            self._ignore_pending_transition
+                            and obj.get("target_policy") is not None
+                        ):
+                            # A transition has already been requested on the object
                             continue
                         obj_name = obj["name"]
                         obj_version = obj["version"]
@@ -271,6 +297,11 @@ def make_arg_parser():
         required=True,
         help='Storage policy to use when rewriting objects (e.g: "STD-R3")',
     )
+    parser.add_argument(
+        "--ignore-pending-transition",
+        action="store_true",
+        help="Ignore pending transitions because a previous request has been made",
+    )
     parser.add_argument("--marker", help="Marker", default="")
     parser.add_argument(
         "--accounts",
@@ -282,11 +313,7 @@ def make_arg_parser():
         "--containers",
         nargs="+",
         metavar="<container_name>",
-        help="Container name(s). Required if the initial attempt successfully"
-        " updated the account object statistics, and all objects were marked "
-        "as in transition with the target storage policy (incrementing the "
-        "new storage policy count and decrementing the previous storage policy "
-        "count), but not all objects completed the transition successfully.",
+        help="Container name(s)",
     )
     parser.add_argument("--key", help="Object name", default=None)
     parser.add_argument("--version", help="Object version", default=None)
@@ -344,6 +371,7 @@ def main():
         logger,
         args.storage_policy,
         args.new_storage_policy,
+        ignore_pending_transition=args.ignore_pending_transition,
         accounts=accounts,
         containers=containers,
         object_name=object_name,
