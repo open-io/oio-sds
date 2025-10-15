@@ -17,6 +17,7 @@ import json
 from collections import Counter
 
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.replication import get_destination_for_object, optimize_replication_conf
 from oio.container.sharding import ContainerSharding
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
@@ -32,6 +33,7 @@ class BucketListerTask(XcuteTask):
         self.customer_bucket = job_params["bucket"]
         self.technical_account = job_params["technical_account"]
         self.technical_bucket = job_params["technical_bucket"]
+        self.replication_configuration = job_params["replication_configuration"]
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         def objects_generator(resp: Counter):
@@ -45,14 +47,43 @@ class BucketListerTask(XcuteTask):
                 reqid=reqid,
             )
             for obj in listing["objects"]:
+                key = obj["name"]
+                prefix = "x-object-sysmeta-"
+                metadata = {}
+                props = obj.get("properties")
+                if props:
+                    metadata = {
+                        key.removeprefix(prefix): value
+                        for key, value in props.items()
+                        if key.startswith(prefix)
+                    }
+                dests, role = get_destination_for_object(
+                    configuration=self.replication_configuration,
+                    key=key,
+                    metadata=metadata,
+                )
+                if not dests:
+                    continue
+                # TODO: build the event and save it as a json directly.
                 line = (
                     json.dumps(
                         {
-                            "name": obj["name"],
+                            "name": key,
                             "version": obj["version"],
+                            "destinations": dests,
+                            "role": role,
                         }
                     )
                     + "\n"
+                )
+
+                self.logger.debug(
+                    "Obj to replicate %s/%s/%s (%s) on destinations %s",
+                    self.customer_account,
+                    self.customer_bucket,
+                    key,
+                    obj["version"],
+                    dests,
                 )
                 resp["nb_objects"] += 1
                 yield line.encode("utf-8")
