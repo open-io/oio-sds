@@ -26,18 +26,18 @@ from oio.common.utils import depaginate, request_id
 SEPARATOR = "/"
 
 
-class OioObjectChangePolicy:
+class OioChangeStoragePolicy:
     """
-    Find all objects using the policy to change,
-    then rewrite each object with the new policy.
+    Find all objects using the storage policy to change,
+    then rewrite each object with the new storage policy.
     """
 
     def __init__(
         self,
         namespace,
         logger,
-        object_policy,
-        new_policy,
+        storage_policy,
+        new_storage_policy,
         accounts,
         containers,
         object_name,
@@ -46,8 +46,8 @@ class OioObjectChangePolicy:
     ):
         self.api = ObjectStorageApi(namespace, logger=logger)
         self.logger = logger
-        self.object_policy = object_policy
-        self.new_policy = new_policy
+        self.storage_policy = storage_policy
+        self.new_storage_policy = new_storage_policy
         self.region = self.api.bucket.region.upper()
         self._account_marker = None
         self._container_marker = None
@@ -60,7 +60,7 @@ class OioObjectChangePolicy:
 
     @property
     def _request_id(self):
-        return request_id("oio-object-change-policy-")
+        return request_id("oio-change-storage-policy-")
 
     @property
     def progress(self):
@@ -104,7 +104,7 @@ class OioObjectChangePolicy:
                 self.logger.debug(
                     f"The containers of account={account}, "
                     f"region={self.region} do not have objects with "
-                    f"the specified policy: {self.object_policy}"
+                    f"the specified storage policy: {self.storage_policy}"
                 )
         if not need_to_parse_container:
             return {"listing": [], "truncated": False}
@@ -147,7 +147,7 @@ class OioObjectChangePolicy:
             for container in containers:
                 yield account, container[0]
 
-    def _change_policy(self, account, container, obj_name, obj_version):
+    def _change_storage_policy(self, account, container, obj_name, obj_version):
         """Change the policy of the specified object
 
         :param account: account name
@@ -168,7 +168,7 @@ class OioObjectChangePolicy:
                 account=account,
                 container=container,
                 obj=obj_name,
-                policy=self.new_policy,
+                policy=self.new_storage_policy,
                 version=obj_version,
                 reqid=self._main_request_id,
                 force_event_emit=True,
@@ -199,7 +199,7 @@ class OioObjectChangePolicy:
                         {
                             "name": self._obj_name,
                             "version": self._version,
-                            "policy": self.object_policy,
+                            "policy": self.storage_policy,
                         }
                     ]
                 else:
@@ -222,13 +222,15 @@ class OioObjectChangePolicy:
                     )
                 try:
                     for obj in obj_list:
-                        if obj.get("policy", None) != self.object_policy:
+                        if obj.get("policy", None) != self.storage_policy:
                             # Object does not have the specified policy
                             continue
                         obj_name = obj["name"]
                         obj_version = obj["version"]
                         obj_per_container += 1
-                        self._change_policy(account, container, obj_name, obj_version)
+                        self._change_storage_policy(
+                            account, container, obj_name, obj_version
+                        )
                 finally:
                     self.logger.info(
                         "%d objects transitioned for container %s, account %s",
@@ -252,19 +254,22 @@ class OioObjectChangePolicy:
 
 def make_arg_parser():
     log_parser = make_logger_args_parser()
-    descr = OioObjectChangePolicy.__doc__
+    descr = OioChangeStoragePolicy.__doc__
 
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument("namespace", help="Namespace")
     parser.add_argument(
-        "--object-policy",
+        "--storage-policy",
         required=True,
-        help='Only objects with specified policy will be selected (e.g: "STD-E93")',
+        help=(
+            "Only objects with specified storage policy will be selected "
+            '(e.g: "STD-E93")'
+        ),
     )
     parser.add_argument(
-        "--new-policy",
+        "--new-storage-policy",
         required=True,
-        help='Policy to use when rewriting objects (e.g: "STD-R3")',
+        help='Storage policy to use when rewriting objects (e.g: "STD-R3")',
     )
     parser.add_argument("--marker", help="Marker", default="")
     parser.add_argument(
@@ -279,9 +284,9 @@ def make_arg_parser():
         metavar="<container_name>",
         help="Container name(s). Required if the initial attempt successfully"
         " updated the account object statistics, and all objects were marked "
-        "as in transition with the target policy (incrementing the new policy "
-        "count and decrementing the previous policy count), but not all "
-        "objects completed the transition successfully.",
+        "as in transition with the target storage policy (incrementing the "
+        "new storage policy count and decrementing the previous storage policy "
+        "count), but not all objects completed the transition successfully.",
     )
     parser.add_argument("--key", help="Object name", default=None)
     parser.add_argument("--version", help="Object version", default=None)
@@ -334,11 +339,11 @@ def main():
             logger.error("Invalid version %s", exc)
             return
 
-    change_policy = OioObjectChangePolicy(
+    change_storage_policy = OioChangeStoragePolicy(
         args.namespace,
         logger,
-        args.object_policy,
-        args.new_policy,
+        args.storage_policy,
+        args.new_storage_policy,
         accounts=accounts,
         containers=containers,
         object_name=object_name,
@@ -346,13 +351,13 @@ def main():
         dry_run=args.dry_run,
     )
     try:
-        change_policy.process(marker=marker)
+        change_storage_policy.process(marker=marker)
     except KeyboardInterrupt:
         logger.info("Exiting...")
-        print(f"Next marker: {change_policy.progress}")
+        print(f"Next marker: {change_storage_policy.progress}")
     except Exception as exc:
         logger.critical("Failure during process %s", exc)
-        print(f"Next marker: {change_policy.progress}")
+        print(f"Next marker: {change_storage_policy.progress}")
 
 
 if __name__ == "__main__":
