@@ -43,6 +43,8 @@ class OioChangeStoragePolicy:
         containers=None,
         object_name=None,
         version=None,
+        less_than=None,
+        greater_than=None,
         dry_run=False,
     ):
         self.api = ObjectStorageApi(namespace, logger=logger)
@@ -57,6 +59,14 @@ class OioChangeStoragePolicy:
         self._containers = containers
         self._obj_name = object_name
         self._version = version
+        if (
+            less_than is not None
+            and greater_than is not None
+            and greater_than > less_than
+        ):
+            raise ValueError("'greater_than' must be less than 'less_than'")
+        self._less_than = less_than
+        self._greater_than = greater_than
         self.dry_run = dry_run
 
     @property
@@ -251,6 +261,18 @@ class OioChangeStoragePolicy:
                         ):
                             # A transition has already been requested on the object
                             continue
+                        if (
+                            self._less_than is not None
+                            and obj["size"] > self._less_than
+                        ):
+                            # Object too big
+                            continue
+                        if (
+                            self._greater_than is not None
+                            and obj["size"] < self._greater_than
+                        ):
+                            # Object too small
+                            continue
                         obj_name = obj["name"]
                         obj_version = obj["version"]
                         obj_per_container += 1
@@ -317,7 +339,18 @@ def make_arg_parser():
     )
     parser.add_argument("--key", help="Object name", default=None)
     parser.add_argument("--version", help="Object version", default=None)
-
+    parser.add_argument(
+        "--less-than",
+        help="Make the change only on smaller (or equal) objects",
+        type=int,
+        default=None,
+    )
+    parser.add_argument(
+        "--greater-than",
+        help="Make the change only on bigger (or equal) objects",
+        type=int,
+        default=None,
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -376,6 +409,8 @@ def main():
         containers=containers,
         object_name=object_name,
         version=version,
+        less_than=args.less_than,
+        greater_than=args.greater_than,
         dry_run=args.dry_run,
     )
     try:
