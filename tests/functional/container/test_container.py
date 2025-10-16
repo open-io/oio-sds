@@ -548,7 +548,8 @@ class TestMeta2Containers(BaseTestCase):
             c["hash"] = c["hash"].lower()
         self.assertEqual(len(expected_chunks), len(obj_chunks))
         for i in range(len(expected_chunks)):
-            self.assertDictContainsSubset(obj_chunks[i], expected_chunks[i])
+            # Check obj_chunks[i] is a subset of expected_chunks[i]
+            self.assertEqual(expected_chunks[i], expected_chunks[i] | obj_chunks[i])
 
         # Insert arbitrary chunks
         self._raw_insert(self.ref, chunks, exception=exc.BadRequest)
