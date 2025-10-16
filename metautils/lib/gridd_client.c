@@ -801,10 +801,10 @@ gridd_client_start(struct gridd_client_s *client)
 {
 	EXTRA_ASSERT(client != NULL);
 
-	const gint64 now = oio_ext_monotonic_time ();
+	const gint64 now = oio_ext_monotonic_time();
 	client->tv_start = client->tv_connect = now;
 
-	/* Compute now the deadline of each step, then ppatch it with the
+	/* Compute now the deadline of each step, then patch it with the
 	 * threadlocal deadline */
 	client->deadline_connect = now + client->delay_connect;
 	client->deadline_single = now + client->delay_single;
@@ -832,7 +832,8 @@ gridd_client_start(struct gridd_client_s *client)
 			if (down) {
 				if (oio_client_down_avoid) {
 					_client_replace_error(client, NEWERROR(CODE_AVOIDED,
-								"Request avoided, service marked down"));
+								"Request avoided, service marked down (reqid=%s)",
+								oio_ext_get_reqid()));
 					return FALSE;
 				}
 				if (oio_client_down_shorten) {
@@ -843,7 +844,7 @@ gridd_client_start(struct gridd_client_s *client)
 	}
 
 	GError *err = _client_connect(client);
-	if (NULL == err)
+	if (!err)
 		return TRUE;
 
 	client->step = STATUS_FAILED;

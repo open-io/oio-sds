@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -27,7 +27,7 @@ from oio.common.exceptions import (
     ServiceBusy,
     UninitializedDB,
 )
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.directory.meta2 import Meta2Database
 from tests.utils import BaseTestCase, random_str
 
@@ -412,3 +412,55 @@ class TestMeta2Database(BaseTestCase):
             "sys.status.until", cprops["system"], "Expiration date should be removed"
         )
         self.assertEqual(cprops["system"]["sys.status"], str(OIO_DB_ENABLED))
+
+    def test_write_after_incomplete_destroy(self):
+        """
+        Make sure partially deleted databases do not resurrect.
+        If there is a leftover copy, all writes should be denied.
+        """
+        # Create a container
+        self.storage.container_create(self.account, self.reference)
+        db_peers = self._get_peers()
+        if len(db_peers) <= 1:
+            self.skipTest("need replicated bases")
+
+        # Stop one meta2 service hosting this container
+        down_m2 = db_peers[-1]
+        sd_key = self.service_to_systemd_key(down_m2, "meta2")
+        self._service(sd_key, "stop", wait=2.0)
+        try:
+            # Request container deletion. We will get a ServiceBusy error
+            # because of the third service, but the database will be deleted
+            # from the first and second services anyway.
+            reqid = request_id("del-cont-")
+            self.assertRaises(
+                ServiceBusy,
+                self.storage.container_delete,
+                self.account,
+                self.reference,
+                reqid=reqid,
+            )
+        finally:
+            # Restart the service even if the test above has failed
+            self._service(sd_key, "start", wait=2.0)
+
+        self.wait_for_service("meta2", down_m2, timeout=10.0)
+
+        # Contact directly the service which did not see the deletion,
+        # and try to set a property in the database, but expect a failure.
+        # We don't see it in the error message, but other peers (which do not
+        # have a copy of the database) respond with "Base not managed",
+        # which makes the election fail.
+        reqid = request_id("set-prop-")
+        self.assertRaisesRegex(
+            ServiceBusy,
+            r"Election failed.*",
+            self.admin.set_properties,
+            "meta2",
+            account=self.account,
+            reference=self.reference,
+            properties={"user.writable": "false"},
+            service_id=down_m2,
+            reqid=reqid,
+            # timeout=5.0,  # A short timeout may fail on CI env
+        )

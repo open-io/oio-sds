@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 #include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_variables.h>
@@ -112,11 +111,12 @@ meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
 	guint32 flags = 0;
 	getflag (flags,reply->request, FORCE);
 	getflag (flags,reply->request, EVENT);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
-	GError *err = meta2_backend_destroy_container(
-			meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx),
-			flags);
+	GError *err = meta2_backend_destroy_container(m2b, url, flags);
+	/* TODO(FVE): set a tombstone? */
+	hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 	if (!err)
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, err);
@@ -315,7 +315,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		if (lp->prefix
 				// The prefix is before the last object of this shard
 				&& g_strcmp0(lp->prefix, shard_upper) <= 0
-				// The last object of this shard desn't start with the prefix
+				// The last object of this shard doesn't start with the prefix
 				&& !g_str_has_prefix(shard_upper, lp->prefix)) {
 			goto end;
 		}
