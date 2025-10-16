@@ -14,6 +14,7 @@
 # License along with this library.
 
 from datetime import datetime, timedelta, timezone
+from math import ceil
 from unittest.mock import Mock, patch
 
 from oio.common.constants import (
@@ -188,6 +189,7 @@ class TestArchiveRestore(BaseTestCase):
 
     def test_delay_event_replay(self):
         _, size, _, meta = self._create_object("my-object")
+        mtime = int(meta.get("mtime"))
 
         archive_filter = ArchiveRestore(
             self.app,
@@ -200,8 +202,19 @@ class TestArchiveRestore(BaseTestCase):
         mock_cb = Mock()
         reqid = request_id("delay-event-")
 
-        now = datetime(2025, 6, 5, 16, 43, 1, tzinfo=timezone.utc)
-        expected_restore_duration = 3 * 24 + 8
+        now = datetime.fromtimestamp(mtime, tz=timezone.utc) + timedelta(
+            days=10, hours=5
+        )
+        expected_restore_duration = ceil(
+            (
+                (
+                    now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    + timedelta(days=1 + 3)
+                ).timestamp()
+                - now.timestamp()
+            )
+            / 3600
+        )
 
         with patch(
             "oio.event.filters.archive_restore.ArchiveRestore._now",
@@ -210,8 +223,9 @@ class TestArchiveRestore(BaseTestCase):
             restore_props = RestoreProperty()
             restore_props.days = 3
             restore_props.ongoing = False
-            restore_props.request_date = datetime(
-                2025, 6, 5, 11, 12, 0, tzinfo=timezone.utc
+            restore_props.request_date = (
+                datetime.fromtimestamp(mtime, tz=timezone.utc)
+                + timedelta(days=10, hours=4)
             ).timestamp()
             event = self._craft_event(meta, restore_property=restore_props, reqid=reqid)
 
@@ -259,8 +273,20 @@ class TestArchiveRestore(BaseTestCase):
                 restore.expiry_date,
             )
             self.assertFalse(restore.ongoing)
-            self.statsd_mock.timing.assert_called_with(
-                "openio.restore.DEEP_ARCHIVE.process", 19861.0
+            self.assertListEqual(
+                [
+                    ("openio.restore.deep_archive.duration", 3600.0),
+                    ("openio.restore.deep_archive.archived.duration", 878400.0),
+                ],
+                [c.args for c in self.statsd_mock.timing.call_args_list],
+            )
+
+            self.assertListEqual(
+                [
+                    ("openio.restore.deep_archive.volume",),
+                    ("openio.restore.deep_archive.requests.restore",),
+                ],
+                [c.args for c in self.statsd_mock.incr.call_args_list],
             )
 
     def test_delay_event_update_expiry(self):
@@ -351,20 +377,30 @@ class TestArchiveRestore(BaseTestCase):
                 "restorable_storage_classes": "DEEP_ARCHIVE",
             },
         )
+        mtime = int(meta.get("mtime"))
+        now = datetime.fromtimestamp(mtime, tz=timezone.utc) + timedelta(
+            days=10, hours=6
+        )
+
         mock_cb = Mock()
         reqid = request_id("delay-event-")
         restore_props = RestoreProperty()
         restore_props.days = 10
-        restore_props.expiry_date = int(
-            datetime(2024, 6, 10, 0, 0, 0, tzinfo=timezone.utc).timestamp()
-        )
-        restore_props.request_date = datetime(
-            2025, 6, 5, 11, 12, 0, tzinfo=timezone.utc
-        ).timestamp()
+        restore_props.expiry_date = int((now - timedelta(days=10)).timestamp())
+        restore_props.request_date = int((now - timedelta(hours=1)).timestamp())
         restore_props.ongoing = False
         event = self._craft_event(meta, restore_property=restore_props, reqid=reqid)
 
-        now = datetime(2025, 6, 5, 11, 12, 1, tzinfo=timezone.utc)
+        expected_restore_duration = ceil(
+            (
+                (
+                    now.replace(hour=0, minute=0, second=0, microsecond=0)
+                    + timedelta(days=1 + 10)
+                ).timestamp()
+                - now.timestamp()
+            )
+            / 3600
+        )
 
         with patch(
             "oio.event.filters.archive_restore.ArchiveRestore._now",
@@ -391,7 +427,7 @@ class TestArchiveRestore(BaseTestCase):
                 S3StorageClasses.DEEP_ARCHIVE.name,
                 requests=1,
                 transfer=size,
-                storage=(13 + 240) * size,
+                storage=expected_restore_duration * size,
             )
             meta = self.storage.object_get_properties(
                 self.account,
@@ -416,6 +452,13 @@ class TestArchiveRestore(BaseTestCase):
             self.assertFalse(restore.ongoing)
             self.statsd_mock.timing.called_once_with(
                 "openio.restore.DEEP_ARCHIVE.process", 1.0
+            )
+            self.assertListEqual(
+                [
+                    ("openio.restore.deep_archive.volume",),
+                    ("openio.restore.deep_archive.requests.restore",),
+                ],
+                [c.args for c in self.statsd_mock.incr.call_args_list],
             )
 
     def test_restore_event_processing(self):

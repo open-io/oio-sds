@@ -120,6 +120,7 @@ class ArchiveRestore(Filter):
         object_version,
         object_size,
         object_storage_class,
+        object_mtime,
         restore_prop: RestoreProperty,
         reqid=None,
     ):
@@ -141,6 +142,7 @@ class ArchiveRestore(Filter):
         # Compute the standard storage time
         hours_storage = ceil((expiry - int(base_time)) / 3600)
 
+        previous_expiry = restore_prop.expiry_date or 0
         restore_prop.expiry_date = expiry
         restore_prop.ongoing = False
 
@@ -163,12 +165,29 @@ class ArchiveRestore(Filter):
             data_transfer=data_transfer,
         )
 
+        storage_class_str = object_storage_class.lower()
+        action = "restore"
         if data_transfer:
             # Send stat for restore processing time
             self.statsd.timing(
-                f"openio.restore.{object_storage_class.upper()}.process",
+                f"openio.restore.{storage_class_str}.duration",
                 base_time - restore_prop.request_date,
             )
+            # Send stat of restored object size
+            self.statsd.incr(
+                f"openio.restore.{storage_class_str}.volume", count=object_size
+            )
+            # Send stat of time the object had been archived
+            archived_for = restore_prop.request_date - max(
+                object_mtime, previous_expiry
+            )
+            self.statsd.timing(
+                f"openio.restore.{storage_class_str}.archived.duration",
+                archived_for,
+            )
+        else:
+            action = "extend"
+        self.statsd.incr(f"openio.restore.{storage_class_str}.requests.{action}")
 
     def _emit_restore_request_invoice(
         self, account, bucket, storage_class, size, duration, data_transfer=False
@@ -281,6 +300,9 @@ class ArchiveRestore(Filter):
                 body=f"Storage class '{object_storage_class}' is not restorable",
             )
             return err(env, cb)
+        object_mtime = int(
+            object_meta.get("properties", {}).get("ttime", object_meta.get("mtime"))
+        )
 
         # For testing purpose only.
         delay_bypass = restore_property.get("_delay_bypass", False)
@@ -315,6 +337,7 @@ class ArchiveRestore(Filter):
             object_version,
             object_size,
             object_storage_class,
+            object_mtime,
             restore,
             reqid=event.reqid,
         )
