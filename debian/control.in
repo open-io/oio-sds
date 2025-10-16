@@ -11,7 +11,7 @@ Build-Depends:
   ca-certificates,
   cargo-1.80,
   go-1.23.4-ovh1645,
-  obsto-zookeeper-3.8.4-ovh1649,
+  obsto-zookeeper-3.8.4-ovh1863,
   python-3.10.16-ovh213,
   flex,
   bison,
