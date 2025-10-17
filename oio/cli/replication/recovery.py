@@ -500,6 +500,13 @@ class ReplicationRecovery(Command):
             action="store_true",
             help="Display actions but do nothing",
         )
+        parser.add_argument(
+            "--max-messages",
+            type=int,
+            default=-1,
+            help="Stop when the number of messages reaches this limit."
+            "(default=-1) all events",
+        )
         return parser
 
     def _clean_exit(self, account, bucket, *args):
@@ -609,6 +616,7 @@ class ReplicationRecovery(Command):
             "namespace": namespace,
             "broker_endpoint": broker_endpoints,
         }
+        max_messages = parsed_args.max_messages
         self.success = True
         self.log = self.app.client_manager.logger
         self.kafka_cluster_health = KafkaClusterHealth(
@@ -655,6 +663,7 @@ class ReplicationRecovery(Command):
         )
         obj = None
         counter = 0
+        total_messages = 0
         try:
             for obj, dest_buckets, role, is_delete_marker in objects_to_replicate:
                 object_event = self.object_to_event(
@@ -669,6 +678,11 @@ class ReplicationRecovery(Command):
                     is_delete_marker,
                 )
                 counter += 1
+                total_messages += 1
+                if max_messages > 0 and total_messages >= max_messages:
+                    if use_marker and self.success:
+                        self.flush_and_update_marker(account, bucket, obj)
+                    break
                 if use_marker and counter >= marker_update_after and self.success:
                     self.flush_and_update_marker(account, bucket, obj)
                     # Reinitialize the counter
