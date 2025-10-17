@@ -24,12 +24,13 @@ from werkzeug.exceptions import BadRequest, Conflict, HTTPException, NotFound
 from werkzeug.routing import Map, Rule
 from werkzeug.wrappers import Response
 
+from oio.account.utils import initialize_kms_clients
 from oio.common.constants import (
     HTTP_CONTENT_TYPE_JSON,
     HTTP_CONTENT_TYPE_TEXT,
     MAX_STRLEN_BUCKET,
 )
-from oio.common.easy_value import boolean_value, float_value, int_value, true_value
+from oio.common.easy_value import boolean_value, int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd  # noqa: E402
@@ -297,34 +298,7 @@ class Account(WerkzeugApp):
         return _send_stats_wrapper
 
     def init_kms_clients(self):
-        kmsapi_mock_server = boolean_value(self.conf.get("kmsapi_mock_server"))
-
-        for domain in self.kms_api.domains:
-            endpoint = self.conf.get(f"kmsapi_{domain}_endpoint")
-            key_id = self.conf.get(f"kmsapi_{domain}_key_id")
-            cert_file = self.conf.get(f"kmsapi_{domain}_cert_file")
-            key_file = self.conf.get(f"kmsapi_{domain}_key_file")
-            connect_timeout = float_value(
-                self.conf.get(f"kmsapi_{domain}_connect_timeout"), 1.0
-            )
-            read_timeout = float_value(
-                self.conf.get(f"kmsapi_{domain}_read_timeout"), 1.0
-            )
-            pool_maxsize = int_value(self.conf.get(f"kmsapi_{domain}_pool_maxsize"), 32)
-            self.kms_api.add_client(
-                domain,
-                endpoint,
-                key_id,
-                cert_file,
-                key_file,
-                connect_timeout,
-                read_timeout,
-                pool_maxsize,
-                self.logger,
-                self.statsd,
-                kmsapi_mock_server=kmsapi_mock_server,
-            )
-            self.kmsapi_domains.append(domain)
+        initialize_kms_clients(self)
 
     def _get_item_id(self, req, key="id", what="account"):
         """Fetch the name of the requested item, raise an error if missing."""

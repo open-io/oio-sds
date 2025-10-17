@@ -25,6 +25,7 @@ from collections import defaultdict
 from functools import wraps
 from importlib import __import__ as late_import
 from subprocess import check_call
+from subprocess import run as run_cmd
 from urllib.parse import urlencode
 
 import yaml
@@ -812,6 +813,21 @@ class BaseTestCase(CommonTestCase):
 
         group_name = "oio-cluster.target" if name == "all" else f"oio-{name}.target"
         return cls._service(group_name, action, wait=wait)
+
+    @classmethod
+    def _is_active(cls, name):
+        """Return True if the service is active (running)."""
+        cmd = ["systemctl"]
+        if "OIO_SYSTEMD_SYSTEM" not in os.environ:
+            cmd.append("--user")
+        cmd.extend(["is-active", name])
+        try:
+            result = run_cmd(cmd, capture_output=True, text=True, check=False)
+            state = result.stdout.strip()
+            return state == "active"
+        except Exception:
+            cls.logger.exception("Failure while checking if service %s is active", name)
+            return False
 
     def grouped_services(self, type_, key, reqid=None):
         """

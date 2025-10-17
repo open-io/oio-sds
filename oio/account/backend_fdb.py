@@ -3187,6 +3187,7 @@ class AccountBackendFdb(object):
         clear_trash_delay=7,
         kms_secrets={},
         incomplete=False,
+        overwrite=False,
         **kwargs,
     ):
         if not isinstance(secret_id, str) or len(secret_id) < 1:
@@ -3201,6 +3202,7 @@ class AccountBackendFdb(object):
             clear_trash_delay=clear_trash_delay,
             kms_secrets=kms_secrets,
             incomplete=incomplete,
+            overwrite=overwrite,
             **kwargs,
         )
 
@@ -3216,12 +3218,13 @@ class AccountBackendFdb(object):
         clear_trash_delay,
         kms_secrets,
         incomplete,
+        overwrite=False,
         **_kwargs,
     ):
         secret_space = self.kms_space[account][bucket]["secret"]
-        if tr[secret_space.pack((secret_id,))].present():
+        if tr[secret_space.pack((secret_id,))].present() and not overwrite:
             raise Conflict(f"A secret with secret_id={secret_id} already exists")
-        if tr[secret_space.pack((secret_id, "checksum"))].present():
+        if tr[secret_space.pack((secret_id, "checksum"))].present() and not overwrite:
             raise Conflict(
                 f"A secret checksum for secret_id={secret_id} already exists"
             )
