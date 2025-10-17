@@ -103,13 +103,10 @@ class ArchiveRestore(Filter):
         if time_since_request >= delay.delay_min:
             # Min delay is already overdue
             return None
-        return (
-            randrange(
-                delay.delay_min,
-                stop=delay.delay_max - time_since_request,
-                step=delay.delay_step,
-            )
-            - time_since_request
+        return randrange(
+            int(delay.delay_min - time_since_request),
+            stop=int(delay.delay_max - time_since_request),
+            step=int(delay.delay_step),
         )
 
     def _now(self):

@@ -181,7 +181,7 @@ class TestArchiveRestore(BaseTestCase):
                 mock_cb.assert_called_once_with(
                     503,
                     "Delay to simulate object restoration",
-                    delay=2879.0,
+                    delay=2880,
                     topic="oio-archive-delayed",
                 )
                 self.mock.add_restore.assert_not_called()
