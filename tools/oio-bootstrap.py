@@ -27,7 +27,8 @@ import shutil
 import sys
 from collections import namedtuple
 from random import choice
-from string import ascii_letters, digits, Template
+from string import Template, ascii_letters, digits
+
 import yaml
 
 C_LANG_SERVICES = (
@@ -384,7 +385,6 @@ use = egg:oio#check_integrity
 use = egg:oio#draining
 drain_limit = 1000
 drain_limit_per_pass = 100000
-kafka_cluster_health_metrics_endpoints = ${KAFKA_METRICS_URL}
 kafka_cluster_health_topics = oio,oio-chunks,oio-delete-*
 
 [filter:copy_cleaner]
@@ -1395,7 +1395,8 @@ ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 conscience=${CS_ALL_PUB}
-${NOBS}event-agent=${EVENT_CNXSTRING}
+event-agent=${EVENT_CNXSTRING}
+kafka-metrics=${KAFKA_METRICS_URL}
 ${NOBS}beanstalk=${BEANSTALK_CNXSTRING}
 
 core.lb.try_fair_constraints_first=true
@@ -2215,7 +2216,7 @@ defaults = {
     "NS": "OPENIO",
     SVC_HOSTS: ("127.0.0.1",),
     KAFKA_ENDPOINT: "127.0.0.1:19092",
-    KAFKA_METRICS_ENDPOINTS: "127.0.0.1:19644",
+    KAFKA_METRICS_ENDPOINTS: "127.0.0.1:9644",
     "ZK": "127.0.0.1:2181",
     "NB_CS": 1,
     "NB_M0": 1,
@@ -2676,14 +2677,12 @@ def generate(options):
         ENV.update(
             {
                 "BEANSTALK_CNXSTRING": beanstalkd_cnxstring,
-                "EVENT_CNXSTRING": beanstalkd_cnxstring,
                 "NOBS": "",
             }
         )
     else:
         ENV.update(
             {
-                "EVENT_CNXSTRING": "***disabled***",
                 "BEANSTALK_CNXSTRING": "***disabled***",
                 "NOBS": "#",
             }
@@ -2694,7 +2693,7 @@ def generate(options):
     if isinstance(endpoints, str):
         endpoints = [endpoints]
     kafka_cnxstring = ",".join((f"kafka://{endpoint}" for endpoint in endpoints))
-    ENV.update({"EVENT_CNXSTRING": kafka_cnxstring, "NOBS": ""})
+    ENV["EVENT_CNXSTRING"] = kafka_cnxstring
     ENV["KAFKA_QUEUE_URL"] = kafka_cnxstring
     # Kafka metrics
     metrics_endpoints = (
@@ -3727,7 +3726,6 @@ def generate(options):
         add_service_to_conf=False,
     )
 
-
     # billing restore
     crawler_target = register_target("billing-restore", root_target)
     env = subenv(
@@ -3754,7 +3752,6 @@ def generate(options):
         crawler_target,
         add_service_to_conf=False,
     )
-
 
     # tinyproxy
     if TINYPROXY_CONFIG:

@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,12 +16,15 @@ import time
 from enum import IntEnum
 
 from oio.api.base import MultiEndpointHttpApi
+from oio.common.configuration import load_namespace_conf
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import (
     OioException,
     OioUnhealthyKafkaClusterError,
     ServiceBusy,
 )
+
+DEFAULT_METRICS_ENDPOINT = "127.0.0.1:9644"
 
 
 class KafkaClusterSpaceStatus(IntEnum):
@@ -56,7 +59,8 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
     def __init__(self, conf, **kwargs):
         endpoints = conf.get("metrics_endpoints")
         if not endpoints:
-            raise ValueError("Metric endpoints are missing, key: metrics_endpoints")
+            ns_conf = load_namespace_conf(conf["namespace"])
+            endpoints = ns_conf.get("kafka-metrics", DEFAULT_METRICS_ENDPOINT)
 
         self._cache_duration = int_value(
             conf.get("cache_duration"), self.DEFAULT_METRICS_CACHE_DURATION
@@ -67,11 +71,6 @@ class KafkaMetricsClient(MultiEndpointHttpApi):
         self.__total_space_bytes = 0
         self.__free_space_alert = KafkaClusterSpaceStatus.UNKNOWN
         self.__next_update = 0
-
-        if endpoints != conf.get("metrics_endpoints"):
-            self._logger().warning(
-                "'metrics_endpoints' should use ',' as endpoint separator, not ';'"
-            )
 
     @property
     def _cache_expired(self):

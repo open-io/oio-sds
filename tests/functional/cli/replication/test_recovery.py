@@ -151,7 +151,7 @@ class ReplicationRecoveryTest(CliTestCase):
             event_types = (EventTypes.CONTENT_UPDATE,)
         time.sleep(1)
         until_date = int(datetime.timestamp(datetime.now()))
-        option += f" --linger-ms 0 --until {until_date} --do-not-use-marker"
+        option += f" --until {until_date} --do-not-use-marker"
         if with_invalid_option:
             option = "--pending --only-metadata --do-not-use-marker"
             self.assertRaisesRegex(

@@ -34,7 +34,12 @@ from oio.common.constants import (
 )
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import NoSuchObject
-from oio.common.kafka import DEFAULT_REPLICATION_TOPIC, KafkaSender
+from oio.common.kafka import (
+    DEFAULT_REPLICATION_DELAYED_TOPIC,
+    DEFAULT_REPLICATION_TOPIC,
+    KafkaSender,
+)
+from oio.common.kafka_http import KafkaClusterHealth, OioUnhealthyKafkaClusterError
 from oio.common.utils import cid_from_name, depaginate, request_id
 from oio.event.evob import EventTypes
 
@@ -395,7 +400,6 @@ class ReplicationRecovery(Command):
         dest_buckets: List[str],
         event: Dict[str, Any],
         dry_run: bool,
-        kafka_conf: Dict[str, Any],
         is_delete_marker: bool,
     ):
         log = self.log.info if dry_run else self.log.debug
@@ -407,15 +411,27 @@ class ReplicationRecovery(Command):
             "(delete marker)" if is_delete_marker else "(object)",
         )
         if not dry_run:
+            while True:
+                try:
+                    # Ensure cluster can absorb generated events
+                    self.kafka_cluster_health.check()
+                    break
+                except OioUnhealthyKafkaClusterError as exc:
+                    self.log.warning(
+                        "Unhealthy kafka cluster, send event on hold: %s", exc
+                    )
+                    time.sleep(
+                        self.kafka_cluster_health.kafka_metrics_client._cache_duration
+                    )
+
             if self.kafka_producer is None:
                 self.kafka_producer = KafkaSender(
                     conf.get("broker_endpoint"),
                     self.log,
                     app_conf=conf,
-                    kafka_conf=kafka_conf,
                 )
             try:
-                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event)
+                self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event, flush=True)
             except Exception as exc:
                 self.log.warning("Fail to send replication event %s: %s", event, exc)
                 self.success = False
@@ -449,17 +465,24 @@ class ReplicationRecovery(Command):
             "minus 48 hours.",
         )
         parser.add_argument(
-            "--batch-num-messages",
+            "--kafka-max-lags",
             type=int,
-            default=1000,
-            help="Maximum number of messages in a single batch. (default=1000)",
+            default=1000000,
+            help=(
+                "Maximum lag allowed by kafka topics "
+                f"{DEFAULT_REPLICATION_TOPIC} and "
+                f"{DEFAULT_REPLICATION_DELAYED_TOPIC} (<0 to disable). "
+                "(default=1000000)"
+            ),
         )
         parser.add_argument(
-            "--linger-ms",
+            "--kafka-min-available-space",
             type=int,
-            default=1000,
-            help="Artificial delay in ms to wait before sending each batch of events. "
-            "(default=1000)",
+            default=40,
+            help=(
+                "Minimal available space allowed for kafka cluster in percent "
+                "(<0 to disable). (default=40)"
+            ),
         )
         parser.add_argument(
             "--do-not-use-marker",
@@ -586,16 +609,19 @@ class ReplicationRecovery(Command):
             "namespace": namespace,
             "broker_endpoint": broker_endpoints,
         }
-        # Maximum number of message in a single batch
-        batch_num_messages = parsed_args.batch_num_messages
-        # Time to wait before sending events in a batch
-        linger_ms = parsed_args.linger_ms
-        kafka_conf = {
-            "batch.num.messages": batch_num_messages,
-            "linger.ms": linger_ms,
-        }
         self.success = True
         self.log = self.app.client_manager.logger
+        self.kafka_cluster_health = KafkaClusterHealth(
+            {
+                "namespace": namespace,
+                "topics": ",".join(
+                    (DEFAULT_REPLICATION_TOPIC, DEFAULT_REPLICATION_DELAYED_TOPIC)
+                ),
+                "max_lag": parsed_args.kafka_max_lags,
+                "min_available_space": parsed_args.kafka_min_available_space,
+            },
+            pool_manager=self.app.client_manager.storage.container.pool_manager,
+        )
         account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
         signal.signal(signal.SIGTERM, partial(self._clean_exit, account, bucket))
         if pending:
@@ -640,7 +666,6 @@ class ReplicationRecovery(Command):
                     dest_buckets,
                     object_event,
                     dry_run,
-                    kafka_conf,
                     is_delete_marker,
                 )
                 counter += 1
