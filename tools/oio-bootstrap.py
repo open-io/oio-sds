@@ -502,6 +502,36 @@ storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 use = egg:oio#logger
 """
 
+template_bucket_crawler_service = """
+[bucket-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${BUCKET}
+
+wait_random_time_before_starting = True
+use_eventlet = True
+use_marker = False
+interval = 1200
+report_interval = 300
+scanned_per_second = 10
+# represents 30 seconds at max rate
+# scanned_between_markers = 300
+limit_nb_objects_one_pass = 1000
+
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+statsd_host = ${STATSD_HOST}
+statsd_port = ${STATSD_PORT}
+syslog_prefix = OIO,${NS},${SRVTYPE}
+
+[pipeline:main]
+pipeline = logger
+
+[filter:logger]
+use = egg:oio#logger
+"""
+
 template_placement_improver_crawler_service = """
 [rawx-crawler]
 namespace = ${NS}
@@ -1310,6 +1340,26 @@ Type=oneshot
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
+"""
+
+template_systemd_service_bucket_crawler = """
+[Unit]
+Description=[OpenIO] Service bucket crawler
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},crawler,bucket-crawler,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+${ENVIRONMENT}
+TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 template_systemd_service_rdir_crawler = """
@@ -2970,6 +3020,31 @@ def generate(options):
         add_service_to_conf=False,
         coverage_wrapper=shutil.which("coverage")
         + " run --context meta2-crawler --concurrency=eventlet -p ",
+    )
+
+    # oio-bucket-crawler
+    _tmp_env = subenv(
+        {
+            "BUCKET": "xcute-customer-technical-bucket",
+            "SRVTYPE": "bucket-crawler",
+            "SRVNUM": "1",
+            "GROUPTYPE": "crawler",
+            "EXE": "oio-bucket-crawler",
+        }
+    )
+    # first the conf
+    tpl = Template(template_bucket_crawler_service)
+    to_write = tpl.safe_substitute(_tmp_env)
+    path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**_tmp_env)
+    with open(path, "w+") as f:
+        f.write(to_write)
+    register_service(
+        _tmp_env,
+        template_systemd_service_bucket_crawler,
+        crawler_target,
+        add_service_to_conf=False,
+        coverage_wrapper=shutil.which("coverage")
+        + " run --context bucket-crawler --concurrency=eventlet -p ",
     )
 
     # oio-rdir-crawler-meta2

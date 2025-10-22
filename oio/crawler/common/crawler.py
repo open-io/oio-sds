@@ -29,12 +29,14 @@ from oio.common.green import GreenPool, get_watchdog, time
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
 from oio.common.utils import paths_gen, ratelimit
+from oio.crawler.bucket.loader import loadpipeline as bucket_loadpipeline
 from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
 from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
 
 LOAD_PIPELINES = {
-    "rawx": rawx_loadpipeline,
+    "bucket": bucket_loadpipeline,
     "meta2": meta2_loadpipeline,
+    "rawx": rawx_loadpipeline,
 }
 
 TAGS_TO_DEBUG = ("starting",)
@@ -221,9 +223,13 @@ class CrawlerWorker(CrawlerStatsdMixin, CrawlerWorkerMarkerMixin):
         self.logger = logger or get_logger(self.conf)
         if not volume_path:
             raise ConfigurationException("No volume specified for crawler")
-        self.namespace, self.volume_id = check_volume_for_service_type(
-            volume_path, self.SERVICE_TYPE
-        )
+        if getattr(self, "check_volume", True):
+            self.namespace, self.volume_id = check_volume_for_service_type(
+                volume_path, self.SERVICE_TYPE
+            )
+        else:
+            self.namespace = conf["namespace"]
+            self.volume_id = volume_path
         self.volume_path = volume_path
         self._stop_requested = Event()
         super().__init__(
