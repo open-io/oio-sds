@@ -144,7 +144,7 @@ class TestRestoreAgent(BaseTestCase):
         self.assertEqual(4, mock_stats.gauge.call_count)
         # Sent
         self.assertEqual(
-            len(expects) - 1,
+            len(expects),
             [
                 c.args[1]
                 for c in mock_stats.gauge.call_args_list
@@ -153,7 +153,7 @@ class TestRestoreAgent(BaseTestCase):
         )
         # Ignored
         self.assertEqual(
-            1,
+            0,
             [
                 c.args[1]
                 for c in mock_stats.gauge.call_args_list

@@ -272,7 +272,7 @@ class ArchiveRestore(Filter):
         object_key = event.url.get("path")
         object_version = event.url.get("version")
 
-        object_meta = self._api.object_show(
+        object_meta = self._api.object_get_properties(
             account, bucket, object_key, version=object_version, reqid=event.reqid
         )
 

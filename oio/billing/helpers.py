@@ -183,7 +183,7 @@ class RestoreBillingClient(_BillingClient):
             bucket,
             storage_class,
             counters={
-                "resquests": requests,
+                "requests": requests,
                 "transfer": transfer,
                 "storage": storage,
             },
