@@ -18,7 +18,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 if [ -v OIO_SYSTEMD_SYSTEM ]; then
 	SYSTEMCTL="systemctl"
 	SYSTEMD_DIR="/etc/systemd/system"
@@ -29,7 +28,7 @@ fi
 
 function dump_syslog {
 	cmd="tail"
-	if ! [ -r /var/log/syslog ] ; then
+	if ! [ -r /var/log/syslog ]; then
 		cmd="sudo tail"
 	fi
 	$cmd -n 500 /var/log/syslog
@@ -50,51 +49,51 @@ function trap_exit {
 	if [ -n "${BEANSTALK}" ]; then
 		# some tests stop all services, we must start beanstalk to dump events
 		$SYSTEMCTL start oio-beanstalkd.target
-		oio-dump-buried-events.py ${BEANSTALK} >> everything.log
+		oio-dump-buried-events.py ${BEANSTALK} >>everything.log
 	fi
-	lsof -i -P -n | grep LISTEN >> everything.log
-	$OPENIOCTL status2 >> everything.log
-	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-pager --full --lines=256 >> everything.log
+	lsof -i -P -n | grep LISTEN >>everything.log
+	$OPENIOCTL status2 >>everything.log
+	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-pager --full --lines=256 >>everything.log
 	#dump_syslog
-	${SRCDIR}/tools/oio-gdb.py >> everything.log
+	${SRCDIR}/tools/oio-gdb.py >>everything.log
 }
 
 trap trap_exit EXIT
 
-is_running_test_suite () {
+is_running_test_suite() {
 	[ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
 }
 
-randomize_env () {
+randomize_env() {
 	export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" \
 		OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
 }
 
-test_oio_tool () {
+test_oio_tool() {
 	set -x
 	oio-tool -h >/dev/null
 	oio-tool config "$OIO_NS" >/dev/null
-	if oio-tool >/dev/null ; then exit 1 ; fi
+	if oio-tool >/dev/null; then exit 1; fi
 	oio-tool stat / /tmp /usr | head -n 1
 	oio-tool location A.B.C.D
-	for url in $(oio-test-config.py -t conscience) ; do
+	for url in $(oio-test-config.py -t conscience); do
 		oio-tool ping "$url" >/dev/null
-		if oio-tool info "$url" >/dev/null ; then exit 1 ; fi
+		if oio-tool info "$url" >/dev/null; then exit 1; fi
 	done
-	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
+	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1); do
 		oio-tool ping "$url" >/dev/null
 		oio-tool info "$url" >/dev/null
 		oio-tool redirect "$url" >/dev/null
 	done
-	if oio-tool ping 127.0.0.1:2 >/dev/null ; then exit 1 ; fi
-	if [ 1 -ne $(oio-tool addr a 127.0.0.1:1234 | wc -l) ] ; then exit 1 ; fi
-	if [ 1 -ne $(oio-tool cid OPENIO/ACCT/JFS | wc -l) ] ; then exit 1 ; fi
+	if oio-tool ping 127.0.0.1:2 >/dev/null; then exit 1; fi
+	if [ 1 -ne $(oio-tool addr a 127.0.0.1:1234 | wc -l) ]; then exit 1; fi
+	if [ 1 -ne $(oio-tool cid OPENIO/ACCT/JFS | wc -l) ]; then exit 1; fi
 	oio-tool hash XXX | head -n 2 >/dev/null
 	set +x
 }
 
-test_oio_file_tool () {
-	head -c 1M </dev/urandom > /tmp/test_oio_file.txt
+test_oio_file_tool() {
+	head -c 1M </dev/urandom >/tmp/test_oio_file.txt
 	oio-file-tool --upload -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file.txt -o remote_file_test.txt
 	oio-file-tool -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file2.txt -o remote_file_test.txt
 	DIFF=$(diff /tmp/test_oio_file2.txt /tmp/test_oio_file.txt)
@@ -102,7 +101,7 @@ test_oio_file_tool () {
 	rm /tmp/test_oio_file.txt
 	openio object delete testfiletool remote_file_test.txt
 	openio container delete testfiletool
-	if [ "$DIFF" != "" ] ; then exit 1; fi
+	if [ "$DIFF" != "" ]; then exit 1; fi
 }
 
 test_oio_lb_benchmark() {
@@ -110,7 +109,7 @@ test_oio_lb_benchmark() {
 	# configurations. The datasets are tested by tests/unit/test_lb.
 	${WRKDIR}/tools/oio-lb-benchmark -O iterations=1000 \
 		"${SRCDIR}/tests/datasets/lb-3-5-4.txt" "6,rawx;min_dist=2" \
-		2> lb-benchmark.log
+		2>lb-benchmark.log
 	if [ $(grep -qv 'no service polled from' lb-benchmark.log) ]; then exit 1; fi
 }
 
@@ -124,35 +123,36 @@ test_oio_logger() {
 	if [ $CODE -ne 1 -a $CODE -ne 0 ]; then exit 1; fi
 }
 
-test_proxy_forward () {
+test_proxy_forward() {
 	proxy=$(oio-test-config.py -t proxy -1)
 
-	curl -sS  -X GET "http://$proxy/v3.0/status" >/dev/null
-	curl -sS  -X GET "http://$proxy/v3.0/cache/status" >/dev/null
-	curl -sS  -X GET "http://$proxy/v3.0/config" >/dev/null
-	curl -sS  -X POST "http://$proxy/v3.0/cache/flush/local" >/dev/null
-	curl -sS  -X POST "http://$proxy/v3.0/cache/flush/high" >/dev/null
-	curl -sS  -X POST "http://$proxy/v3.0/cache/flush/low" >/dev/null
-	curl -sS  -X POST -d '{"socket.nodelay.enabled":"on"}' \
+	curl -sS -X GET "http://$proxy/v3.0/status" >/dev/null
+	curl -sS -X GET "http://$proxy/v3.0/cache/status" >/dev/null
+	curl -sS -X GET "http://$proxy/v3.0/config" >/dev/null
+	curl -sS -X POST "http://$proxy/v3.0/cache/flush/local" >/dev/null
+	curl -sS -X POST "http://$proxy/v3.0/cache/flush/high" >/dev/null
+	curl -sS -X POST "http://$proxy/v3.0/cache/flush/low" >/dev/null
+	curl -sS -X POST -d '{"socket.nodelay.enabled":"on"}' \
 		"http://$proxy/v3.0/config" >/dev/null
 
-	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
-		curl -sS  -X GET "http://$proxy/v3.0/forward/config?id=$url" >/dev/null
-		curl -sS  -X POST -d '{"socket.nodelay.enabled":"on"}' \
+	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1); do
+		curl -sS -X GET "http://$proxy/v3.0/forward/config?id=$url" >/dev/null
+		curl -sS -X POST -d '{"socket.nodelay.enabled":"on"}' \
 			"http://$proxy/v3.0/forward/config?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/flush?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/reload?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/ping?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/lean-glib?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/lean-sqlx?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/version?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/handlers?id=$url" >/dev/null
-		curl -sS  -X POST "http://$proxy/v3.0/forward/info?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/flush?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/reload?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/ping?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/lean-glib?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/lean-sqlx?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/version?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/handlers?id=$url" >/dev/null
+		curl -sS -X POST "http://$proxy/v3.0/forward/info?id=$url" >/dev/null
 	done
 }
 
 wait_proxy_cache() {
 	cnt=$(oio-test-config.py -t rawx | wc -l)
+	proxy=$(oio-test-config.py -t proxy -1)
 	while true; do
 		rawx=$(curl -sS http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
 		if [ "$cnt" -eq "$rawx" ]; then
@@ -180,7 +180,7 @@ test_zookeeper_failure() {
 	# Old systemd versions do not recognize --value, whence the eval hack
 	#MainPID=$(sudo systemctl show -p MainPID --value zookeeper)
 	eval $(sudo systemctl show -p MainPID zookeeper)
-	if [[ -n "$MainPID" ]] && [[ $MainPID -gt 0 ]] ; then
+	if [[ -n "$MainPID" ]] && [[ $MainPID -gt 0 ]]; then
 		sudo kill -STOP $MainPID
 		openio election debug meta2 test_zookeeper_failure
 		sleep 11
@@ -193,7 +193,7 @@ test_zookeeper_failure() {
 	fi
 }
 
-func_tests () {
+func_tests() {
 	randomize_env
 	# Some functional tests require events to be preserved after being handled
 	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
@@ -261,7 +261,7 @@ func_tests () {
 	# TODO(jfs): Move in a tests/functional/cli python test
 	${PYTHON} $(command -v oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
-	if is_running_test_suite "ec" ; then
+	if is_running_test_suite "EC"; then
 		echo "Roundtrip test disabled for EC"
 	else
 		# Create a file just bigger than chunk size
@@ -290,7 +290,28 @@ func_tests () {
 	${OPENIOCTL} status
 }
 
-test_meta2_filters () {
+lifecycle_tests() {
+	randomize_env
+	# Some functional tests require events to be preserved after being handled
+	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
+	$OIO_RESET ${args} -N $OIO_NS $@
+
+	wait_proxy_cache
+
+	# Run only lifecycle-related tests
+	cd "$SRCDIR"
+	tox -e lifecycle
+
+	# Parallel stop
+	$SYSTEMCTL stop oio-cluster.target
+	# Sequential wait for all processes to stop
+	$OPENIOCTL stop
+	sleep 0.5
+	# This allows to check if all processes have actually stopped
+	${OPENIOCTL} status
+}
+
+test_meta2_filters() {
 	randomize_env
 	$OIO_RESET -N $OIO_NS $@
 
@@ -302,7 +323,7 @@ test_meta2_filters () {
 	sleep 0.5
 }
 
-test_cli () {
+test_cli() {
 	randomize_env
 	# Some tests require events to be preserved after being handled
 	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
@@ -329,11 +350,15 @@ test_cli () {
 #-------------------------------------------------------------------------------
 
 set -e
-SRCDIR="$1" ; [[ -n "$SRCDIR" ]] ; [[ -d "$SRCDIR" ]]
-WRKDIR="$2" ; [[ -n "$WRKDIR" ]] ; [[ -d "$WRKDIR" ]]
+SRCDIR="$1"
+[[ -n "$SRCDIR" ]]
+[[ -d "$SRCDIR" ]]
+WRKDIR="$2"
+[[ -n "$WRKDIR" ]]
+[[ -d "$WRKDIR" ]]
 
 export PYTHON=python
-if [[ -n "$PYTHON_COVERAGE" ]] ; then
+if [[ -n "$PYTHON_COVERAGE" ]]; then
 	export PYTHON="coverage run --context ${TEST_SUITE:=nocontext} -p"
 fi
 
@@ -342,9 +367,9 @@ OIO_RESET="oio-reset.sh"
 CLI=$(command -v openio)
 ADMIN_CLI=$(command -v openio-admin)
 
-if is_running_test_suite "single" ; then
+if is_running_test_suite "single"; then
 	opts=
-	if is_running_test_suite "zlib" ; then
+	if is_running_test_suite "zlib"; then
 		opts="-f ${SRCDIR}/etc/bootstrap-option-compression-zlib.yml"
 	fi
 	func_tests $opts \
@@ -355,7 +380,7 @@ if is_running_test_suite "single" ; then
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
-if is_running_test_suite "repli" ; then
+if is_running_test_suite "repli"; then
 	echo -e "\n### Replication tests"
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
@@ -364,7 +389,7 @@ if is_running_test_suite "repli" ; then
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
-if is_running_test_suite "cli" ; then
+if is_running_test_suite "cli"; then
 	echo -e "\n### CLI tests"
 	test_cli -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
@@ -373,20 +398,27 @@ if is_running_test_suite "cli" ; then
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
-if is_running_test_suite "3copies" ; then
+if is_running_test_suite "lifecycle"; then
+	echo -e "\n### Lifecycle tests"
+	lifecycle_tests -f "${SRCDIR}/etc/bootstrap-preset-fullrepli.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-cache.yml" \
+		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
+fi
+
+if is_running_test_suite "3copies"; then
 	echo -e "\n### 3copies tests"
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3hosts.yml"
 fi
 
-if is_running_test_suite "ec" ; then
+if is_running_test_suite "EC"; then
 	echo -e "\n### EC tests"
 
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-ANY-E93.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
 fi
 
-func_tests_rebuilder_mover () {
+func_tests_rebuilder_mover() {
 	randomize_env
 	args=
 	if is_running_test_suite "zlib"; then
@@ -405,16 +437,16 @@ func_tests_rebuilder_mover () {
 		CONTAINER="container-${RANDOM}"
 		for j in {1..10}; do
 			dd if=/dev/urandom of=/tmp/openio_object_$j bs=1K \
-					count=$(shuf -i 1-2000 -n 1) 2> /dev/null
+				count=$(shuf -i 1-2000 -n 1) 2>/dev/null
 			echo "object create ${CONTAINER} /tmp/openio_object_$j" \
-					"--name object-${RANDOM} -f value"
+				"--name object-${RANDOM} -f value"
 		done | ${PYTHON} ${CLI}
 	done
 	rm -f /tmp/openio_object_*
 	# Shard the last container
 	${OPENIOCTL} stop @meta2-crawler
 	${PYTHON} ${CLI} container-sharding find-and-replace --threshold 1 \
-			--enable "${CONTAINER}"
+		--enable "${CONTAINER}"
 
 	# FIXME(ADU): I don't know why, but there are missing entries in the rdir.
 	# While waiting to find the explanation, it is necessary to force
@@ -442,7 +474,7 @@ func_tests_rebuilder_mover () {
 	${OPENIOCTL} status
 }
 
-if is_running_test_suite "rebuilder" ; then
+if is_running_test_suite "rebuilder"; then
 	echo -e "\n### Tests all rebuilders"
 
 	export REBUILDER=1
@@ -459,7 +491,7 @@ if is_running_test_suite "rebuilder" ; then
 	unset REBUILDER
 fi
 
-if is_running_test_suite "mover" ; then
+if is_running_test_suite "mover"; then
 	echo -e "\n### Tests meta2 mover"
 
 	export MOVER=1

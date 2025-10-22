@@ -26,6 +26,16 @@ workflow:
       script: |+
         return cds_triggered_by_username ~= "cds.scheduler"
 
+  tests-lifecycle:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-lifecycle
+    depends_on:
+      - root
+    conditions:
+      script: |+
+        return cds_triggered_by_username ~= "cds.scheduler"
+
   tests-lint:
     pipeline: oio-sds-lint
     application: oio-sds
@@ -100,13 +110,14 @@ workflow:
     application: oio-sds
     depends_on:
       - tests-cli
-      - tests-fast
-      - tests-single
       - tests-ec
+      - tests-fast
       - tests-fullrepli
-      - tests-rebuilder
-      - tests-mover
+      - tests-lifecycle
       - tests-lint
+      - tests-mover
+      - tests-rebuilder
+      - tests-single
     when:
       - success
 

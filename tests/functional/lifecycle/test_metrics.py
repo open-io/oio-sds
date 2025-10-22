@@ -1,4 +1,4 @@
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,7 @@
 
 from time import sleep
 
+import pytest
 from redis.exceptions import ResponseError
 
 from oio.common.exceptions import NotFound, ServiceBusy
@@ -22,6 +23,7 @@ from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, Lifec
 from tests.utils import BaseTestCase
 
 
+@pytest.mark.lifecycle
 class TestLifecycleMetrics(BaseTestCase):
     def setUp(self):
         super().setUp()
@@ -150,6 +152,7 @@ class TestLifecycleMetrics(BaseTestCase):
         self.assertEqual(100, len(containers))
 
 
+@pytest.mark.lifecycle
 class TestLifecycleMetricsError(BaseTestCase):
     def test_unreachable_host(self):
         # Configure an invalid host

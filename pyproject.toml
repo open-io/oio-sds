@@ -90,6 +90,7 @@ addopts = [
 ]
 log_level = "DEBUG"
 markers = [
+  "lifecycle: lifecycle-related tests",
   "no_thread_patch: tests which must run with unpatched thread module",
 ]
 

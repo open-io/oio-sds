@@ -17,6 +17,8 @@ import json
 import time
 from datetime import datetime, timedelta, timezone
 
+import pytest
+
 from oio.common.constants import M2_PROP_BUCKET_NAME, MULTIUPLOAD_SUFFIX
 from oio.common.statsd import get_statsd
 from oio.common.utils import request_id
@@ -34,6 +36,7 @@ class _App:
         self.cb = cb
 
 
+@pytest.mark.lifecycle
 class TestFilterLifecycleActionsCommon(BaseTestCase):
     def setUp(self):
         super().setUp()
@@ -188,8 +191,8 @@ class TestFilterLifecycleActions(TestFilterLifecycleActionsCommon):
             reqid=reqid,
         )
 
-        self.lifeycle_actions = LifecycleActions(app=self.app, conf=self.conf)
-        self.lifeycle_actions.process(event, None)
+        self.lifecycle_actions = LifecycleActions(app=self.app, conf=self.conf)
+        self.lifecycle_actions.process(event, None)
 
         evt = self.wait_for_kafka_event(
             reqid=reqid,
@@ -230,14 +233,14 @@ class TestFilterLifecycleActions(TestFilterLifecycleActionsCommon):
             reqid=reqid,
         )
 
-        self.lifeycle_actions = LifecycleActions(
+        self.lifecycle_actions = LifecycleActions(
             app=self.app,
             conf={
                 **self.conf,
                 "skip_data_move_storage_class.STANDARD": "GLACIER,STANDARD_IA",
             },
         )
-        self.lifeycle_actions.process(event, None)
+        self.lifecycle_actions.process(event, None)
 
         props = self.storage.object_get_properties(
             self.account, self.container, self.object, version=self.obj_meta["version"]

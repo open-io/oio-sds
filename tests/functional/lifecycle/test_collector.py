@@ -15,6 +15,8 @@
 import json
 from tempfile import NamedTemporaryFile
 
+import pytest
+
 from oio.common.constants import LIFECYCLE_PROPERTY_KEY, M2_PROP_BUCKET_NAME
 from oio.common.kafka import DEFAULT_LIFECYCLE_CHECKPOINT_TOPIC
 from oio.event.evob import EventTypes
@@ -22,6 +24,7 @@ from tests.functional.cli import execute
 from tests.utils import BaseTestCase, random_str
 
 
+@pytest.mark.lifecycle
 class TestLifecycleCheckpointCollector(BaseTestCase):
     @classmethod
     def setUpClass(cls):

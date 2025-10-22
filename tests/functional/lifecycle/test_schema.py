@@ -13,10 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import pytest
+
 from oio.container.lifecycle import ContainerLifecycle, LifecycleConfigurationInvalid
 from tests.utils import BaseTestCase
 
 
+@pytest.mark.lifecycle
 class TestLifecycleSchema(BaseTestCase):
     def setUp(self):
         super().setUp()

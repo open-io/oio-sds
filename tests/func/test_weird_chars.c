@@ -1,7 +1,7 @@
 /*
 OpenIO SDS functional tests
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2023 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -29,18 +29,12 @@ static const char *ns_name = NULL;
 static const char *account = NULL;
 static struct oio_sds_s *client = NULL;
 static const char *source_file = "/etc/fstab";
-static gboolean use_ecd = FALSE;
 
 const char *weirdos = "!#$&'()*+,/:;=?@[]\r\n\"%-.<>\\^_`{}|~";
 
 static void
 test_create_upload_delete_destroy(struct oio_url_s *url, const gchar *obj)
 {
-	if (use_ecd) {
-		g_test_skip("ecd is disabled");
-		return;
-	}
-
 	g_assert_nonnull(url);
 	GRID_DEBUG("Testing URL [%s]", oio_url_get(url, OIOURL_WHOLE));
 
@@ -136,7 +130,12 @@ main(int argc, char **argv)
 	OIO_TEST_INIT(argc, argv);
 
 	const gchar *test_suite = g_getenv("TEST_SUITE");
-	use_ecd = oio_str_is_set(test_suite) && g_str_has_prefix(test_suite, "ec");
+	gboolean is_ec = oio_str_is_set(test_suite)
+			&& g_str_has_prefix(test_suite, "EC");
+	if (is_ec) {
+		GRID_INFO("Tests disabled in EC environments.");
+		return 0;
+	}
 
 	ns_name = g_getenv("OIO_NS");
 	account = g_getenv("OIO_ACCOUNT");

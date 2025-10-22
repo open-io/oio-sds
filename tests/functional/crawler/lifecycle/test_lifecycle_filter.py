@@ -19,6 +19,8 @@ from datetime import datetime
 from enum import Enum
 from unittest.mock import patch
 
+import pytest
+
 from oio.common.constants import (
     ACL_PROPERTY_KEY,
     LIFECYCLE_USER_AGENT,
@@ -98,6 +100,7 @@ class Expectation:
         )
 
 
+@pytest.mark.lifecycle
 class TestLifecycleCrawler(BaseTestCase):
     TIME_FACTOR = 43200  # 1 day =>  2 seconds
     DEFAULT_STATS = {

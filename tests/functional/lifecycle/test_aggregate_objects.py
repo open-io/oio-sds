@@ -17,10 +17,13 @@ import math
 import uuid
 from subprocess import check_call
 
+import pytest
+
 from oio.common.utils import request_id
 from tests.utils import BaseTestCase
 
 
+@pytest.mark.lifecycle
 class TestAggregateObjects(BaseTestCase):
     """Test aggregating objects using number and size strategies"""
 
