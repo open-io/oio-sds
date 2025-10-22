@@ -24,11 +24,11 @@ DEFAULT_HANDLER = "egg:oio#default"
 _loaders = {}
 
 
-class _Type(object):
+class _Type:
     name = None
     egg_protocols = None
 
-    def invoke(self, ctx, **kwargs):
+    def invoke(self, context, **kwargs):
         pass
 
 
@@ -41,8 +41,7 @@ class _Handler(_Type):
         if context.protocol in self.egg_protocols:
             app = kwargs.pop("app")
             return context.object(app, context.global_conf, **context.local_conf)
-        else:
-            assert 0, "Protocol %r unknown" % context.protocol
+        assert 0, f"Protocol {context.protocol} unknown"
 
 
 HANDLER = _Handler()
@@ -56,8 +55,7 @@ class _Filter(_Type):
     def invoke(self, context, **kwargs):
         if context.protocol in self.egg_protocols:
             return context.object(context.global_conf, **context.local_conf)
-        else:
-            assert 0, "Protocol %r unknown" % context.protocol
+        assert 0, f"Protocol {context.protocol} unknown"
 
 
 FILTER = _Filter()
@@ -100,11 +98,11 @@ def loadcontext(obj_type, uri, name=None, global_conf=None):
         else:
             uri = uri.split("#", 1)[0]
     if ":" not in uri:
-        raise LookupError("URI scheme invalid %r" % uri)
+        raise LookupError(f"URI scheme invalid {uri!r}")
     scheme, path = uri.split(":", 1)
     scheme = scheme.lower()
     if scheme not in _loaders:
-        raise LookupError("URI scheme unknown: %r" % scheme)
+        raise LookupError(f"URI scheme unknown: {scheme!r}")
     return _loaders[scheme](obj_type, uri, path, name=name, global_conf=global_conf)
 
 
@@ -116,11 +114,11 @@ def _loadegg(obj_type, uri, spec, name, global_conf):
 _loaders["egg"] = _loadegg
 
 
-class _Loader(object):
+class _Loader:
     pass
 
 
-class ConfigLoader(object):
+class ConfigLoader:
     HANDLER = HANDLER
     FILTER = FILTER
     PIPELINE = PIPELINE
@@ -130,7 +128,7 @@ class ConfigLoader(object):
         defaults = {"__file__": os.path.abspath(filename)}
         self.parser = ConfigParser(defaults=defaults, interpolation=None)
         self.parser.optionxform = str
-        with open(filename, "rt") as infile:
+        with open(filename, "rt", encoding="utf-8") as infile:
             self.parser.read_file(infile, source=filename)
 
     _absolute_re = re.compile(r"^[a-zA-Z]+:")
@@ -166,7 +164,7 @@ class ConfigLoader(object):
         elif "use" in local_conf:
             context = self._context_from_use(obj_type, local_conf, global_conf, section)
         else:
-            raise LookupError("Invalid section config %r" % section)
+            raise LookupError(f"Invalid section config {section!r}")
         return context
 
     def _pipeline_context(self, obj_type, section, name, global_conf, local_conf):
@@ -190,7 +188,7 @@ class ConfigLoader(object):
     def _context_from_use(self, obj_type, local_conf, global_conf, section):
         use = local_conf.pop("use", None)
         if not use:
-            raise LookupError("Missing 'use' in section config %r" % section)
+            raise LookupError(f"Missing 'use' in section config {section!r}")
 
         context = self.get_context(obj_type, name=use, global_conf=global_conf)
         context.local_conf.update(local_conf)
@@ -198,10 +196,7 @@ class ConfigLoader(object):
 
         if context.protocol is None:
             section_protocol = section.split(":", 1)[0]
-            if section_protocol in ("handler"):
-                context.protocol = "handler_factory"
-            else:
-                context.protocol = "%s_factory" % section_protocol
+            context.protocol = f"{section_protocol}_factory"
 
         return context
 
@@ -213,12 +208,10 @@ class ConfigLoader(object):
                 sections.extend(found)
                 break
         if not sections:
-            raise LookupError(
-                "No section %r found in config %r" % (name, self.filename)
-            )
+            raise LookupError(f"No section {name} found in config {self.filename!r}")
         if len(sections) > 1:
             raise LookupError(
-                "Ambiguous section %r found in config %r" % (name, self.filename)
+                f"Ambiguous section {name!r} found in config {self.filename!r}"
             )
 
         return sections[0]
@@ -266,19 +259,20 @@ class EggLoader(_Loader):
             name = "main"
         entries = []
         for protocol in obj_type.egg_protocols:
-            entry = metadata.entry_points(group=protocol, name=name)
+            # Cast to tuple to make it compatible with python3.11+
+            entry = tuple(metadata.entry_points(group=protocol, name=name))
             if entry:
                 entry = entry[0]
                 entries.append((entry.load(), protocol, entry.name))
                 break
         if not entries:
-            raise LookupError("Entry point %r not found in egg %r" % (name, self.spec))
+            raise LookupError(f"Entry point {name!r} not found in egg {self.spec!r}")
         if len(entries) > 1:
-            raise LookupError("Ambiguous entry for %r in egg %r" % (name, self.spec))
+            raise LookupError(f"Ambiguous entry for {name!r} in egg {self.spec!r}")
         return entries[0]
 
 
-class LoaderContext(object):
+class LoaderContext:
     def __init__(
         self,
         obj,
