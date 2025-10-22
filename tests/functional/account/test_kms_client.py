@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -180,10 +180,11 @@ class TestKmsClientUnavailableKMSAPI(TestKmsClient):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        # Prevent the sharding/shrinking by the meta2 crawlers
-        cls._service("oio-kmsapi-mock-server-1.service", "stop", wait=3)
+        # Stop the KMSAPI mock servers to simulate unavailability
+        cls._service_group("kmsapi-server", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-kmsapi-mock-server-1.service", "start", wait=1)
+        # Restart the KMSAPI mock servers
+        cls._service_group("kmsapi-server", "start", wait=1)
         super().tearDownClass()

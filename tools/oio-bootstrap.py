@@ -2225,9 +2225,9 @@ allow_user_policy_ipaddress = True
 kmsapi_enabled = True
 kmsapi_mock_server = True
 kmsapi_domains = domain1, domain2
-kmsapi_domain1_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain1
+kmsapi_domain1_endpoint = http://${KMSIP_1}:${PORT_KMSAPI_MOCK_SERVER_1}/domain1
 kmsapi_domain1_key_id = abcdefgh-aaaa-bbbb-cccc-123456789abc
-kmsapi_domain2_endpoint = http://${KMSIP}:${PORT_KMSAPI_MOCK_SERVER}/domain2
+kmsapi_domain2_endpoint = http://${KMSIP_2}:${PORT_KMSAPI_MOCK_SERVER_2}/domain2
 kmsapi_domain2_key_id = abcdefgh-aaaa-bbbb-cccc-123456789def
 
 # GROUPS FOR REGION BACKUPS
@@ -2547,7 +2547,8 @@ def generate(options):
     port_proxy = next(ports)
     port_account = next(ports)
     port_admin = next(ports)
-    port_kmsapi_mock_server = next(ports)
+    port_kmsapi_mock_server_1 = next(ports)
+    port_kmsapi_mock_server_2 = next(ports)
 
     versioning = 1
     stgpol = "SINGLE"
@@ -2617,7 +2618,8 @@ def generate(options):
         PORT_PROXYD=port_proxy,
         PORT_ACCOUNT=port_account,
         PORT_ADMIN=port_admin,
-        PORT_KMSAPI_MOCK_SERVER=port_kmsapi_mock_server,
+        PORT_KMSAPI_MOCK_SERVER_1=port_kmsapi_mock_server_1,
+        PORT_KMSAPI_MOCK_SERVER_2=port_kmsapi_mock_server_2,
         M1_DIGITS=meta1_digits,
         M1_REPLICAS=meta1_replicas,
         M2_REPLICAS=meta2_replicas,
@@ -3489,19 +3491,26 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
 
     # kmsapi-mock-server
-    env = subenv(
-        {
-            "SRVTYPE": "kmsapi-mock-server",
-            "SRVNUM": 1,
-            "EXE": "oio-kmsapi-mock-server",
-            "PORT": port_kmsapi_mock_server,
-        }
-    )
-    register_service(env, template_systemd_service_kms, root_target)
-    with open(env["CFGPATH"], "w+") as f:
-        tpl = Template(template_kms)
-        f.write(tpl.safe_substitute(env))
-    ENV["KMSIP"] = env["IP"]
+    kmsapi_mock_server_target = register_target("kmsapi-server", root_target)
+    for i in range(1, 3):
+        kms_port = locals()[f"port_kmsapi_mock_server_{i}"]
+        env = subenv(
+            {
+                "SRVTYPE": "kmsapi-mock-server",
+                "SRVNUM": i,
+                "EXE": "oio-kmsapi-mock-server",
+                "PORT": kms_port,
+            }
+        )
+        register_service(
+            env,
+            template_systemd_service_kms,
+            kmsapi_mock_server_target
+        )
+        with open(env["CFGPATH"], "w+") as f:
+            tpl = Template(template_kms)
+            f.write(tpl.safe_substitute(env))
+        ENV[f"KMSIP_{i}"] = env["IP"]
 
     # fake statsd server
     if options.get("statsd", {}).get("host", ""):
