@@ -32,12 +32,15 @@ from oio.content.content import RAWX_PERMANENT_ERRORS, Chunk, Content
 
 
 class PlainContent(Content):
-    def fetch(self):
+    def fetch(self, **_kwargs):
         chunks = _sort_chunks(
             self.chunks.raw(), self.storage_method.ec, logger=self.logger
         )
         stream = fetch_stream(
-            chunks, None, self.storage_method, watchdog=self.blob_client.watchdog
+            chunks,
+            None,
+            self.storage_method,
+            watchdog=self.blob_client.watchdog,
         )
         return stream
 

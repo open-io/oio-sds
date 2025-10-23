@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,6 +51,7 @@ class TestEC(unittest.TestCase):
         cls.watchdog = get_watchdog(called_from_main_application=True)
 
     def setUp(self):
+        super().setUp()
         self.chunk_method = "ec/algo=liberasurecode_rs_vand,k=6,m=2"
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         self.storage_method = storage_method
@@ -74,6 +75,7 @@ class TestEC(unittest.TestCase):
             {"url": "http://127.0.0.1:7006/6", "pos": "0.6", "num": 6},
             {"url": "http://127.0.0.1:7007/7", "pos": "0.7", "num": 7},
         ]
+        self.ec_enable_pass_through = False
 
     def meta_chunk(self):
         return self._meta_chunk
@@ -170,72 +172,80 @@ class TestEC(unittest.TestCase):
             self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_connect_errors(self):
+        write_to = green.ConnectionTimeout(1.0)
         test_cases = [
             {
-                "error": green.ConnectionTimeout(1.0),
+                "error": write_to,
                 "msg": "connect: Connection timeout 1.0 second",
             },
             {"error": Exception("failure"), "msg": "connect: failure"},
         ]
-        for test in test_cases:
-            checksum = self.checksum()
-            source = empty_stream()
-            size = CHUNK_SIZE * self.storage_method.ec_nb_data
-            nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
-            resps = [201] * (nb - 1)
-            # Put the error in the middle to mess with chunk indices
-            err_pos = random.randint(0, nb)
-            resps.insert(err_pos, test["error"])
-            with set_http_connect(*resps):
-                handler = EcMetachunkWriter(
-                    self.sysmeta,
-                    self.meta_chunk_copy(),
-                    checksum,
-                    self.storage_method,
-                    watchdog=self.__class__.watchdog,
-                )
-                bytes_transferred, checksum, chunks = handler.stream(source, size)
+        try:
+            for test in test_cases:
+                checksum = self.checksum()
+                source = empty_stream()
+                size = CHUNK_SIZE * self.storage_method.ec_nb_data
+                nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+                resps = [201] * (nb - 1)
+                # Put the error in the middle to mess with chunk indices
+                err_pos = random.randint(0, nb)
+                resps.insert(err_pos, test["error"])
+                with set_http_connect(*resps):
+                    handler = EcMetachunkWriter(
+                        self.sysmeta,
+                        self.meta_chunk_copy(),
+                        checksum,
+                        self.storage_method,
+                        watchdog=self.__class__.watchdog,
+                    )
+                    bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-            self.assertEqual(len(chunks), nb)
-            for i in range(nb - 1):
-                self.assertEqual(chunks[i].get("error"), None)
-            self.assertEqual(chunks[nb - 1].get("error"), test["msg"])
+                self.assertEqual(len(chunks), nb)
+                for i in range(nb - 1):
+                    self.assertEqual(chunks[i].get("error"), None)
+                self.assertEqual(chunks[nb - 1].get("error"), test["msg"])
 
-            self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_BLAKE3)
+                self.assertEqual(bytes_transferred, 0)
+                self.assertEqual(checksum, EMPTY_BLAKE3)
+        finally:
+            write_to.cancel()
 
     def test_write_response_error(self):
+        write_to = green.ChunkWriteTimeout(1.0)
         test_cases = [
             {
-                "error": green.ChunkWriteTimeout(1.0),
+                "error": write_to,
                 "msg": "resp: Chunk write timeout 1.0 second",
             },
             {"error": Exception("failure"), "msg": "resp: failure"},
         ]
-        for test in test_cases:
-            checksum = self.checksum()
-            source = empty_stream()
-            size = CHUNK_SIZE * self.storage_method.ec_nb_data
-            nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
-            resps = [201] * (nb - 1)
-            resps.append((100, test["error"]))
-            with set_http_connect(*resps):
-                handler = EcMetachunkWriter(
-                    self.sysmeta,
-                    self.meta_chunk_copy(),
-                    checksum,
-                    self.storage_method,
-                    watchdog=self.__class__.watchdog,
-                )
-                bytes_transferred, checksum, chunks = handler.stream(source, size)
+        try:
+            for test in test_cases:
+                checksum = self.checksum()
+                source = empty_stream()
+                size = CHUNK_SIZE * self.storage_method.ec_nb_data
+                nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+                resps = [201] * (nb - 1)
+                resps.append((100, test["error"]))
+                with set_http_connect(*resps):
+                    handler = EcMetachunkWriter(
+                        self.sysmeta,
+                        self.meta_chunk_copy(),
+                        checksum,
+                        self.storage_method,
+                        watchdog=self.__class__.watchdog,
+                    )
+                    bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-            self.assertEqual(len(chunks), nb)
-            for i in range(nb - 1):
-                self.assertEqual(chunks[i].get("error"), None)
-            self.assertEqual(chunks[nb - 1].get("error"), test["msg"])
+                self.assertEqual(len(chunks), nb)
+                for i in range(nb - 1):
+                    self.assertEqual(chunks[i].get("error"), None)
+                self.assertEqual(chunks[nb - 1].get("error"), test["msg"])
 
-            self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_BLAKE3)
+                self.assertEqual(bytes_transferred, 0)
+                self.assertEqual(checksum, EMPTY_BLAKE3)
+        finally:
+            write_to.cancel()
 
     def test_write_error_source(self):
         class TestReader(object):
@@ -258,24 +268,29 @@ class TestEC(unittest.TestCase):
             self.assertRaises(exc.SourceReadError, handler.stream, source, size)
 
     def test_write_timeout_source(self):
+        read_to = Timeout(1.0)
+
         class TestReader(object):
             def read(self, size):
-                raise Timeout(1.0)
+                raise read_to
 
         checksum = self.checksum()
         source = TestReader()
         size = CHUNK_SIZE * self.storage_method.ec_nb_data
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         resps = [201] * nb
-        with set_http_connect(*resps):
-            handler = EcMetachunkWriter(
-                self.sysmeta,
-                self.meta_chunk(),
-                checksum,
-                self.storage_method,
-                watchdog=self.__class__.watchdog,
-            )
-            self.assertRaises(exc.OioTimeout, handler.stream, source, size)
+        try:
+            with set_http_connect(*resps):
+                handler = EcMetachunkWriter(
+                    self.sysmeta,
+                    self.meta_chunk(),
+                    checksum,
+                    self.storage_method,
+                    watchdog=self.__class__.watchdog,
+                )
+                self.assertRaises(exc.OioTimeout, handler.stream, source, size)
+        finally:
+            read_to.cancel()
 
     def test_write_exception_source(self):
         class TestReader(object):
@@ -466,6 +481,7 @@ class TestEC(unittest.TestCase):
                 meta_end,
                 headers,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             body = b""
@@ -512,6 +528,7 @@ class TestEC(unittest.TestCase):
                 meta_end,
                 headers,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             for part in stream:
@@ -571,6 +588,7 @@ class TestEC(unittest.TestCase):
                 meta_end,
                 headers,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             for part in stream:
@@ -631,6 +649,7 @@ class TestEC(unittest.TestCase):
                 meta_end,
                 headers,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             for part in stream:
@@ -677,6 +696,7 @@ class TestEC(unittest.TestCase):
                 meta_end,
                 headers,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
 
             # TODO specialize Exception here (UnsatisfiableRange)
@@ -717,6 +737,7 @@ class TestEC(unittest.TestCase):
                 meta_end,
                 headers,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             body = b""
@@ -766,6 +787,7 @@ class TestEC(unittest.TestCase):
                 headers,
                 read_timeout=0.05,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             body = b""
@@ -814,6 +836,7 @@ class TestEC(unittest.TestCase):
                 headers,
                 read_timeout=0.01,
                 watchdog=self.__class__.watchdog,
+                ec_enable_pass_through=self.ec_enable_pass_through,
             )
             stream = handler.get_stream()
             body = b""
@@ -1134,3 +1157,9 @@ class TestEC(unittest.TestCase):
         return self._test_rebuild_not_enough_valid_sources(
             slice(-300), "Invalid fragment payload"
         )
+
+
+class TestECPassThrough(TestEC):
+    def setUp(self):
+        super().setUp()
+        self.ec_enable_pass_through = True

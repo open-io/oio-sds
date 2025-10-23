@@ -238,12 +238,19 @@ class ECContent(Content):
 
         return bytes_transferred
 
-    def fetch(self):
+    def fetch(
+        self,
+        **kwargs,
+    ):
         chunks = _sort_chunks(
             self.chunks.raw(), self.storage_method.ec, logger=self.logger
         )
         stream = fetch_stream_ec(
-            chunks, None, self.storage_method, watchdog=self.blob_client.watchdog
+            chunks,
+            None,
+            self.storage_method,
+            watchdog=self.blob_client.watchdog,
+            **kwargs,
         )
         return stream
 

@@ -83,6 +83,8 @@ class ObjectStorageApi(object):
         "tls",
         "use_tcp_cork",
         "watchdog",
+        "ec_enable_pass_through",
+        "ec_passthrough_min_score",
     )
 
     def __init__(self, namespace, logger=None, perfdata=None, **kwargs):

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,8 +49,11 @@ class TestECContent(BaseTestCase):
         self.account = self.conf["account"]
         self.chunk_size = self.conf["chunk_size"]
         self.gridconf = {"namespace": self.namespace}
+        self.ec_enable_pass_through = False
         self.content_factory = ContentFactory(
-            self.gridconf, logger=self.logger, watchdog=self.watchdog
+            self.gridconf,
+            logger=self.logger,
+            watchdog=self.watchdog,
         )
         self.container_client = ContainerClient(self.gridconf)
         self.blob_client = self.content_factory.blob_client
@@ -248,7 +251,11 @@ class TestECContent(BaseTestCase):
             self.blob_client.chunk_delete(c.url)
 
         # get the new structure of the uploaded content
-        return self.content_factory.get(self.container_id, old_content.content_id)
+        return self.content_factory.get(
+            self.container_id,
+            old_content.content_id,
+            ec_enable_pass_through=self.ec_enable_pass_through,
+        )
 
     def test_orphan_chunk(self):
         content = self._new_content(random_data(10))
@@ -259,7 +266,11 @@ class TestECContent(BaseTestCase):
         test_data = random_data(data_size)
         content = self._new_content(test_data, broken_pos_list)
 
-        data = b"".join(content.fetch())
+        data = b"".join(
+            content.fetch(
+                ec_enable_pass_through=self.ec_enable_pass_through,
+            )
+        )
 
         self.assertEqual(len(data), len(test_data))
         self.assertEqual(hash_data(data), hash_data(test_data))
@@ -290,3 +301,9 @@ class TestECContent(BaseTestCase):
     def test_fetch_content_unrecoverable(self):
         broken_chunks = self.random_chunks(4)
         self.assertRaises(OioException, self._test_fetch, DAT_LEGIT_SIZE, broken_chunks)
+
+
+class TestECContentPassthrough(TestECContent):
+    def setUp(self):
+        super(TestECContentPassthrough, self).setUp()
+        self.ec_enable_pass_through = True

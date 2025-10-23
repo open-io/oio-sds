@@ -148,7 +148,7 @@ class ECChunkDownloadHandler(object):
         reqid=None,
         perfdata=None,
         watchdog=None,
-        **_kwargs,
+        **kwargs,
     ):
         """
         :param connection_timeout: timeout to establish the connections
@@ -166,7 +166,9 @@ class ECChunkDownloadHandler(object):
         self.read_timeout = read_timeout
         self.reqid = reqid
         self.perfdata = perfdata
-        self.logger = _kwargs.get("logger", LOGGER)
+        self.logger = kwargs.get("logger", LOGGER)
+        self.ec_enable_pass_through = kwargs.get("ec_enable_pass_through", False)
+        self.ec_passthrough_min_score = kwargs.get("ec_passthrough_min_score", 90)
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
@@ -235,6 +237,17 @@ class ECChunkDownloadHandler(object):
 
     def get_stream(self):
         range_infos = self._get_range_infos()
+        sorted_chunks = []
+        if self.ec_enable_pass_through:
+            for el in self.chunks:
+                if (
+                    int(el["num"]) < self.storage_method.ec_nb_data
+                    and int(el.get("score", 0)) > self.ec_passthrough_min_score
+                ):
+                    sorted_chunks.insert(0, el)
+                else:
+                    sorted_chunks.append(el)
+            self.chunks = sorted_chunks
         chunk_iter = iter(self.chunks)
 
         # we use eventlet GreenPool to manage readers
