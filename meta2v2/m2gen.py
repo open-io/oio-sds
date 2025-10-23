@@ -394,12 +394,10 @@ class Generator(object):
                     + ");"
                 )
         print_quoted(
-            "INSERT OR IGNORE INTO admin(k,v) VALUES"
-            " ('schema_version','1.8');"
+            "INSERT OR IGNORE INTO admin(k,v) VALUES ('schema_version','1.8');"
         )
         print_quoted(
-            "INSERT OR IGNORE INTO admin(k,v) VALUES"
-            " ('version:main.admin','1:0');"
+            "INSERT OR IGNORE INTO admin(k,v) VALUES ('version:main.admin','1:0');"
         )
         for t in self.reverse_dependencies():
             print_quoted(
