@@ -244,10 +244,6 @@ storage_class.STANDARD = THREECOPIES,EC
 use = egg:oio#object_restore_detection
 broker_endpoint = kafka://localhost:19092
 topic = oio-archive-restore
-# Storage class mapping
-storage_class.DEEP_ARCHIVE = ANY-93
-# List of restorable classes
-restorable_storage_classes = DEEP_ARCHIVE
 
 # -----------------------------------------------------------------
 # Process restore events.
