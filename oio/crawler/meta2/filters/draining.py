@@ -60,6 +60,7 @@ class Draining(Meta2Filter):
             for k, v in self.conf.items()
             if k.startswith("kafka_cluster_health_")
         }
+        kafka_cluster_health_conf["namespace"] = self.api.namespace
         self.kafka_cluster_health = KafkaClusterHealth(
             kafka_cluster_health_conf, pool_manager=self.api.container.pool_manager
         )
