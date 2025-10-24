@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -336,7 +336,7 @@ class DeleteObject(ContainerCommandMixin, Lister):
         container = ""
         results = []
         account = self.app.client_manager.account
-        reqid = self.app.request_id("CLI-object--delete-")
+        reqid = self.app.request_id("CLI-object-delete-")
 
         if len(parsed_args.objects) <= 1:
             if parsed_args.auto:
@@ -378,7 +378,7 @@ class DeleteObject(ContainerCommandMixin, Lister):
                     objs[container].append(obj)
 
                 for key, value in objs:
-                    reqid = self.app.request_id("CLI-object--delete-")
+                    reqid = self.app.request_id("CLI-object-delete-")
                     tmp = self.app.client_manager.storage.object_delete_many(
                         account, key, value, reqid=reqid
                     )
