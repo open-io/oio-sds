@@ -6,7 +6,7 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
@@ -608,7 +608,7 @@ class KafkaBatchFeeder(
         app_conf,
         **kwargs,
     ):
-        Process.__init__(self)
+        Process.__init__(self, name="feeder")
         KafkaRejectorMixin.__init__(self, endpoint, logger, app_conf)
         KafkaOffsetHelperMixin.__init__(self)
         AcknowledgeMessageMixin.__init__(
@@ -738,7 +738,7 @@ class KafkaBatchFeeder(
                         )
                         continue
                     if offset.get("type") in EventTypes.INTERNAL_EVENTS:
-                        # Internal events should not be commited
+                        # Internal events should not be committed
                         self._ready_offsets += 1
                         continue
                     if offset.get("failure", False):
@@ -827,7 +827,7 @@ class KafkaBatchFeeder(
 
     def _commit_batch(self):
         offsets, offsets_count = self.get_offsets_to_commit()
-        self._statsd.gauge(f"openio.event.{self.topic}.commited", offsets_count)
+        self._statsd.gauge(f"openio.event.{self.topic}.committed", offsets_count)
         if offsets:
             self.logger.debug("Commit offsets: %s", offsets)
             self._consumer.commit(offsets=offsets)
@@ -986,7 +986,11 @@ class KafkaConsumerPool:
                 for worker_id, instance in self._workers.items():
                     if instance is None or not instance.is_alive():
                         if instance:
-                            self.logger.info("Joining dead worker %s", worker_id)
+                            self.logger.info(
+                                "Joining dead worker %s (exitcode=%s)",
+                                worker_id,
+                                instance.exitcode,
+                            )
                             instance.join()
                         factory = worker_factories.get(worker_id, self._start_worker)
                         factory(worker_id)

@@ -6,7 +6,7 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
@@ -292,6 +292,11 @@ class KafkaSender(KafkaClient):
             raise KafkaSendException(
                 "Failed to send event", retriable=retriable
             ) from exc
+        except AttributeError as aerr:
+            # Another thread/coroutine called self.close()
+            raise KafkaSendException(
+                "Failed to send event to topic %s: producer closed", retriable=True
+            ) from aerr
 
     def _generate_delayed_event(self, topic, event, delay, key=None):
         if delay < self._delay_granularity:
@@ -562,7 +567,7 @@ class GetTopicMixin:
 
     CACHE_UPDATE_COOLDOWN = 10
     DEFAULT_CACHE_DURATION = 3600
-    SLOT_SEPATATORS = (".", "-", "_")
+    SLOT_SEPARATORS = (".", "-", "_")
 
     def __init__(self, conscience_client, conf, logger) -> None:
         self._conscience_client = conscience_client
@@ -602,7 +607,7 @@ class GetTopicMixin:
                         slot = slot[4:]
                     if not slot:
                         continue
-                    if slot[0] in self.SLOT_SEPATATORS:
+                    if slot[0] in self.SLOT_SEPARATORS:
                         slot = slot[1:]
                     slots.append(slot)
                 slots.sort()
