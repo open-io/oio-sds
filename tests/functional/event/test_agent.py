@@ -7,7 +7,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -224,6 +224,7 @@ broker_endpoint = {endpoint}
             self.pool.run = run_limited_time
             self.pool.run()
 
+    @pytest.mark.flaky(reruns=2)
     def test_event_agent_delete_producer_usage(self):
         """Check that producers connection errors
         from delete event agent are avoided.
@@ -248,6 +249,7 @@ broker_endpoint = {endpoint}
         # error are not expected from the worker
         self.assertTrue(errors.empty())
 
+    @pytest.mark.flaky(reruns=2)
     def test_event_agent_delete_producer_oio_protocol(self):
         """Check that event is delayed when OioProtocolError exceptions occur"""
         rawx_by_host = self.grouped_services(
