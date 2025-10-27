@@ -87,7 +87,7 @@ override_dh_install:
 		$(DESTDIR)/run/oio/sds
 
 	# fix shebangs
-	sed -i "s@${DESTDIR}@@" $(DESTDIR)$(PREFIX)/bin/*
+	find $(DESTDIR)$(PREFIX)/bin/ -type f -exec sed -i "s@${DESTDIR}@@" {} \;
 
 	./tools/patch-python-modules.sh "${DESTDIR}${PREFIX}"
 

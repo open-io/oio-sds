@@ -34,7 +34,7 @@ build-backend = "pbr.build"
 
 [project.optional-dependencies]
 # All dependencies needed to run the program (but not to test it)
-all = ["oio[event,object,service,zk]"]
+all = ["oio[event,object,service,zk,boto]"]
 
 # Use the event system
 event = [
@@ -67,6 +67,11 @@ test = [
   "pytest-timer",
   "oio[all]",
   "oio[lint]",
+]
+# Run specific bucket crawler / xcute-customer service
+boto = [
+  "boto3~=1.38.42",
+  "botocore~=1.38.42",
 ]
 # Talk to Zookeeper (with openio CLI)
 zk = [

@@ -33,7 +33,17 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,bucket,1
 
 [pipeline:main]
-pipeline = logger
+pipeline = logger bucket_lister_creator
 
 [filter:logger]
 use = egg:oio#logger
+
+[filter:bucket_lister_creator]
+use = egg:oio#bucket_lister_creator
+boto_profile = keystone
+# boto_access_key = demo:demo
+# boto_secret_key = DEMO_PASS
+# boto_region = RegionOne
+# boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+# Policy to use for the manifests
+policy_manifest = SINGLE

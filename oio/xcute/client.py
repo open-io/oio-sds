@@ -21,7 +21,7 @@ class XcuteClient(ServiceClient):
     """Simple client API for the xcute service."""
 
     def __init__(self, conf, **kwargs):
-        xcute_type = conf.get("xcute_type")
+        xcute_type = conf.get("xcute_type") or kwargs.get("xcute_type")
         request_prefix = f"v1.0/xcute-{xcute_type}" if xcute_type else "v1.0/xcute"
         service_type = f"xcute-{xcute_type}" if xcute_type else "xcute"
         super(XcuteClient, self).__init__(

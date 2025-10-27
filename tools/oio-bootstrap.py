@@ -514,6 +514,7 @@ use_marker = False
 interval = 1200
 report_interval = 300
 scanned_per_second = 10
+xcute_type = customer
 # represents 30 seconds at max rate
 # scanned_between_markers = 300
 limit_nb_objects_one_pass = 1000
@@ -526,10 +527,19 @@ statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger
+pipeline = logger bucket_lister_creator
 
 [filter:logger]
 use = egg:oio#logger
+
+[filter:bucket_lister_creator]
+use = egg:oio#bucket_lister_creator
+boto_profile = keystone
+# boto_access_key = demo:demo
+# boto_secret_key = DEMO_PASS
+# boto_region = ${REGION}
+# boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+policy_manifest = SINGLE
 """
 
 template_placement_improver_crawler_service = """
