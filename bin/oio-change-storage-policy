@@ -55,6 +55,7 @@ class OioChangeStoragePolicy:
         self._account_marker = None
         self._container_marker = None
         self._main_request_id = self._request_id
+        self._ignore_pending_transition = ignore_pending_transition
         self._accounts = accounts
         self._containers = containers
         self._obj_name = object_name
