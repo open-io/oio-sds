@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -28,7 +28,7 @@ from tests.utils import BaseTestCase, random_str
 
 class TestContentVersioning(BaseTestCase):
     def setUp(self):
-        super(TestContentVersioning, self).setUp()
+        super().setUp()
         self.api = self.storage
         self.container = f"ct-vers-{random_str(6)}"
         system = {"sys.m2.policy.version": "3"}
@@ -41,7 +41,7 @@ class TestContentVersioning(BaseTestCase):
             self.api.container_delete(self.account, self.container)
         except Exception:
             pass
-        super(TestContentVersioning, self).tearDown()
+        super().tearDown()
 
     def test_versioning_enabled(self):
         props = self.api.container_get_properties(self.account, self.container)
@@ -108,7 +108,7 @@ class TestContentVersioning(BaseTestCase):
 
     def test_container_purge(self):
         # many contents
-        for i in range(0, 4):
+        for _ in range(0, 4):
             self.api.object_create(
                 self.account, self.container, obj_name="versioned", data="content"
             )
@@ -820,7 +820,7 @@ class TestContentVersioning(BaseTestCase):
                     self.account,
                     self.container,
                     versions=False,
-                    limit=100,
+                    limit=20,  # Low limit makes more iterations backend-side
                     reqid=f"{reqid}-{attempt}",
                     read_timeout=timeout,
                 )
