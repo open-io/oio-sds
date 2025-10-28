@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,10 +12,18 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+import socket
 
-import gevent.monkey
+from gevent import socket as gevent_socket
 
-gevent.monkey.patch_ssl()
+# Patch SSL only if gevent has already patched sockets.
+# This avoids recursion when sockets are unpatched and
+# ensures SSL remain gevent-compatible when socket has
+# been patched.
+if socket.socket is gevent_socket.socket:
+    from gevent import monkey
+
+    monkey.patch_ssl()
 
 import json  # noqa: E402
 import time  # noqa: E402
