@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,13 +89,14 @@ class ServiceClient(MultiEndpointHttpApi):
         super().__init__(endpoint=endpoint, service_type=service_type, **kwargs)
 
         kwargs.pop("pool_manager", None)
-        self.conscience = ConscienceClient(
-            conf,
-            endpoint=proxy_endpoint,
-            logger=self.logger,
-            pool_manager=self.pool_manager,
-            **kwargs,
-        )
+        if not self.endpoint:
+            self.conscience = ConscienceClient(
+                conf,
+                endpoint=proxy_endpoint,
+                logger=self.logger,
+                pool_manager=self.pool_manager,
+                **kwargs,
+            )
 
         self._global_kwargs = {
             tok: float_value(tov, None)
