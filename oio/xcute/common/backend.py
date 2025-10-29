@@ -45,6 +45,9 @@ def handle_redis_exceptions(func):
             if error is None:
                 raise
             error_cls, error_msg = error
+            # Resplit for this specific type of error
+            if error_type == "lock_exists":
+                error_param = error_param[0].rsplit(":", 1)
             raise error_cls(message=error_msg.format(*error_param))
 
     return handle_redis_exceptions
@@ -58,7 +61,7 @@ class XcuteBackend(RedisConnection):
             "job_exists": (Forbidden, "The job already exists"),
             "lock_exists": (
                 Forbidden,
-                "A job with the same lock ({}) is already in progress",
+                "A job ({}) with the same lock ({}) is already in progress",
             ),
             "no_job": (NotFound, "The job does not exist"),
             "job_must_be_paused": (Forbidden, "The job must be paused: {}"),
@@ -113,10 +116,11 @@ class XcuteBackend(RedisConnection):
             end;
 
             local job_status;
-            local lock_exists = redis.call('HEXISTS', '{prefix}:locks', lock);
-            if lock_exists ~= 0 then
+            local job_with_same_lock = redis.call('HGET', '{prefix}:locks', lock);
+            if job_with_same_lock then
                 if put_on_hold_if_locked ~= 'True' then
-                    return redis.error_reply('lock_exists:' .. lock);
+                    return redis.error_reply(
+                        string.format('lock_exists:%s:%s', job_with_same_lock, lock));
                 end;
                 redis.call('RPUSH', '{prefix}:on_hold:jobs:' .. lock, job_id);
                 job_status = 'ON_HOLD';

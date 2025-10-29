@@ -18,7 +18,9 @@
 # pylint: disable=no-member
 
 import time
+from urllib.parse import urlparse
 
+from oio.common.exceptions import Forbidden
 from oio.xcute.client import XcuteClient
 from tests.utils import BaseTestCase
 
@@ -149,3 +151,53 @@ class TestXcuteJobs(XcuteTest):
             )
             self.assertFalse(data["truncated"])
             self.assertNotIn("next_marker", data)
+
+    def test_create_with_lock(self):
+        self._service("oio-xcute-event-agent-1.service", "stop")
+        self._service("oio-xcute-event-agent-local-1.service", "stop", wait=3)
+
+        # We need to create an object in order to have at least 1 task to execute.
+        chunks, _, _ = self.storage.object_create(
+            self.account,
+            "test_create_with_lock",
+            obj_name="test_create_with_lock",
+            data=b"yes",
+            policy="THREECOPIES",
+        )
+        rawx_id = urlparse(chunks[0]["url"]).netloc
+
+        def create_job():
+            return self.xcute_client.job_create(
+                "rawx-decommission",
+                job_config={
+                    "params": {
+                        "service_id": rawx_id,
+                    }
+                },
+            )
+
+        # Create the first job
+        job = create_job()
+
+        # The second job should not be started
+        with self.assertRaises(Forbidden) as error:
+            create_job()
+        expected_msg = (
+            f"A job ({job['job']['id']}) with the same lock "
+            f"(rawx/{rawx_id}) is already in progress (HTTP 403)"
+        )
+        self.assertEqual(expected_msg, str(error.exception))
+
+        # Now abort the job to be able to delete it later in teardown (we need
+        # to wait to pass from WAITING to RUNNING to abort it).
+        self._wait_for_job_status(job["job"]["id"], "RUNNING")
+        self.xcute_client.job_abort(job["job"]["id"])
+
+        self.storage.object_delete(
+            self.account,
+            "test_create_with_lock",
+            "test_create_with_lock",
+        )
+        self._service("oio-xcute-event-agent-1.service", "start")
+        # Rebalance can take some time, unfortunately it is a passive sleep.
+        self._service("oio-xcute-event-agent-local-1.service", "start", wait=5)
