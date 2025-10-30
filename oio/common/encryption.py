@@ -32,7 +32,8 @@ from oio.common.exceptions import NotFound
 from oio.common.utils import get_hasher
 
 CRYPTO_BODY_META_KEY = "x-object-sysmeta-crypto-body-meta"
-TRANSIENT_CRYPTO_META_KEY = "x-object-transient-sysmeta-crypto-meta"
+TRANSIENT_SYSMETA_PREFIX = "x-object-transient-sysmeta-"
+TRANSIENT_CRYPTO_META_KEY = f"{TRANSIENT_SYSMETA_PREFIX}crypto-meta"
 CRYPTO_ETAG_KEY = "x-object-sysmeta-crypto-etag"
 CONTAINER_UPDATE_OVERRIDE_ETAG_KEY = "x-object-sysmeta-container-update-override-etag"
 CRYPTO_ETAG_MAC_KEY = "x-object-sysmeta-crypto-etag-mac"

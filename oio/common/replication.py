@@ -13,17 +13,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+import re
+import time
+from collections import OrderedDict
 from typing import Any, Dict, List, Tuple
 
 import xmltodict
 
 from oio.common.constants import OBJECT_REPLICATION_REPLICA
+from oio.common.encryption import TRANSIENT_SYSMETA_PREFIX
+from oio.common.utils import cid_from_name, request_id
+from oio.event.evob import EventTypes
 
 ARN_AWS_PREFIX = "arn:aws:"
 DEST_BUCKET_PREFIX = ARN_AWS_PREFIX + "s3:::"
 
 DEFAULT_USE_STORAGE_CLASS = False
 DEFAULT_DELETE_MARKER_REPLICATION_VALUE = "Disabled"
+
+REPLICATION_ROLE_RE = re.compile(r"arn:aws:iam::([a-zA-Z0-9]+):role/([a-zA-Z0-9\_-]+)")
 
 
 def optimize_replication_conf(configuration):
@@ -243,3 +251,95 @@ def get_destination_for_object(
             if not r_continue:
                 break
     return destinations, configuration.get("role")
+
+
+def object_to_event(
+    obj: Dict[str, Any],
+    destinations: str,
+    role: str,
+    namespace: str,
+    account: str,
+    bucket: str,
+    event_type: str,
+    origin: str,
+) -> Dict[str, Any]:
+    """
+    Create an event as a dict from an object to replicate it through s3-replicator.
+
+    :param obj: as a dict coming from an get_properties or a listing
+    :param destinations: str representing the list of destinations (";" separated)
+    :param role: the role coming from the customer replication configuration
+    :param namespace: src namespace
+    :param account: src account
+    :param bucket: src bucket
+    :param event_type: either a new or update content event
+    :return: a dict representing the event for replication.
+    """
+    match = REPLICATION_ROLE_RE.fullmatch(role)
+    src_project_id = match.group(1)
+    replicator_id = match.group(2)
+    event: Dict[str, Any] = {}
+    event["event"] = event_type
+    event["when"] = int(time.time() * 1000000)  # use time in micro seconds
+    event["url"] = {}
+    event["url"]["ns"] = namespace
+    event["url"]["account"] = account
+    event["url"]["user"] = bucket
+    event["url"]["id"] = cid_from_name(account, bucket)
+    event["url"]["path"] = obj["name"]
+    event["url"]["content"] = obj["content"]
+    event["url"]["version"] = obj["version"]
+    event["request_id"] = request_id()
+    event["origin"] = origin
+    event["part"] = 0
+    event["parts"] = 1
+    event["data"] = []
+    event["data"].append(
+        {
+            "type": "aliases",
+            "name": obj["name"],
+            "version": obj["version"],
+            "ctime": obj["ctime"],
+            "mtime": obj["mtime"],
+            "deleted": obj["deleted"],
+            "header": obj["content"],
+        }
+    )
+    if not obj["deleted"]:  # Not a delete marker
+        event["data"].append(
+            {
+                "type": "contents_headers",
+                "id": obj["id"],
+                "hash": obj["hash"],
+                "size": obj["size"],
+                "policy": obj["policy"],
+                "chunk-method": obj["chunk_method"],
+                "mime-type": obj["mime_type"],
+            }
+        )
+        properties = OrderedDict(obj.get("properties", {}).items())
+        for prop in properties:
+            if not prop.startswith(TRANSIENT_SYSMETA_PREFIX):
+                value = obj["properties"].get(prop)
+                event["data"].append(
+                    {
+                        "type": "properties",
+                        "alias": obj["name"],
+                        "version": obj["version"],
+                        "key": prop,
+                        "value": value,
+                    }
+                )
+    event["repli"] = {}
+    event["repli"]["destinations"] = destinations
+    event["repli"]["replicator_id"] = replicator_id
+    event["repli"]["src_project_id"] = src_project_id
+    if (
+        not obj["deleted"]
+        and "x-object-sysmeta-s3api-acl" in obj.get("properties", {})
+        and event["event"] == EventTypes.CONTENT_UPDATE
+    ):
+        event["repli"]["x-object-sysmeta-s3api-acl"] = obj.get("properties", {}).get(
+            "x-object-sysmeta-s3api-acl"
+        )
+    return event
