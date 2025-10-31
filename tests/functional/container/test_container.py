@@ -546,6 +546,7 @@ class TestMeta2Containers(BaseTestCase):
         obj_chunks = sorted(obj_chunks, key=lambda c: c["url"])
         for c in obj_chunks:
             c["hash"] = c["hash"].lower()
+            c.pop("score", None)
         self.assertEqual(len(expected_chunks), len(obj_chunks))
         for i in range(len(expected_chunks)):
             # Check obj_chunks[i] is a subset of expected_chunks[i]
