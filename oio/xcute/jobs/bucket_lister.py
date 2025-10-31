@@ -17,8 +17,13 @@ import json
 from collections import Counter
 
 from oio.api.object_storage import ObjectStorageApi
-from oio.common.replication import get_destination_for_object, optimize_replication_conf
+from oio.common.replication import (
+    get_destination_for_object,
+    object_to_event,
+    optimize_replication_conf,
+)
 from oio.container.sharding import ContainerSharding
+from oio.event.evob import EventTypes
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
@@ -64,18 +69,19 @@ class BucketListerTask(XcuteTask):
                 )
                 if not dests:
                     continue
-                # TODO: build the event and save it as a json directly.
-                line = (
-                    json.dumps(
-                        {
-                            "name": key,
-                            "version": obj["version"],
-                            "destinations": dests,
-                            "role": role,
-                        }
-                    )
-                    + "\n"
+
+                # Build the replication event
+                event = object_to_event(
+                    obj=obj,
+                    destinations=dests,
+                    role=role,
+                    namespace=self.namespace,
+                    account=self.customer_account,
+                    bucket=self.customer_bucket,
+                    event_type=EventTypes.CONTENT_NEW,
+                    origin="xcute-bucket-lister",
                 )
+                event = json.dumps(event) + "\n"
 
                 self.logger.debug(
                     "Obj to replicate %s/%s/%s (%s) on destinations %s",
@@ -86,7 +92,7 @@ class BucketListerTask(XcuteTask):
                     dests,
                 )
                 resp["nb_objects"] += 1
-                yield line.encode("utf-8")
+                yield event.encode("utf-8")
 
         resp = Counter()
         self.api.object_create_ext(
