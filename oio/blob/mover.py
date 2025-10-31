@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -41,7 +41,7 @@ from oio.content.factory import ContentFactory
 SLEEP_TIME = 30
 
 
-class BlobMoverWorker(object):
+class BlobMoverWorker:
     ORPHANS_DIR = "orphans"
     NON_OPTIMAL_DIR = "non_optimal_placement"
 
@@ -82,11 +82,11 @@ class BlobMoverWorker(object):
 
     def _generate_fake_excluded_chunks(self):
         conscience_client = ConscienceClient(self.conf, logger=self.logger)
-        fake_excluded_chunks = list()
+        fake_excluded_chunks = []
         fake_chunk_id = "0" * 64
         for service_id in self.excluded_rawx:
             service_addr = conscience_client.resolve_service_id("rawx", service_id)
-            chunk = dict()
+            chunk = {}
             chunk["hash"] = "0000000000000000000000000000000000"
             chunk["pos"] = "0"
             chunk["size"] = 1
@@ -227,7 +227,7 @@ class BlobMoverWorker(object):
             chunk_path, chunk_symlink = path
         chunk_id = chunk_path.rsplit("/", 1)[-1]
         if not is_chunk_id_valid(chunk_id):
-            self.logger.warn("WARN Not a chunk %s" % chunk_path)
+            self.logger.warning("WARN Not a chunk %s", chunk_path)
             return
         try:
             self.chunk_move(chunk_path, chunk_id, symlink_folder, chunk_symlink)
@@ -238,7 +238,7 @@ class BlobMoverWorker(object):
 
     def load_chunk_metadata(self, path, chunk_id):
         """Reads and returns chunk metadata"""
-        with open(path) as file_:
+        with open(path, "rb") as file_:
             meta, _ = read_chunk_metadata(file_, chunk_id)
             return meta
 
@@ -294,8 +294,8 @@ class BlobMoverWorker(object):
             if symlink_folder and chunk_symlink:
                 if symlink_folder == self.NON_OPTIMAL_DIR:
                     msg = f"{new_url} non optimal symlink creation succeeded"
+                    self.logger.info(msg)
                 # TODO (FIR): recreate orphan chunk sylink if needed.
-                self.logger.info(msg)
                 try:
                     # Remove the later symlink
                     os.unlink(chunk_symlink)
@@ -313,8 +313,8 @@ class BlobMoverWorker(object):
                 path,
             )
             self.adjacent_services_unavailable += 1
-            # We did not find spare chunks in adjacent services
-            # lets fallback and try distant services too.
+            # We did not find spare chunks in adjacent services,
+            # let's fallback and try distant services too.
             # On this second try, we absolutely want an ideal location
             new_chunk = content.move_chunk(
                 chunk_id,
@@ -363,7 +363,7 @@ class BlobMoverWorker(object):
 
 class BlobMover(Daemon):
     def __init__(self, conf, **kwargs):
-        super(BlobMover, self).__init__(conf)
+        super().__init__(conf)
         self.logger = get_logger(conf)
         volume = conf.get("volume")
         if not volume:

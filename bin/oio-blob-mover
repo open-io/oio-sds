@@ -2,6 +2,7 @@
 
 # oio-blob-mover.py
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2025 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -10,11 +11,11 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 # ruff: noqa: E402
 # isort: off
@@ -113,7 +114,7 @@ def generate_config_file(path, mode):
 
     def create_content():
         header = "\n[blob-mover]\n"
-        cont = dict()
+        cont = {}
         add_value(cont, "namespace", args.namespace)
         add_value(cont, "volume", args.volume)
         add_value(cont, "log_level", args.log_level)
@@ -134,7 +135,7 @@ def generate_config_file(path, mode):
         add_value(cont, "adjacent_mode", args.adjacent_mode)
         return dic_to_string(cont, header)
 
-    with open(path, mode) as conf:
+    with open(path, mode, encoding="utf-8") as conf:
         cont = create_content()
         conf.write(cont)
     return path
