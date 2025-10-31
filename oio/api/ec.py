@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -798,11 +798,13 @@ class EcChunkWriter(object):
                 eventlet_yield()
             except (Exception, SocketError, ChunkWriteTimeout) as exc:
                 self.failed = True
-                msg = str(exc)
+                # With SocketError the timeout value is not printed automatically.
+                msg = f"{exc}, read_timeout={self.read_timeout}"
                 self.logger.warning(
                     "Failed to write to %s (%s, reqid=%s)", self.chunk, msg, self.reqid
                 )
                 self.chunk["error"] = f"write: {msg}"
+                io.close_source(self, self.logger)
             # Indicate that the data is completely sent
             self.queue.task_done()
 
