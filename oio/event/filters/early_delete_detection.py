@@ -17,12 +17,18 @@
 from oio.billing.helpers import BillingAdjustmentClient
 from oio.common.constants import (
     MULTIUPLOAD_SUFFIX,
-    SHARDING_ACCOUNT_PREFIX,
     S3StorageClasses,
 )
 from oio.common.exceptions import ServiceBusy
 from oio.common.utils import read_storage_mappings
-from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
+from oio.event.evob import (
+    Event,
+    EventError,
+    EventTypes,
+    RetryableEventError,
+    get_account_from_event,
+    get_root_container_from_event,
+)
 from oio.event.filters.base import Filter
 
 
@@ -83,26 +89,16 @@ class EarlyDeleteDetection(Filter):
         if event.event_type != EventTypes.CONTENT_DELETED:
             return self.app(env, cb)
 
-        url = event.url
-        if "shard" in url:
-            url = url["shard"]
+        try:
+            account = get_account_from_event(event)
+            container = get_root_container_from_event(event)
+        except ValueError as exc:
+            err_resp = EventError(event=event, body=str(exc))
+            return err_resp(env, cb)
 
-        container = url.get("user", "")
+        # Parts are handled by manifest deletion
         if container.endswith(MULTIUPLOAD_SUFFIX):
-            # Parts are handled by manifest deletion
             return self.app(env, cb)
-        if not container:
-            err_resp = EventError(event=event, body="Container is missing in event")
-            return err_resp(env, cb)
-
-        account = url.get("account", "")
-        if account.startswith(SHARDING_ACCOUNT_PREFIX):
-            account = account[len(SHARDING_ACCOUNT_PREFIX) :]
-            container = container.rsplit("-", 3)[0]
-
-        if not account:
-            err_resp = EventError(event=event, body="Account is missing in event")
-            return err_resp(env, cb)
 
         if not event.when:
             err_resp = EventError(event=event, body="When is missing in event")

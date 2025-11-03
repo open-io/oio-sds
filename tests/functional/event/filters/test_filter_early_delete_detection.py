@@ -15,6 +15,7 @@
 
 from unittest.mock import Mock, patch
 
+from oio.common.constants import MULTIUPLOAD_SUFFIX, SHARDING_ACCOUNT_PREFIX
 from oio.common.statsd import get_statsd
 from oio.event.evob import EventTypes
 from oio.event.filters.early_delete_detection import EarlyDeleteDetection
@@ -61,10 +62,13 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
             "data": [],
             "when": when,
         }
+        url = event["url"]
         if account:
-            event["url"]["account"] = account
+            if account.startswith(SHARDING_ACCOUNT_PREFIX):
+                url = event["url"].setdefault("shard", {})
+            url["account"] = account
         if container:
-            event["url"]["user"] = container
+            url["user"] = container
         if policy:
             headers = {
                 "type": "contents_headers",
@@ -97,7 +101,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
         event_filter = EarlyDeleteDetection(self.app, self.conf)
         event_filter.process(self._create_event(container="foo"), mock_cb)
         mock_cb.assert_called_once_with(
-            500, "Account is missing in event", delay=None, topic=None
+            500, "Unable to extract account from event", delay=None, topic=None
         )
 
     def test_no_user(self):
@@ -105,7 +109,7 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
         event_filter = EarlyDeleteDetection(self.app, self.conf)
         event_filter.process(self._create_event(account="foo"), mock_cb)
         mock_cb.assert_called_once_with(
-            500, "Container is missing in event", delay=None, topic=None
+            500, "Unable to extract container from event", delay=None, topic=None
         )
 
     def test_no_when(self):
@@ -235,6 +239,25 @@ class TestFilterEarlyDeleteDetection(BaseTestCase):
                 self._create_event(
                     account="foo",
                     container="bar+segments",
+                    policy="SINGLE",
+                    mtime=1000,
+                    ttime=9000,
+                ),
+                mock_cb,
+            )
+            mock_cb.assert_not_called()
+            mock_add_adjustment.assert_not_called()
+
+    def test_early_parts_in_shard_skipped(self):
+        mock_cb = Mock()
+        with patch(
+            "oio.billing.helpers.BillingAdjustmentClient.add_adjustment"
+        ) as mock_add_adjustment:
+            event_filter = EarlyDeleteDetection(self.app, self.conf)
+            event_filter.process(
+                self._create_event(
+                    account=f"{SHARDING_ACCOUNT_PREFIX}_foo",
+                    container=f"bar{MULTIUPLOAD_SUFFIX}-869729DE79C94070BB0EA85197D93FCE5D7E214074549ABB09038293F404074A-1762166195467724-0",
                     policy="SINGLE",
                     mtime=1000,
                     ttime=9000,
