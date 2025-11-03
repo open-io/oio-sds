@@ -251,6 +251,10 @@ _reconnect(struct sqlx_sync_s *ss)
 		zookeeper_close(ss->zh);
 	}
 
+	GRID_NOTICE("Zookeeper: reset connection attempts counter");
+	/*Reset connection attempts counter*/
+	grid_single_rrd_reset(ss->conn_attempts);
+
 	/* Forget the previous ID and reconnect */
 	memset (&ss->zk_id, 0, sizeof(ss->zk_id));
 

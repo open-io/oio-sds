@@ -2,6 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -26,6 +27,9 @@ struct grid_single_rrd_s;
 
 /*! Allocates a round-robin set of metrics, working on <period> slots. */
 struct grid_single_rrd_s* grid_single_rrd_create(time_t now, time_t period);
+
+/*! Reset all positions values to 0. */
+void grid_single_rrd_reset(struct grid_single_rrd_s *gsr);
 
 /*! Cleans all the resources used by the rrd. */
 void grid_single_rrd_destroy(struct grid_single_rrd_s *gsr);

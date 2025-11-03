@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2022 OVH SAS
+Copyright (C) 2022-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -48,6 +48,18 @@ grid_single_rrd_create(time_t now, time_t period)
 	gsr->period = period;
 
 	return gsr;
+}
+
+void
+grid_single_rrd_reset(struct grid_single_rrd_s *gsr)
+{
+	if (!gsr){
+        return;
+	}
+	for (size_t i = 0; i < (size_t)gsr->period; i++) {
+			gsr->l0[i] = 0;
+	}
+    gsr->last = oio_ext_monotonic_seconds();
 }
 
 void
