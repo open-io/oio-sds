@@ -282,6 +282,7 @@ class CommonTestCase(unittest.TestCase):
         self._conscience = None
         self._http_pool = None
         self._rdir_client = None
+        self._storage_kwargs = {}
         self._storage_api = None
         self._container_sharding = None
         self._watchdog = None
@@ -467,6 +468,7 @@ class CommonTestCase(unittest.TestCase):
                 watchdog=self.watchdog,
                 location=self.CLIENT_LOCATION,
                 logger=self.logger,
+                **self._storage_kwargs,
             )
         return self._storage_api
 

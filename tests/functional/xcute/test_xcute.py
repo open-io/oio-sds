@@ -63,8 +63,9 @@ class XcuteTest(BaseTestCase):
     def _wait_for_job_status(self, job_id, status, wait_time=15):
         """
         Wait for a xcute job_id to reach a given status.
+        wait_time in seconds.
         """
-        for _ in range(30):
+        for _ in range(wait_time * 2):
             time.sleep(0.5)
             job_status = self.xcute_client.job_show(job_id)
             if job_status["job"]["status"] == status:

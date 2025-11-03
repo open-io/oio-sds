@@ -141,11 +141,9 @@ class TestSseChecker(BaseTestCase):
             self.sse_checker.process(meta2db.env, _cb)
 
         filter_stats = self.sse_checker.get_stats()[self.sse_checker.NAME]
-        exprected_stats = {"successes": 1, "errors": 0, "bad_encrypted": 0}
+        expected_stats = {"successes": 1, "errors": 0, "bad_encrypted": 0}
+        self.assertDictEqual(expected_stats, filter_stats)
         mock.assert_called()
-
-        for key, value in filter_stats.items():
-            self.assertEqual(exprected_stats[key], value)
 
     def test_invalid_key(self):
         def _cb(status, _msg):
@@ -178,10 +176,9 @@ class TestSseChecker(BaseTestCase):
             self.sse_checker.process(meta2db.env, _cb)
 
         filter_stats = self.sse_checker.get_stats()[self.sse_checker.NAME]
-        exprected_stats = {"successes": 1, "errors": 0, "bad_encrypted": 2}
+        expected_stats = {"successes": 1, "errors": 0, "bad_encrypted": 2}
+        self.assertDictEqual(expected_stats, filter_stats)
         mock.assert_called()
-        for key, value in filter_stats.items():
-            self.assertEqual(exprected_stats[key], value)
 
     def test_missing_crypto_key(self):
         def _cb(status, _msg):
@@ -215,11 +212,9 @@ class TestSseChecker(BaseTestCase):
             self.sse_checker.process(meta2db.env, _cb)
 
         filter_stats = self.sse_checker.get_stats()[self.sse_checker.NAME]
-        exprected_stats = {"successes": 1, "errors": 0, "bad_encrypted": 0}
+        expected_stats = {"successes": 1, "errors": 0, "bad_encrypted": 0}
+        self.assertDictEqual(expected_stats, filter_stats)
         mock.assert_called()
-
-        for key, value in filter_stats.items():
-            self.assertEqual(exprected_stats[key], value)
 
     def test_shard_invalid_key(self):
         def _cb(status, _msg):
@@ -258,7 +253,6 @@ class TestSseChecker(BaseTestCase):
                 self.sse_checker.process(meta2db.env, _cb)
             success += 1
             filter_stats = self.sse_checker.get_stats()[self.sse_checker.NAME]
-            exprected_stats = {"successes": success, "errors": 0, "bad_encrypted": 1}
+            expected_stats = {"successes": success, "errors": 0, "bad_encrypted": 1}
+            self.assertDictEqual(expected_stats, filter_stats)
             mock.assert_called()
-            for key, value in filter_stats.items():
-                self.assertEqual(exprected_stats[key], value)
