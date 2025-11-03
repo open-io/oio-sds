@@ -24,18 +24,15 @@ from tests.utils import BaseTestCase
 
 
 class XcuteTest(BaseTestCase):
-    def setUp(self):
-        super().setUp()
-        self.xcute_client = XcuteClient({"namespace": self.ns})
-
+    def _cleanup_jobs(self):
         # Clean old jobs
         try:
             data = self.xcute_client.job_list()
             for job in data["jobs"]:
-                for i in range(2):
+                for i in range(6):
                     if i != 0:
                         # Wait for the job to complete.
-                        time.sleep(5)
+                        time.sleep(1)
                     try:
                         self.xcute_client.job_delete(job["job"]["id"])
                         break
@@ -45,6 +42,33 @@ class XcuteTest(BaseTestCase):
                         )
         except Exception as exc:
             self.logger.info("Failed to delete jobs: %s", exc)
+
+        # Check there is no leftovers
+        data = self.xcute_client.job_list()
+        self.assertEqual(0, len(data["jobs"]), f"Still {data} not deleted")
+
+    def setUp(self):
+        super().setUp()
+        self.xcute_client = XcuteClient({"namespace": self.ns})
+        # Some tests may let some jobs.
+        self._cleanup_jobs()
+
+    def tearDown(self):
+        # Remove created jobs.
+        self._cleanup_jobs()
+        super().tearDown()
+
+    def _wait_for_job_status(self, job_id, status, wait_time=15):
+        """
+        Wait for a xcute job_id to reach a given status.
+        """
+        for _ in range(30):
+            time.sleep(0.5)
+            job_status = self.xcute_client.job_show(job_id)
+            if job_status["job"]["status"] == status:
+                return job_status
+        else:
+            self.fail(f"Xcute job {job_id} did not reach status {status}")
 
 
 class TestXcuteJobs(XcuteTest):

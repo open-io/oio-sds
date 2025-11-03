@@ -94,13 +94,8 @@ class TestMeta2Relocate(XcuteTest):
             },
             put_on_hold_if_locked=True,
         )
-        for _ in range(30):
-            time.sleep(0.5)
-            job_status = self.xcute_client.job_show(job["job"]["id"])
-            if job_status["job"]["status"] == "FINISHED":
-                break
-        else:
-            self.fail(f"Xcute job {job['job']['id']} did not finish")
+        job_status = self._wait_for_job_status(job["job"]["id"], "FINISHED")
+
         self.logger.debug("Job status: %s", job_status)
         self.assertGreater(
             job_status.get("tasks", {}).get("processed", 0), 0, "No task processed"
