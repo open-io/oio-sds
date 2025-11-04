@@ -28,9 +28,8 @@ from oio.common.green import Timeout, eventlet, get_watchdog, greenthread
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
-from oio.common.utils import drop_privileges
+from oio.common.utils import drop_privileges, is_http_retryable, is_http_success
 from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
-from oio.event.evob import is_retryable, is_success
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
 
@@ -309,14 +308,14 @@ class EventWorker(Worker):
         event["queue_connector"] = beanstalk
 
         def cb(status, msg, **kwargs):
-            if is_success(status):
+            if is_http_success(status):
                 try:
                     beanstalk.delete(job_id)
                 except ResponseError as err:
                     self.logger.warn(
                         "Job %s succeeded but was not deleted: %s", job_id, err
                     )
-            elif is_retryable(status):
+            elif is_http_retryable(status):
                 self.logger.warn(
                     "event %s handling failure (release with delay): %s", job_id, msg
                 )

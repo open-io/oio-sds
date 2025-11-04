@@ -22,14 +22,9 @@ from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
+from oio.common.utils import is_http_outdated, is_http_retryable, is_http_success
 from oio.conscience.client import ConscienceClient
-from oio.event.evob import (
-    EventTypes,
-    ResponseCallBack,
-    is_outdated,
-    is_retryable,
-    is_success,
-)
+from oio.event.evob import EventTypes, ResponseCallBack
 from oio.event.filters.base import Filter
 from oio.event.kafka_consumer import (
     KafkaConsumerWorker,
@@ -201,10 +196,10 @@ class KafkaEventWorker(KafkaConsumerWorker):
             if "handlers" in kwargs:
                 replacements["handlers"] = kwargs["handlers"]
             self.log_and_statsd(start, status, replacements)
-            if is_success(status):
+            if is_http_success(status):
                 return
 
-            if is_retryable(status):
+            if is_http_retryable(status):
                 self.logger.warn(
                     "event handling failure (release with delay): (%s) %s reqid=%s",
                     status,
@@ -217,7 +212,7 @@ class KafkaEventWorker(KafkaConsumerWorker):
                 )
                 raise RetryLater(delay=kwargs.get("delay"), topic=kwargs.get("topic"))
 
-            if is_outdated(status):
+            if is_http_outdated(status):
                 raise OutdatedMessage("Message requeued for too long")
 
             self.logger.debug(

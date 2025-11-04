@@ -16,14 +16,6 @@
 from functools import partial
 
 
-def is_success(status):
-    return 200 <= status <= 299
-
-
-def is_error(status):
-    return 500 <= status <= 599
-
-
 def _object_env_property(field):
     def getter(self):
         value = self.env.get(field, None)

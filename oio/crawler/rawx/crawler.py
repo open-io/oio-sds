@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,9 +16,9 @@ import os
 
 from oio.blob.utils import read_chunk_metadata
 from oio.common import exceptions as exc
-from oio.common.utils import is_chunk_id_valid
+from oio.common.utils import is_chunk_id_valid, is_http_error, is_http_success
 from oio.crawler.common.crawler import Crawler, PipelineWorker
-from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, is_error, is_success
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper
 
 
 class RawxWorker(PipelineWorker):
@@ -34,9 +34,9 @@ class RawxWorker(PipelineWorker):
         )
 
     def cb(self, status, msg):
-        if is_success(status):
+        if is_http_success(status):
             pass
-        elif is_error(status):
+        elif is_http_error(status):
             self.logger.warning(
                 "Rawx volume_id=%s handling failure: %s", self.volume_id, msg
             )

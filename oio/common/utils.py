@@ -64,6 +64,22 @@ CUSTOM_HASHER = {
 }
 
 
+def is_http_success(status: int) -> bool:
+    return 200 <= status <= 299
+
+
+def is_http_error(status: int) -> bool:
+    return 500 <= status <= 599
+
+
+def is_http_retryable(status: int) -> bool:
+    return status == 503
+
+
+def is_http_outdated(status: int) -> bool:
+    return status == 410
+
+
 def quote(value, safe="/"):
     if isinstance(value, str):
         (value, _len) = utf8_encoder(value, "replace")

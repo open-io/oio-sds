@@ -19,22 +19,6 @@ from functools import partial
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 
 
-def is_success(status):
-    return 200 <= status <= 299
-
-
-def is_error(status):
-    return 500 <= status <= 599
-
-
-def is_retryable(status):
-    return status == 503
-
-
-def is_outdated(status):
-    return status == 410
-
-
 def is_pausable(event):
     return event.get("_internal", {}).get("allow_pause", False)
 

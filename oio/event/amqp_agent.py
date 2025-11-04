@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2024 OVH SAS
+# Copyright (C) 2023-2025 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -16,8 +16,8 @@ from oio.account.client import AccountClient
 from oio.common.easy_value import float_value
 from oio.common.green import get_watchdog
 from oio.common.json import json
+from oio.common.utils import is_http_retryable, is_http_success
 from oio.event.amqp_consumer import AmqpConsumerWorker, RejectMessage, RetryLater
-from oio.event.evob import is_retryable, is_success
 from oio.event.loader import loadhandlers
 from oio.rdir.client import RdirClient
 
@@ -76,10 +76,10 @@ class AmqpEventWorker(AmqpConsumerWorker):
         # event["queue_connector"] = beanstalk
 
         def cb(status, msg):
-            if is_success(status):
+            if is_http_success(status):
                 # Nothing special to do
                 pass
-            elif is_retryable(status):
+            elif is_http_retryable(status):
                 self.logger.warn(
                     "event handling failure (release with delay): (%s) %s reqid=%s",
                     status,

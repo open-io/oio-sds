@@ -15,8 +15,8 @@
 
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import ConfigurationException, NotFound
-from oio.common.utils import depaginate, ratelimit
-from oio.crawler.bucket.object_wrapper import ObjectWrapper, is_error, is_success
+from oio.common.utils import depaginate, is_http_error, is_http_success, ratelimit
+from oio.crawler.bucket.object_wrapper import ObjectWrapper
 from oio.crawler.common.crawler import Crawler, PipelineWorker
 
 
@@ -41,9 +41,9 @@ class BucketWorker(PipelineWorker):
         )
 
     def cb(self, status, msg):
-        if is_success(status):
+        if is_http_success(status):
             pass
-        elif is_error(status):
+        elif is_http_error(status):
             self.logger.warning("Bucket %s handling failure: %s", self.volume_id, msg)
         else:
             self.logger.warning(
