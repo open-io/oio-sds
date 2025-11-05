@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
 from datetime import datetime, timedelta, timezone
 from math import ceil
 from unittest.mock import Mock, patch
@@ -74,15 +75,67 @@ class TestArchiveRestore(BaseTestCase):
         self.patcher.stop()
         super().tearDown()
 
-    def _create_object(self, name, properties=None, policy="THREECOPIES_DA"):
-        return self.storage.object_create_ext(
+    def _create_object(self, name, properties=None, policy="THREECOPIES_DA", slo=False):
+        data = "test"
+        mime_type = "binary/octet-stream"
+        if slo:
+            data = json.dumps(
+                [
+                    {
+                        "name": (
+                            f"/{self.container}+segments/{name}/"
+                            "YTc0ZDJlMDctMjdmZi00ZjgwLWI1NzAtMDc5ZDVmMGM1MjFl/1"
+                        ),
+                        "bytes": 8388608,
+                        "hash": "087b6f114cf78c022a0a3bec421b4d1b",
+                        "content_type": "application/octet-stream",
+                        "last_modified": "2025-11-05T12:55:52.000000",
+                    },
+                    {
+                        "name": (
+                            f"/{self.container}+segments/{name}/"
+                            "YTc0ZDJlMDctMjdmZi00ZjgwLWI1NzAtMDc5ZDVmMGM1MjFl/2"
+                        ),
+                        "bytes": 8388608,
+                        "hash": "79f201c9668ab33821fc711883bd006a",
+                        "content_type": "application/octet-stream",
+                        "last_modified": "2025-11-05T12:55:52.000000",
+                    },
+                ]
+            )
+            if properties is None:
+                properties = {}
+            properties.update(
+                {
+                    "x-object-sysmeta-s3api-upload-id": (
+                        "YTc0ZDJlMDctMjdmZi00ZjgwLWI1NzAtMDc5ZDVmMGM1MjFl"
+                    ),
+                    "x-object-sysmeta-s3api-etag": "ce723f0dc5628e29a065f44a3fde31f9-2",
+                    "x-object-sysmeta-s3api-checksum-crc32": "tO7oJg==-2",
+                    "x-object-sysmeta-container-update-override-etag": (
+                        "f4aca38f03ff4c52e5eae8987ee38ff9; "
+                        "s3_etag=ce723f0dc5628e29a065f44a3fde31f9-2; "
+                        "s3_crc32=tO7oJg==-2; "
+                        "slo_etag=d47b64792b7f75234fb1fa89d53f6b59"
+                    ),
+                    "x-object-sysmeta-slo-etag": "d47b64792b7f75234fb1fa89d53f6b59",
+                    "x-object-sysmeta-slo-size": "16777216",
+                    "x-static-large-object": "True",
+                }
+            )
+            mime_type += ";swift_bytes=16777216"
+        _, size, _, meta = self.storage.object_create_ext(
             account=self.account,
             container=self.container,
             obj_name=name,
-            data="test",
+            data=data,
             policy=policy,
             properties=properties,
+            mime_type=mime_type,
         )
+        if slo:
+            size = 16777216
+        return size, meta
 
     def _craft_event(
         self,
@@ -178,7 +231,7 @@ class TestArchiveRestore(BaseTestCase):
                     2025, 6, 5, 11, 12, 0, tzinfo=timezone.utc
                 ).timestamp()
                 event = self._craft_event(
-                    self._create_object("my-object")[3], restore_property=restore_props
+                    self._create_object("my-object")[1], restore_property=restore_props
                 )
                 archive_filter.process(event, mock_cb)
                 mock_cb.assert_called_once_with(
@@ -190,8 +243,15 @@ class TestArchiveRestore(BaseTestCase):
                 self.mock.add_restore.assert_not_called()
 
     @pytest.mark.flaky(reruns=1)
-    def test_delay_event_replay(self):
-        _, size, _, meta = self._create_object("my-object")
+    def test_delay_event_replay_with_simple_object(self):
+        self._test_delay_event_replay(slo=False)
+
+    @pytest.mark.flaky(reruns=1)
+    def test_delay_event_replay_with_mpu_object(self):
+        self._test_delay_event_replay(slo=True)
+
+    def _test_delay_event_replay(self, slo=False):
+        size, meta = self._create_object("my-object", slo=slo)
         mtime = int(meta.get("mtime"))
 
         archive_filter = ArchiveRestore(
@@ -295,8 +355,14 @@ class TestArchiveRestore(BaseTestCase):
                 [c.args for c in self.statsd_mock.incr.call_args_list],
             )
 
-    def test_delay_event_update_expiry(self):
-        _, size, _, meta = self._create_object("my-object")
+    def test_delay_event_update_expiry_with_simple_object(self):
+        self._test_delay_event_update_expiry(slo=False)
+
+    def test_delay_event_update_expiry_with_mpu_object(self):
+        self._test_delay_event_update_expiry(slo=True)
+
+    def _test_delay_event_update_expiry(self, slo=False):
+        size, meta = self._create_object("my-object", slo=slo)
 
         archive_filter = ArchiveRestore(
             self.app,
@@ -372,8 +438,14 @@ class TestArchiveRestore(BaseTestCase):
             self.assertFalse(restore.ongoing)
             self.statsd_mock.timing.assert_not_called()
 
-    def test_delay_event_restore_previously_restored(self):
-        _, size, _, meta = self._create_object("my-object")
+    def test_delay_event_restore_previously_restored_with_simple_object(self):
+        self._test_delay_event_restore_previously_restored(slo=False)
+
+    def test_delay_event_restore_previously_restored_with_mpu_object(self):
+        self._test_delay_event_restore_previously_restored(slo=True)
+
+    def _test_delay_event_restore_previously_restored(self, slo=False):
+        size, meta = self._create_object("my-object", slo=slo)
 
         archive_filter = ArchiveRestore(
             self.app,
@@ -469,7 +541,7 @@ class TestArchiveRestore(BaseTestCase):
 
     def test_restore_event_processing(self):
         reqid = request_id("delay-event-")
-        _, _, _, meta = self._create_object("my-object", policy="THREECOPIES_DA")
+        _, meta = self._create_object("my-object", policy="THREECOPIES_DA")
 
         restore_prop = RestoreProperty()
         restore_prop.days = 10

@@ -234,6 +234,22 @@ class ArchiveRestore(Filter):
             self.logger.warning("Object not accessible, reason: %s", exc)
             return self.app(env, cb)
 
+    def _get_object_size(self, object_meta):
+        # Check if the object is an SLO
+        slo_size = object_meta.get("properties", {}).get("x-object-sysmeta-slo-size")
+        if slo_size is None:
+            object_size = object_meta.get("size")
+            if object_size is None:
+                raise ValueError("Missing object size in object metadata")
+            try:
+                return int(object_size)
+            except ValueError:
+                raise ValueError("Bad object size in object metadata")
+        try:
+            return int(slo_size)
+        except ValueError:
+            raise ValueError("Bad SLO object size in object metadata")
+
     def _process_event(self, env, cb):
         event = Event(env)
         restore_property = None
@@ -276,14 +292,11 @@ class ArchiveRestore(Filter):
             account, bucket, object_key, version=object_version, reqid=event.reqid
         )
 
-        object_size = object_meta.get("size")
-        if object_size is None:
-            err = EventError(
-                event=event,
-                body="Unable to retrieve object size from event",
-            )
+        try:
+            object_size = self._get_object_size(object_meta)
+        except ValueError as exc:
+            err = EventError(event=event, body=str(exc))
             return err(env, cb)
-        object_size = int(object_size)
 
         object_policy = object_meta.get("policy")
         if object_policy is None:
