@@ -42,57 +42,64 @@ class BucketListerTask(XcuteTask):
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         def objects_generator(resp: Counter):
-            listing = self.api.object_list(
-                account=self.customer_account,
-                container=self.customer_bucket,
-                versions=True,
-                marker=task_payload["lower"],
-                end_marker=task_payload["upper"],
-                properties=True,
-                reqid=reqid,
-            )
-            for obj in listing["objects"]:
-                key = obj["name"]
-                prefix = "x-object-sysmeta-"
-                metadata = {}
-                props = obj.get("properties")
-                if props:
-                    metadata = {
-                        key.removeprefix(prefix): value
-                        for key, value in props.items()
-                        if key.startswith(prefix)
-                    }
-                dests, role = get_destination_for_object(
-                    configuration=self.replication_configuration,
-                    key=key,
-                    metadata=metadata,
-                )
-                if not dests:
-                    continue
-
-                # Build the replication event
-                event = object_to_event(
-                    obj=obj,
-                    destinations=dests,
-                    role=role,
-                    namespace=self.namespace,
+            marker = task_payload["lower"]
+            while True:
+                listing = self.api.object_list(
                     account=self.customer_account,
-                    bucket=self.customer_bucket,
-                    event_type=EventTypes.CONTENT_NEW,
-                    origin="xcute-bucket-lister",
+                    container=self.customer_bucket,
+                    versions=True,
+                    marker=marker,
+                    end_marker=task_payload["upper"],
+                    properties=True,
+                    reqid=reqid,
                 )
-                event = json.dumps(event) + "\n"
+                for obj in listing["objects"]:
+                    key = obj["name"]
+                    prefix = "x-object-sysmeta-"
+                    metadata = {}
+                    props = obj.get("properties")
+                    if props:
+                        metadata = {
+                            key.removeprefix(prefix): value
+                            for key, value in props.items()
+                            if key.startswith(prefix)
+                        }
+                    dests, role = get_destination_for_object(
+                        configuration=self.replication_configuration,
+                        key=key,
+                        metadata=metadata,
+                    )
+                    if not dests:
+                        continue
 
-                self.logger.debug(
-                    "Obj to replicate %s/%s/%s (%s) on destinations %s",
-                    self.customer_account,
-                    self.customer_bucket,
-                    key,
-                    obj["version"],
-                    dests,
-                )
-                resp["nb_objects"] += 1
-                yield event.encode("utf-8")
+                    # Build the replication event
+                    event = object_to_event(
+                        obj=obj,
+                        destinations=dests,
+                        role=role,
+                        namespace=self.namespace,
+                        account=self.customer_account,
+                        bucket=self.customer_bucket,
+                        event_type=EventTypes.CONTENT_NEW,
+                        origin="xcute-bucket-lister",
+                    )
+                    event = json.dumps(event) + "\n"
+
+                    self.logger.error(
+                        "Obj to replicate %s/%s/%s (%s) on destinations %s",
+                        self.customer_account,
+                        self.customer_bucket,
+                        key,
+                        obj["version"],
+                        dests,
+                    )
+                    resp["nb_objects"] += 1
+                    yield event.encode("utf-8")
+
+                if listing["truncated"]:
+                    marker = listing["next_marker"]
+                else:
+                    break
 
         resp = Counter()
         self.api.object_create_ext(

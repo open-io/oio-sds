@@ -238,3 +238,28 @@ class TestBucketLister(XcuteTest):
             )
         finally:
             self._service("oio-crawler.target", "start", wait=1)
+
+    def test_xcute_bucket_lister_lot_objects(self):
+        bucket = "test-xcute-bucket-lister-lot-objects"
+        obj_prefix = "test-xcute-bucket-lister-lot-objects"
+        nb_obj = 1003  # should be more than default listing
+        reqid = request_id("test_xcute_bucket_lister_lot_objects-")
+        self._create_objects(bucket, obj_prefix, reqid=reqid, nb_obj=nb_obj)
+
+        self._test_xcute_bucket_lister(
+            bucket=bucket,
+            obj_prefix=obj_prefix,
+            nb_obj=nb_obj,
+        )
+
+        # We need to wait for the queues to be empty (otherwise, next test
+        # could be blocked if an event is expected in the preserve topic).
+        reqid = request_id("remove_lot_objects-")
+        self._clean_bucket_and_containers(reqid=reqid)
+        for i in range(nb_obj * 3):
+            _event = self.wait_for_event(
+                reqid=reqid,
+                types=(EventTypes.CHUNK_DELETED,),
+                timeout=10.0,
+            )
+            self.assertIsNotNone(_event, f"Received events {i}/{nb_obj}")

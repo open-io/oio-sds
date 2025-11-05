@@ -38,6 +38,7 @@ from oio.common.json import json as jsonlib
 from oio.common.kafka import DEFAULT_PRESERVED_TOPIC, KafkaConsumer
 from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import request_id
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
@@ -346,28 +347,35 @@ class CommonTestCase(unittest.TestCase):
                 TopicPartition(part.topic, part.partition, high_offset)
             )
 
-    def tearDown(self):
+    def _clean_bucket_and_containers(self, reqid=None):
+        if not reqid:
+            reqid = request_id("clean_bucket_and_containers")
         for acct, ct in self._containers_to_clean:
             try:
                 # Disable versioning to be able to fully flush the container.
                 self.storage.container_set_properties(
-                    acct, ct, system={"sys.m2.policy.version": "0"}
+                    acct, ct, system={"sys.m2.policy.version": "0"}, reqid=reqid
                 )
-                self.storage.container_flush(acct, ct, all_versions=True)
+                self.storage.container_flush(acct, ct, all_versions=True, reqid=reqid)
                 self.storage.container_delete(acct, ct)
             except Exception:
                 # Maybe its a root container, flush is not possible, delete it
                 # with force=True.
                 try:
-                    self.storage.container_delete(acct, ct, force=True)
+                    self.storage.container_delete(acct, ct, force=True, reqid=reqid)
                 except Exception as exc:
                     self.logger.info("Failed to clean container %s", exc)
+        self._containers_to_clean = []
 
         for acct, bucket in self._buckets_to_clean:
             try:
-                self.storage.bucket.bucket_delete(bucket, acct, force=True)
+                self.storage.bucket.bucket_delete(bucket, acct, force=True, reqid=reqid)
             except Exception as exc:
                 self.logger.info("Failed to remove bucket, %s", exc)
+        self._buckets_to_clean = []
+
+    def tearDown(self):
+        self._clean_bucket_and_containers()
 
         # Reset namespace configuration as it was before we mess with it
         if self._ns_conf != self._ns_conf_backup:
