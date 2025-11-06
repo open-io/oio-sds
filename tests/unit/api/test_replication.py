@@ -49,6 +49,7 @@ class TestReplication(unittest.TestCase):
         cls.watchdog = green.get_watchdog(called_from_main_application=True)
 
     def setUp(self):
+        super().setUp()
         self.chunk_method = "plain/nb_copy=3"
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         self.storage_method = storage_method
@@ -165,31 +166,30 @@ class TestReplication(unittest.TestCase):
         checksum = self.checksum()
         source = empty_stream()
         size = CHUNK_SIZE
+        write_to = Timeout(1.0)
         meta_chunk = self.meta_chunk()
         resps = [201] * (len(meta_chunk) - 1)
-        resps.append(Timeout(1.0))
-        with set_http_connect(*resps):
-            handler = ReplicatedMetachunkWriter(
-                self.sysmeta,
-                meta_chunk,
-                checksum,
-                self.storage_method,
-                watchdog=self.__class__.watchdog,
-            )
-            bytes_transferred, checksum, chunks = handler.stream(source, size)
+        resps.append(write_to)
+        try:
+            with set_http_connect(*resps):
+                handler = ReplicatedMetachunkWriter(
+                    self.sysmeta,
+                    meta_chunk,
+                    checksum,
+                    self.storage_method,
+                    watchdog=self.__class__.watchdog,
+                )
+                bytes_transferred, checksum, chunks = handler.stream(source, size)
 
-        self.assertEqual(len(chunks), len(meta_chunk) - 1)
+            self.assertEqual(len(chunks), len(meta_chunk) - 1)
 
-        for i in range(len(meta_chunk) - 1):
-            self.assertEqual(chunks[i].get("error"), None)
+            for i in range(len(meta_chunk) - 1):
+                self.assertEqual(chunks[i].get("error"), None)
 
-        # # JFS: starting at branch 3.x, it has been preferred to save only
-        # #      the chunks that succeeded.
-        # self.assertEqual(
-        #     chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
-
-        self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_BLAKE3)
+            self.assertEqual(bytes_transferred, 0)
+            self.assertEqual(checksum, EMPTY_BLAKE3)
+        finally:
+            write_to.cancel()
 
     def test_write_partial_exception(self):
         checksum = self.checksum()
@@ -240,9 +240,11 @@ class TestReplication(unittest.TestCase):
             self.assertRaises(exc.SourceReadError, handler.stream, source, size)
 
     def test_write_timeout_source(self):
+        read_to = Timeout(1.0)
+
         class TestReader(object):
             def read(self, size):
-                raise Timeout(1.0)
+                raise read_to
 
         checksum = self.checksum()
         source = TestReader()
@@ -258,7 +260,10 @@ class TestReplication(unittest.TestCase):
                 self.storage_method,
                 watchdog=self.__class__.watchdog,
             )
-            self.assertRaises(exc.OioTimeout, handler.stream, source, size)
+            try:
+                self.assertRaises(exc.OioTimeout, handler.stream, source, size)
+            finally:
+                read_to.cancel()
 
     def test_write_exception_source(self):
         class TestReader(object):
@@ -558,6 +563,8 @@ class TestReplication(unittest.TestCase):
                     for d in part["iter"]:
                         data += d
             except green.ChunkReadTimeout:
+                pass
+            except green.ChunkWriteTimeout:
                 pass
 
         self.assertEqual(len(parts), 1)
