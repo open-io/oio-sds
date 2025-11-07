@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from .batch_replicator import BatchReplicatorJob
 from .blob_mover import RawxDecommissionJob
 from .blob_rebuilder import RawxRebuildJob
 from .bucket_lister import BucketListerJob
@@ -34,6 +35,7 @@ INTERNAL_JOB_TYPES = {
 }
 
 CUSTOMER_JOB_TYPES = {
+    BatchReplicatorJob.JOB_TYPE: BatchReplicatorJob,
     BucketListerJob.JOB_TYPE: BucketListerJob,
 }
 

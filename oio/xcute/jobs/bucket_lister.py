@@ -83,9 +83,9 @@ class BucketListerTask(XcuteTask):
                         event_type=EventTypes.CONTENT_NEW,
                         origin="xcute-bucket-lister",
                     )
-                    event = json.dumps(event) + "\n"
+                    event = json.dumps(event, separators=(",", ":")) + "\n"
 
-                    self.logger.error(
+                    self.logger.info(
                         "Obj to replicate %s/%s/%s (%s) on destinations %s",
                         self.customer_account,
                         self.customer_bucket,

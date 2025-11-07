@@ -14,7 +14,14 @@
 # License along with this library.
 
 from oio.cli.admin.xcute import CustomerCommand, XcuteJobStartCommand
+from oio.xcute.jobs.batch_replicator import (
+    DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
+    BatchReplicatorJob,
+)
 from oio.xcute.jobs.bucket_lister import BucketListerJob
+
+DEFAULT_TECHNICAL_ACCOUNT = "AUTH_demo"
+DEFAULT_TECHNICAL_BUCKET = "xcute-customer-technical-bucket"
 
 
 class BucketLister(CustomerCommand, XcuteJobStartCommand):
@@ -23,9 +30,6 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
     """
 
     JOB_CLASS = BucketListerJob
-
-    DEFAULT_TECHNICAL_ACCOUNT = "AUTH_demo"
-    DEFAULT_TECHNICAL_BUCKET = "xcute-customer-technical-bucket"
 
     def get_parser(self, prog_name):
         parser = super().get_parser(prog_name)
@@ -49,14 +53,14 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
         parser.add_argument(
             "--technical-account",
             dest="technical_account",
-            help=f"Technical account (default: {self.DEFAULT_TECHNICAL_ACCOUNT})",
-            default=self.DEFAULT_TECHNICAL_ACCOUNT,
+            help=f"Technical account (default: {DEFAULT_TECHNICAL_ACCOUNT})",
+            default=DEFAULT_TECHNICAL_ACCOUNT,
         )
         parser.add_argument(
             "--technical-bucket",
             dest="technical_bucket",
-            help=f"Technical bucket (default: {self.DEFAULT_TECHNICAL_BUCKET})",
-            default=self.DEFAULT_TECHNICAL_BUCKET,
+            help=f"Technical bucket (default: {DEFAULT_TECHNICAL_BUCKET})",
+            default=DEFAULT_TECHNICAL_BUCKET,
         )
         return parser
 
@@ -69,5 +73,51 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             "technical_bucket": parsed_args.technical_bucket,
             "replication_configuration": parsed_args.replication_configuration,
             "policy_manifest": parsed_args.policy_manifest,
+        }
+        return {"params": job_params}
+
+
+class BatchReplicator(CustomerCommand, XcuteJobStartCommand):
+    """
+    Send events and track replication status from a listing done with BucketLister.
+    """
+
+    JOB_CLASS = BatchReplicatorJob
+
+    def get_parser(self, prog_name):
+        parser = super().get_parser(prog_name)
+        parser.add_argument(
+            dest="technical_manifest_prefix",
+            help="Technical manifest prefix to process",
+        )
+        parser.add_argument(
+            "--technical-account",
+            dest="technical_account",
+            help=f"Technical account (default: {DEFAULT_TECHNICAL_ACCOUNT})",
+            default=DEFAULT_TECHNICAL_ACCOUNT,
+        )
+        parser.add_argument(
+            "--technical-bucket",
+            dest="technical_bucket",
+            help=f"Technical bucket (default: {DEFAULT_TECHNICAL_BUCKET})",
+            default=DEFAULT_TECHNICAL_BUCKET,
+        )
+        parser.add_argument(
+            "--check-replication-status-timeout",
+            dest="repli_status_timeout",
+            help=(
+                f"Timeout to wait for the object to be replicated "
+                f"(default: {DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT})"
+            ),
+            default=DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
+        )
+        return parser
+
+    def get_job_config(self, parsed_args):
+        job_params = {
+            "technical_manifest_prefix": parsed_args.technical_manifest_prefix,
+            "technical_account": parsed_args.technical_account,
+            "technical_bucket": parsed_args.technical_bucket,
+            "check_replication_status_timeout": parsed_args.repli_status_timeout,
         }
         return {"params": job_params}

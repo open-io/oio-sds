@@ -26,6 +26,7 @@ from oio.cli import Command
 from oio.common.constants import (
     OBJECT_REPLICATION_COMPLETED,
     OBJECT_REPLICATION_PENDING,
+    REPLICATION_STATUS_KEY,
 )
 from oio.common.easy_value import boolean_value
 from oio.common.encryption import TRANSIENT_SYSMETA_PREFIX
@@ -74,9 +75,7 @@ class ReplicationRecovery(Command):
                     account, bucket, key, version - 1
                 )
             else:
-                return props.get("properties", {}).get(
-                    "x-object-sysmeta-s3api-replication-status"
-                )
+                return props.get("properties", {}).get(REPLICATION_STATUS_KEY)
         except NoSuchObject:
             return None
 
@@ -110,9 +109,7 @@ class ReplicationRecovery(Command):
             # Unable to tell if the deletion marker has already been replicated
             # or if it's a replica
             if not is_delete_marker:
-                replication_status = metadata.get(
-                    "x-object-sysmeta-s3api-replication-status"
-                )
+                replication_status = metadata.get(REPLICATION_STATUS_KEY)
                 if pending:
                     if replication_status != OBJECT_REPLICATION_PENDING:
                         continue
@@ -293,6 +290,7 @@ class ReplicationRecovery(Command):
                 )
             # Close the producer
             self.kafka_producer.close()
+            self.kafka_producer = None
         self.log.info("Replication recovery exiting.")
         self.log.info(
             "account=%s bucket=%s nb_objects_recovered=%d "

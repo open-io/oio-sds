@@ -25,6 +25,7 @@ from oio.common.constants import (
     LIFECYCLE_USER_AGENT,
     MULTIUPLOAD_SUFFIX,
     OBJECT_REPLICATION_PENDING,
+    REPLICATION_STATUS_KEY,
     S3StorageClasses,
 )
 from oio.common.easy_value import boolean_value, int_value
@@ -437,9 +438,7 @@ class LifecycleActions(Filter):
             policy = obj_meta.get("policy", None)
             metadata = obj_meta.get("properties") or {}
             is_mpu = boolean_value(metadata.get(SLO), False)
-            replication_status = metadata.get(
-                "x-object-sysmeta-s3api-replication-status"
-            )
+            replication_status = metadata.get(REPLICATION_STATUS_KEY)
             if replication_status == OBJECT_REPLICATION_PENDING:
                 self.logger.debug("Lifecycle postponed, replication pending")
                 resp = RetryableEventError(
