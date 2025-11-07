@@ -232,7 +232,7 @@ class EventTypes(object):
     MANIFEST_DELETED = "storage.manifest.deleted"
     META2_DELETED = "storage.meta2.deleted"
     XCUTE_TASKS = "xcute.tasks"
-    XCUTE_CUSTOMER_TASKS = "xcute_customer.tasks"
+    XCUTE_CUSTOMER_TASKS = "xcute.customer.tasks"
     LIFECYCLE_CHECKPOINT = "lifecycle.checkpoint"
     LIFECYCLE_ACTION = "storage.lifecycle.action"
 

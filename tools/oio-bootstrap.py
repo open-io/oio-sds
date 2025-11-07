@@ -1966,7 +1966,7 @@ ${TCP_CORK_COMMENT}use_tcp_cork = ${TCP_CORK}
 """
 
 template_xcute_customer_event_agent_handlers = """
-[handler:xcute_customer.tasks]
+[handler:xcute.customer.tasks]
 pipeline = xcute_customer
 
 [filter:xcute_customer]
