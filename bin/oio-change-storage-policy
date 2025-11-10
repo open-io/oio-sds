@@ -255,10 +255,14 @@ class OioChangeStoragePolicy:
                             continue
                         if obj["policy"] != self.storage_policy:
                             # Object does not have the specified storage policy
-                            continue
+                            if obj.get("target-policy") != self.storage_policy:
+                                # There is no ongoing transition to storage policy
+                                continue
                         if (
                             self._ignore_pending_transition
-                            and obj.get("target_policy") is not None
+                            and obj.get("target-policy") is not None
+                            and obj["policy"] == self.storage_policy
+                            and obj["target-policy"] == self.new_storage_policy
                         ):
                             # A transition has already been requested on the object
                             continue
