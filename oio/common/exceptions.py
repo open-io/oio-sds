@@ -138,10 +138,29 @@ class ExplicitBury(OioException):
     pass
 
 
-class RetryLater(OioException):
+class RejectMessage(OioException):
     """
-    Exception raised by workers that want a task to be
-    rescheduled later.
+    Exception raised by workers for a task that cannot be processed.
+    """
+
+    pass
+
+
+class RetryLater(RejectMessage):
+    """
+    Exception raised by workers for a task that cannot be processed yet,
+    but maybe later.
+    """
+
+    def __init__(self, *args, delay=None, topic=None):
+        super().__init__(*args)
+        self.delay = delay
+        self.topic = topic
+
+
+class OutdatedMessage(RejectMessage):
+    """
+    Exception raised by workers for a task requeued for too long.
     """
 
     pass

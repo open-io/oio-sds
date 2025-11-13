@@ -25,7 +25,12 @@ from multiprocessing.queues import Empty
 from confluent_kafka import TopicPartition
 
 from oio.common.easy_value import float_value, int_value
-from oio.common.exceptions import OioProtocolError
+from oio.common.exceptions import (
+    OioProtocolError,
+    OutdatedMessage,
+    RejectMessage,
+    RetryLater,
+)
 from oio.common.kafka import (
     DEFAULT_DEADLETTER_TOPIC,
     KAFKA_CONF_CONSUMER_PREFIX,
@@ -204,30 +209,6 @@ def event_queue_factory(logger, conf, *args, **kwargs):
 
     logger.debug("Instantiate %s event queue", event_queue_type)
     return queue_class(logger, conf, *args, **kwargs)
-
-
-class RejectMessage(Exception):
-    """
-    Raise this exception when the current message cannot be processed.
-    """
-
-
-class RetryLater(RejectMessage):
-    """
-    Raise this exception when the current message cannot be processed yet,
-    but maybe later.
-    """
-
-    def __init__(self, *args, delay=None, topic=None):
-        super().__init__(*args)
-        self.delay = delay
-        self.topic = topic
-
-
-class OutdatedMessage(RejectMessage):
-    """
-    Raise this exception when the current message is requeue for too long.
-    """
 
 
 class KafkaOffsetHelperMixin:

@@ -19,6 +19,7 @@ from oio.account.bucket_client import BucketClient
 from oio.account.client import AccountClient
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.easy_value import float_value
+from oio.common.exceptions import OutdatedMessage, RejectMessage, RetryLater
 from oio.common.green import get_watchdog
 from oio.common.logger import get_logger
 from oio.common.statsd import get_statsd
@@ -26,12 +27,7 @@ from oio.common.utils import is_http_outdated, is_http_retryable, is_http_succes
 from oio.conscience.client import ConscienceClient
 from oio.event.evob import EventTypes, ResponseCallBack
 from oio.event.filters.base import Filter
-from oio.event.kafka_consumer import (
-    KafkaConsumerWorker,
-    OutdatedMessage,
-    RejectMessage,
-    RetryLater,
-)
+from oio.event.kafka_consumer import KafkaConsumerWorker
 from oio.event.loader import loadhandlers
 from oio.event.utils import log_context_from_msg
 from oio.rdir.client import RdirClient

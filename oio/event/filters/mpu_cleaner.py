@@ -27,13 +27,14 @@ from oio.common.exceptions import (
     DeadlineReached,
     NotFound,
     OioNetworkException,
+    RejectMessage,
+    RetryLater,
     ServiceBusy,
 )
 from oio.common.utils import request_id
 from oio.container.client import ContainerClient
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
-from oio.event.kafka_consumer import RejectMessage, RetryLater
 
 UPLOAD_ID = "x-object-sysmeta-s3api-upload-id"
 SLO = "x-static-large-object"
