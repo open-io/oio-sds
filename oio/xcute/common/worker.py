@@ -17,6 +17,7 @@
 from collections import Counter
 
 from oio.common.constants import STRLEN_REQID
+from oio.common.exceptions import RetryLater
 from oio.common.json import json
 from oio.common.kafka import (
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
@@ -78,6 +79,15 @@ class XcuteWorker(object):
                         task_id, task_payload, reqid=reqid, job_id=job_id
                     )
                     task_results.update(task_result)
+                except RetryLater as exc:
+                    self.logger.warning(
+                        "[job_id=%s reqid=%s] Retry later task %s: (delay=%s)",
+                        job_id,
+                        reqid,
+                        task_id,
+                        exc.delay,
+                    )
+                    raise
                 except Exception as exc:
                     self.logger.warning(
                         "[job_id=%s reqid=%s %s] Failed to process task %s: (%s) %s",

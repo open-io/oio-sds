@@ -20,8 +20,6 @@ from oio.xcute.common.worker import KafkaXcuteWorker
 
 
 class XcuteFilter(Filter):
-    DEFAULT_RETRY_DELAY_TO_REPLY = 60
-
     def __init__(self, app, conf, endpoint=None):
         super().__init__(app, conf)
         self.endpoint = endpoint
