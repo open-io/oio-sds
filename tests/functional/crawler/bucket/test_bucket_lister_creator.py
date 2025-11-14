@@ -69,7 +69,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
             "policy_manifest": "SINGLE",
         }
         with patch(
-            "oio.crawler.bucket.filters.bucket_lister_creator.get_boto_client",
+            "oio.crawler.bucket.filters.common.get_boto_client",
             return_value=None,
         ):
             self.bucket_lister_creator = BucketListerCreator(
@@ -229,14 +229,14 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         object_list = self.storage.object_list(
             self.account, self.internal_bucket, properties=True
         )
-        # in_progress/xx (on_hold was never created/deleted but mocked) ..
+        # in_progress/lister/xx (on_hold was never created/deleted but mocked) ..
         nb_expected_objects = 1
         if job_status == "FINISHED":
             # .. and also listing
             nb_expected_objects += 1
         self.assertEqual(nb_expected_objects, len(object_list["objects"]))
         for obj in object_list["objects"]:
-            if obj["name"] == "in_progress/abc":
+            if obj["name"] == "in_progress/lister/abc":
                 self.assertEqual(
                     job["job"]["id"], obj["properties"]["xcute-job-id-bucket-lister"]
                 )
@@ -306,7 +306,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         self.storage.object_del_properties(
             self.account,
             self.internal_bucket,
-            "in_progress/abc",
+            "in_progress/lister/abc",
             "xcute-job-id-bucket-lister",
         )
         self.bucket_lister_creator._reset_filter_stats()

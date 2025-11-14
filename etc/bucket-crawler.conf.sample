@@ -21,8 +21,6 @@ scanned_per_second = 10
 # (not used if <use_marker> is disabled). Default to 900.
 # This value represents 60s at max rate.
 # scanned_between_markers = 900
-# Xcute type for jobs created by the crawler
-xcute_type = customer
 # Avoid creating to many xcute jobs at the same time (max 10k).
 # limit_nb_objects_one_pass = 1000
 
