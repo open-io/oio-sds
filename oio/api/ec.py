@@ -167,8 +167,13 @@ class ECChunkDownloadHandler(object):
         self.reqid = reqid
         self.perfdata = perfdata
         self.logger = kwargs.get("logger", LOGGER)
-        self.ec_enable_pass_through = kwargs.get("ec_enable_pass_through", False)
-        self.ec_passthrough_min_score = kwargs.get("ec_passthrough_min_score", 90)
+        self.ec_enable_pass_through = boolean_value(
+            kwargs.get("ec_enable_pass_through"), False
+        )
+
+        self.ec_passthrough_min_score = int_value(
+            kwargs.get("ec_passthrough_min_score"), 90
+        )
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
