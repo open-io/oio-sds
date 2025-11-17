@@ -467,7 +467,7 @@ pipeline = logger lifecycle
 [filter:lifecycle]
 use = egg:oio#lifecycle
 lifecycle_batch_size = 5000
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 # Lifecycle backup
 lifecycle_configuration_backup_account = AUTH_demo
 lifecycle_configuration_backup_bucket = lc-bucket
@@ -736,7 +736,7 @@ user = ${USER}
 concurrency = 1
 endpoint = ${EVENT_CNXSTRING}
 topic = oio-lifecycle-checkpoint
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 
 syslog_prefix = OIO,${NS},${SRVTYPE}
 log_level = INFO
@@ -1511,7 +1511,7 @@ meta2.sharding.max_entries_merged=10
 meta2.sharding.max_entries_cleaned=10
 
 # Lifecycle
-lifecycle.redis_host=${IP}:${REDIS_PORT}
+lifecycle.redis_host=${REDIS_IP}:${REDIS_PORT}
 
 admin=${IP}:${PORT_ADMIN}
 """
@@ -1684,7 +1684,7 @@ storage_class.STANDARD_IA = TWOCOPIES
 storage_class.ONEZONE_IA = SINGLE
 storage_class.GLACIER = THREECOPIES_FR
 storage_class.DEEP_ARCHIVE = THREECOPIES_DA
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 
 [filter:preserve]
 # Preserve all events in the oio-preserved topic. This filter is intended
@@ -1818,7 +1818,7 @@ pipeline = checkpoint
 [filter:checkpoint]
 use = egg:oio#checkpoint_creator
 topic = oio-lifecycle-checkpoint
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 checkpoint_prefix = lifecycle
 
 [filter:log]
@@ -1832,7 +1832,7 @@ pipeline = lifecycle_actions ${PRESERVE}
 
 [filter:lifecycle_actions]
 use = egg:oio#lifecycle_actions
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 storage_class.STANDARD = EC21,THREECOPIES:0,EC21:100000
 storage_class.STANDARD_IA = TWOCOPIES
 storage_class.ONEZONE_IA = SINGLE
@@ -1887,7 +1887,7 @@ pipeline = archive_restore ${PRESERVE}
 
 [filter:archive_restore]
 use = egg:oio#archive_restore
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 storage_class.STANDARD = EC21,THREECOPIES
 storage_class.STANDARD_IA = TWOCOPIES
 storage_class.ONEZONE_IA = SINGLE
@@ -2140,7 +2140,7 @@ amqp_durable = True
 amqp_auto_delete = False
 
 # Redis
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 """
 
 template_billing_restore_agent_service = """
@@ -2176,7 +2176,7 @@ amqp_durable = True
 amqp_auto_delete = False
 
 # Redis
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 """
 
 template_conscience_agent = """
@@ -2251,7 +2251,7 @@ namespace = ${NS}
 # Let this option empty to connect directly to redis_host
 #redis_sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
 #redis_sentinel_name = oio
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 
 [xcute-server]
 bind_addr = ${IP}
@@ -2275,7 +2275,7 @@ namespace = ${NS}
 # Let this option empty to connect directly to redis_host
 #redis_sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
 #redis_sentinel_name = oio
-redis_host = ${IP}:${REDIS_PORT}
+redis_host = ${REDIS_IP}:${REDIS_PORT}
 # Special xcute type (shared for server and orchestrator)
 xcute_type = customer
 
@@ -3014,6 +3014,29 @@ def generate(options):
 
     crawler_target = register_target("crawler", root_target)
 
+    # redis
+    if options.get(ALLOW_REDIS):
+        redis_server = shutil.which("redis-server")
+        env = subenv(
+            {
+                "SRVTYPE": "redis",
+                "SRVNUM": 1,
+                "PORT": 6379,
+                "redis_server": redis_server,
+            }
+        )
+        register_service(env, template_systemd_service_redis, root_target)
+        ENV["REDIS_IP"] = env["IP"]
+        with open(env["CFGPATH"], "w+") as f:
+            tpl = Template(template_redis)
+            f.write(tpl.safe_substitute(env))
+        with open(env["CFGPATH"], "w+") as f:
+            tpl = Template(template_redis)
+            f.write(tpl.safe_substitute(env))
+        with open(watch(env), "w+") as f:
+            tpl = Template(template_redis_watch)
+            f.write(tpl.safe_substitute(env))
+
     # oio-meta2-crawler
     _tmp_env = subenv(
         {
@@ -3376,28 +3399,6 @@ def generate(options):
     path = "{CFGDIR}/{NS}-{SRVTYPE}.conf".format(**env)
     with open(path, "w+") as f:
         f.write(to_write)
-
-    # redis
-    if options.get(ALLOW_REDIS):
-        redis_server = shutil.which("redis-server")
-        env = subenv(
-            {
-                "SRVTYPE": "redis",
-                "SRVNUM": 1,
-                "PORT": 6379,
-                "redis_server": redis_server,
-            }
-        )
-        register_service(env, template_systemd_service_redis, root_target)
-        with open(env["CFGPATH"], "w+") as f:
-            tpl = Template(template_redis)
-            f.write(tpl.safe_substitute(env))
-        with open(env["CFGPATH"], "w+") as f:
-            tpl = Template(template_redis)
-            f.write(tpl.safe_substitute(env))
-        with open(watch(env), "w+") as f:
-            tpl = Template(template_redis_watch)
-            f.write(tpl.safe_substitute(env))
 
     # foundationdb
     srvtype = "foundationdb"
