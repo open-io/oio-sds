@@ -78,7 +78,7 @@ class BucketWorker(PipelineWorker):
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
             )
-            for obj in resp_list["objects"]:
+            for obj in resp_list:
                 if not self.running:
                     self.logger.info("stop crawling %s", self.volume_path)
                     break
