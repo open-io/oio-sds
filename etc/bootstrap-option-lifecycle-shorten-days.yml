@@ -1,0 +1,4 @@
+lifecycle:
+  # The delay set in lf configuration will be divided by this factor
+  # 1 day => 2 seconds
+  shorten_days_dates_factor: 43200

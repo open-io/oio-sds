@@ -468,6 +468,8 @@ pipeline = logger lifecycle
 use = egg:oio#lifecycle
 lifecycle_batch_size = 5000
 redis_host = ${REDIS_IP}:${REDIS_PORT}
+time_factor = ${TIME_FACTOR}
+shorten_days_dates_factor = ${SHORTEN_DAYS_DATES_FACTOR}
 # Lifecycle backup
 lifecycle_configuration_backup_account = internal
 lifecycle_configuration_backup_bucket = internal_lifecycle
@@ -2404,6 +2406,7 @@ HASH_WIDTH = "hash_width"
 HASH_DEPTH = "hash_depth"
 KAFKA_ENDPOINT = "kafka_endpoint"
 KAFKA_METRICS_ENDPOINTS = "kafka_metrics_endpoints"
+LIFECYCLE_SHORTEN_DAYS_FACTOR = "shorten_days_dates_factor"
 
 
 defaults = {
@@ -2411,6 +2414,7 @@ defaults = {
     SVC_HOSTS: ("127.0.0.1",),
     KAFKA_ENDPOINT: "127.0.0.1:19092",
     KAFKA_METRICS_ENDPOINTS: "127.0.0.1:9644",
+    LIFECYCLE_SHORTEN_DAYS_FACTOR: 1,
     "ZK": "127.0.0.1:2181",
     "NB_CS": 1,
     "NB_M0": 1,
@@ -3089,6 +3093,7 @@ def generate(options):
     )
 
     # oio-meta2-lifecycle-crawler
+    shorten_days_factor = options["lifecycle"]["shorten_days_dates_factor"] or defaults[LIFECYCLE_SHORTEN_DAYS_FACTOR]
     _tmp_env = subenv(
         {
             "IP": host,
@@ -3097,6 +3102,8 @@ def generate(options):
             "SRVNUM": "1",
             "GROUPTYPE": "crawler",
             "EXE": "oio-meta2-crawler",
+            "TIME_FACTOR": shorten_days_factor,
+            "SHORTEN_DAYS_DATES_FACTOR": shorten_days_factor,
         }
     )
     # first the conf
@@ -4325,6 +4332,7 @@ def main():
     opts["kafka"] = {"endpoint": None, "metrics_endpoints": None}
     opts["event-agent"] = {SVC_NB: None}
     opts["rebuilder"] = {SVC_NB: None}
+    opts["lifecycle"] = {"shorten_days_dates_factor": None}
 
     options = parser.parse_args()
 
