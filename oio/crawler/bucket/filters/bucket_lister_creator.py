@@ -32,7 +32,7 @@ class BucketListerCreator(BucketFilter):
         reqid = request_id(prefix="bucketlistercreator-")
 
         # Only work on objects with the prefix
-        if not obj_wrapper.name.startswith(self.ON_HOLD_PREFIX):
+        if not obj_wrapper.name.startswith(self.CURRENT_PREFIX):
             self.skipped += 1
             return self.app(env, cb)
 

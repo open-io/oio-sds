@@ -28,6 +28,7 @@ from oio.crawler.common.base import Filter
 class BucketFilter(Filter):
     ON_HOLD_PREFIX = "on_hold/"
     IN_PROGRESS_LISTER_PREFIX = "in_progress/lister/"
+    IN_PROGRESS_REPLICATOR_PREFIX = "in_progress/replicator/"
     LOCK_IN_JOB_EXIST_PATTERN = re.compile(
         r"A job \(([^)]+)\) with the same lock \([^)]+\) is already in progress"
     )
@@ -122,13 +123,8 @@ class BucketFilter(Filter):
         # First, check on the in_progress object that the xcute job does not already
         # exist (still running or finished (finished means it could be created again..))
         try:
-            props = self.app_env["api"].object_get_properties(
-                self.internal_account,
-                self.internal_bucket,
-                obj=key,
-                reqid=reqid,
-            )
-            job_id = props.get("properties", {}).get(f"xcute-job-id-{job_type}")
+            props = self._get_properties(obj_wrapper, key, reqid, raise_on_error=True)
+            job_id = props.get(f"xcute-job-id-{job_type}")
             if job_id:
                 self.logger.warning("Xcute job already exists for %s", obj_wrapper)
                 return job_id, None
@@ -167,6 +163,29 @@ class BucketFilter(Filter):
         self.logger.error("Failed to create job %s (err=%s)", job_type, error)
         self.errors += 1
         return None, BucketCrawlerError(obj_wrapper, body=str(error))
+
+    def _get_properties(
+        self, obj_wrapper: ObjectWrapper, key: str, reqid: str, raise_on_error=False
+    ):
+        """
+        Return properties saved on an object.
+        Returns: tuple: properties (dict), error (None if no error)
+        """
+        try:
+            props = self.app_env["api"].object_get_properties(
+                self.internal_account,
+                self.internal_bucket,
+                obj=key,
+                reqid=reqid,
+                force_master=True,
+            )
+            return props.get("properties", {})
+        except OioException as err:
+            if raise_on_error:
+                raise
+            self.logger.error("Failed to get properties of %s (err=%s)", key, err)
+            self.errors += 1
+            return BucketCrawlerError(obj_wrapper, body=str(err))
 
     def _save_job_id(
         self,

@@ -217,7 +217,7 @@ class BatchReplicatorTask(XcuteTask):
             return resp
         except OioNetworkException:
             # Something went wrong, retry later
-            raise RetryLater(delay=60)
+            raise RetryLater(delay=self.delay_retry_later)
 
         self.logger.info("Replication of obj=%s finished", event.url.get("path"))
         resp["object_replicated"] += 1
@@ -270,24 +270,31 @@ class BatchReplicatorJob(XcuteJob):
         sanitized_job_params["replication_delayed_topic"] = job_params.get(
             "replication_delayed_topic", DEFAULT_REPLICATION_DELAYED_TOPIC
         )
+
         # Maximum lag allowed for kafka topics (<0 to disable)
-        sanitized_job_params["kafka_max_lags"] = job_params.get(
-            "kafka_max_lags", cls.DEFAULT_KAFKA_MAX_LAGS
+        sanitized_job_params["kafka_max_lags"] = int(
+            job_params.get("kafka_max_lags", cls.DEFAULT_KAFKA_MAX_LAGS)
         )
         # Minimal available space allowed for kafka cluster (in percent) (<0 to disable)
-        sanitized_job_params["kafka_min_available_space"] = job_params.get(
-            "kafka_min_available_space", cls.DEFAULT_KAFKA_MIN_AVAILABLE_SPACE
+        sanitized_job_params["kafka_min_available_space"] = int(
+            job_params.get(
+                "kafka_min_available_space", cls.DEFAULT_KAFKA_MIN_AVAILABLE_SPACE
+            )
         )
-        sanitized_job_params["kafka_sleep_between_health_check"] = job_params.get(
-            "kafka_sleep_between_health_check",
-            cls.DEFAULT_KAFKA_CHECK_BETWEEN_HEALTH_CHECK,
+        sanitized_job_params["kafka_sleep_between_health_check"] = int(
+            job_params.get(
+                "kafka_sleep_between_health_check",
+                cls.DEFAULT_KAFKA_CHECK_BETWEEN_HEALTH_CHECK,
+            )
         )
-        sanitized_job_params["check_replication_status_timeout"] = job_params.get(
-            "check_replication_status_timeout",
-            DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
+        sanitized_job_params["check_replication_status_timeout"] = float(
+            job_params.get(
+                "check_replication_status_timeout",
+                DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
+            )
         )
-        sanitized_job_params["delay_retry_later"] = job_params.get(
-            "delay_retry_later", cls.DEFAULT_DELAY_RETRY_LATER
+        sanitized_job_params["delay_retry_later"] = int(
+            job_params.get("delay_retry_later", cls.DEFAULT_DELAY_RETRY_LATER)
         )
         return sanitized_job_params, job_params["technical_manifest_prefix"]
 

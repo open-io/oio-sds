@@ -31,7 +31,7 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,bucket,1
 
 [pipeline:main]
-pipeline = logger bucket_lister_creator
+pipeline = logger bucket_lister_creator batch_replicator_creator
 
 [filter:logger]
 use = egg:oio#logger
@@ -45,3 +45,21 @@ boto_profile = keystone
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
 # Policy to use for the manifests
 policy_manifest = SINGLE
+
+[filter:batch_replicator_creator]
+use = egg:oio#batch_replicator_creator
+boto_profile = keystone
+# boto_access_key = demo:demo
+# boto_secret_key = DEMO_PASS
+# boto_region = RegionOne
+# boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+
+# replication_topic = oio-replication
+# replication_delayed_topic = oio-replication-delayed
+# kafka_max_lags = 1000000
+# In percent
+# kafka_min_available_space = 40
+# In seconds
+# kafka_sleep_between_health_check = 60
+# check_replication_status_timeout = 172800
+# delay_retry_later = 60
