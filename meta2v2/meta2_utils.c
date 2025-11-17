@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -3886,6 +3886,7 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	struct storage_policy_s* pol = NULL;
 	struct bean_ALIASES_s *current_alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
+	GString *current_ttime = g_string_new("0");
 	gboolean is_event_remission = FALSE;
 
 	void _search_alias_and_size(gpointer ignored, gpointer bean) {
@@ -3894,6 +3895,14 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			current_alias = bean;
 		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 			current_header = bean;
+		} else if (DESCR(bean) == &descr_struct_PROPERTIES){
+			struct bean_PROPERTIES_s *prop = bean;
+			if (g_strcmp0("ttime", PROPERTIES_get_key(prop)->str) == 0) {
+				GByteArray *val = PROPERTIES_get_value(prop);
+				if (val && val->data && val->len > 0) {
+					g_string_overwrite_len(current_ttime, 0, (const gchar *) val->data, val->len);
+				}
+			}
 		}
 	}
 
@@ -3909,7 +3918,7 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	err = m2db_get_alias(
 		sq3, url,
-		M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS|M2V2_FLAG_NORECURSION,
+		M2V2_FLAG_HEADERS|M2V2_FLAG_NORECURSION,
 		_search_alias_and_size, NULL);
 	if (err) {
 		goto cleanup;
@@ -3921,7 +3930,14 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	// Ensure new policy is not already applied
 	if (g_strcmp0(new_policy, target_policy) == 0) {
 		if (!internal_transition) {
-			goto cleanup;
+			time_t now = oio_ext_real_seconds();
+    		time_t c_ttime = (time_t)atoll(current_ttime->str);
+			gint64 since_c_ttime = (gint64)(now - c_ttime);
+			// After transition grace delay since object last transition,
+			// we consider that the transition failed and we re emit the event. 
+			if (since_c_ttime < meta2_transition_grace_period) {
+				goto cleanup;
+			}
 		}
 		is_event_remission = TRUE;
 	}
@@ -3983,6 +3999,7 @@ cleanup:
 	}
 	g_free(actual_policy);
 	g_free(target_policy);
+	g_string_free(current_ttime, TRUE);
 	_bean_clean(current_alias);
 	_bean_clean(current_header);
 	return err;

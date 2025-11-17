@@ -723,6 +723,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_META2_STORE_CHUNK_IDS*
 
+### meta2.transition_grace_period
+
+> Maximum time in seconds (default: ~2 days) after which transition is considered as failed, another transition event is sent.
+
+ * default: **172800**
+ * type: gint64
+ * cmake directive: *OIO_META2_TRANSITION_GRACE_PERIOD*
+ * range: 1 -> 8640000
+
 ### meta2.tube.container_deleted
 
 > Tube name (or routing key) for 'storage.container.deleted' events.

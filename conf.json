@@ -66,7 +66,12 @@
 			{ "type": "monotonic", "name": "meta2_sharding_replicated_clean_timeout",
 				"key": "meta2.sharding.replicated_clean_timeout",
 				"descr": "Maximum time to clean a shard (in replicated mode) from the moment the lock is taken.",
-				"def": "1s", "min": "1ms", "max": "1m" }
+				"def": "1s", "min": "1ms", "max": "1m" },
+
+			{ "type": "int64", "name": "meta2_transition_grace_period",
+				"key": "meta2.transition_grace_period",
+				"descr": "Maximum time in seconds (default: ~2 days) after which transition is considered as failed, another transition event is sent.",
+				"def": 172800, "min": 1, "max": 8640000 }
 		]
 	},
 	"rawx": {

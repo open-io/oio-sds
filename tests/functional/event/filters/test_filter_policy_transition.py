@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 from copy import deepcopy
 
 from oio.common.statsd import get_statsd
@@ -123,40 +124,83 @@ class TestFilterPolicyTransition(BaseTestCase):
 
         self.assertIsNone(evt)
 
+    def _check_event_transition(self, expected=True, **kwargs):
+        reqid = request_id("pol-chg-internal-transition")
+        self.storage.object_request_transition(
+            self.account,
+            self.container,
+            self.object,
+            "THREECOPIES",
+            reqid=reqid,
+            **kwargs,
+        )
+        evt = self.wait_for_kafka_event(
+            reqid=reqid,
+            data_fields={"target_policy": "THREECOPIES"},
+            types=[EventTypes.CONTENT_TRANSITIONED],
+            kafka_consumer=self._cls_tests_consumer,
+        )
+        if expected:
+            self.assertIsNotNone(evt)
+        else:
+            self.assertIsNone(evt)
+        obj = self.storage.object_get_properties(
+            self.account,
+            self.container,
+            self.object,
+        )
+        self.assertEqual(obj["target_policy"], "THREECOPIES")
+
     def test_transition_internal_transition(self):
         # Stop processing events
         self.logger.debug("Stopping the event system")
         self._service("oio-event.target", "stop", wait=8)
+        try:
+            # First time to set target policy and emit the event
+            self._check_event_transition()
+            # Second time to re emit the event
+            self._check_event_transition(internal_transition=True)
+        finally:
+            self._service("oio-event.target", "start", wait=3)
 
-        def check_event_transition(**kwargs):
-            reqid = request_id("pol-chg-internal-transition")
-            self.storage.object_request_transition(
-                self.account,
-                self.container,
-                self.object,
-                "THREECOPIES",
-                reqid=reqid,
-                **kwargs,
-            )
-            evt = self.wait_for_kafka_event(
-                reqid=reqid,
-                data_fields={"target_policy": "THREECOPIES"},
-                types=[EventTypes.CONTENT_TRANSITIONED],
-                kafka_consumer=self._cls_tests_consumer,
-            )
+    def test_transition_after_grace_delay(self):
+        """Test if event is re emitted after transition grace delay (~ 2 days)"""
+        # Stop processing events
+        self.logger.debug("Stopping the event system")
+        self._service("oio-event.target", "stop", wait=8)
 
-            self.assertIsNotNone(evt)
-            obj = self.storage.object_get_properties(
-                self.account,
-                self.container,
-                self.object,
-            )
-            self.assertEqual(obj["target_policy"], "THREECOPIES")
+        self.object = "policy-transition/obj-bis"
+        self.storage.object_create_ext(
+            account=self.account,
+            container=self.container,
+            obj_name=self.object,
+            data="test",
+            policy="SINGLE",
+        )
 
         try:
             # First time to set target policy and emit the event
-            check_event_transition()
-            # Second time to re emit the event
-            check_event_transition(internal_transition=True)
+            self._check_event_transition()
+            now = int(time.time())
+            t_delay_not_passed = now - 86400
+            self.storage.object_set_properties(
+                self.account,
+                self.container,
+                self.object,
+                reqid=request_id("pol-transition"),
+                properties={"ttime": str(t_delay_not_passed)},
+            )
+            # Do not re emit event as grace delay not passed yet
+            self._check_event_transition(expected=False)
+            t_delay_passed = now - 259200
+            self.storage.object_set_properties(
+                self.account,
+                self.container,
+                self.object,
+                reqid=request_id("pol-transition"),
+                properties={"ttime": str(t_delay_passed)},
+            )
+            # Re emit the event as grace delay has passed
+            self._check_event_transition()
         finally:
             self._service("oio-event.target", "start", wait=3)
