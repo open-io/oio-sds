@@ -469,13 +469,14 @@ use = egg:oio#lifecycle
 lifecycle_batch_size = 5000
 redis_host = ${REDIS_IP}:${REDIS_PORT}
 # Lifecycle backup
-lifecycle_configuration_backup_account = AUTH_demo
-lifecycle_configuration_backup_bucket = lc-bucket
+lifecycle_configuration_backup_account = internal
+lifecycle_configuration_backup_bucket = internal_lifecycle
 
 # Order from highest to lowset
-storage_class.STANDARD = EC21,TWOCOPIES:0,EC:10000,ECX21,THREECOPIES,ANY-E93
-storage_class.STANDARD_IA = SINGLE
-storage_class.GLACIER = THREECOPIES_FR
+storage_class.EXPRESS_ONEZONE = EC:-2,SINGLE
+storage_class.STANDARD = EC21,TWOCOPIES:0,EC21:102400,ANY-E93
+storage_class.STANDARD_IA = THREECOPIES
+storage_class.GLACIER = ECX21
 storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 
 [filter:logger]
