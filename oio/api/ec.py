@@ -16,6 +16,7 @@
 
 import collections
 import math
+import random
 from socket import error as SocketError
 from urllib.parse import urlparse
 
@@ -253,6 +254,26 @@ class ECChunkDownloadHandler(object):
                 else:
                     sorted_chunks.append(el)
             self.chunks = sorted_chunks
+        if (
+            self.storage_method.ec_nb_data == 7
+            and self.storage_method.ec_nb_parity == 5
+            and "liberasurecode_rs_vand"
+            in self.headers.get(CHUNK_HEADERS["content_chunkmethod"], "plain/")
+        ):
+            # Invalid combination in case of EC75 with rs_vand backend
+            invalid_EC75_combination = [
+                [1, 2, 4, 6, 7, 8, 11],
+                [1, 3, 4, 6, 7, 10, 11],
+                [0, 2, 4, 5, 7, 10, 11],
+                [0, 2, 3, 5, 7, 8, 11],
+            ]
+            while True:  # Search for a valid sorted combination
+                current_combination = [el["num"] for el in self.chunks[:7]].sort()
+                if current_combination not in invalid_EC75_combination:
+                    # Ensure all selected chunks have a non-null score
+                    if all(map(lambda el: el.get("score", 0) > 0, self.chunks[:7])):
+                        break
+                random.shuffle(self.chunks)
         chunk_iter = iter(self.chunks)
 
         # we use eventlet GreenPool to manage readers
