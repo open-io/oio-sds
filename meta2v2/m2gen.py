@@ -12,16 +12,17 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 index = 0
 
 agpl = """/*
-Copyright (C) 2017-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2025 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -30,11 +31,11 @@ License, or (at your option) any later version.
 
 This program is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU Affero General Public License for more details.
 
 You should have received a copy of the GNU Affero General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+along with this program. If not, see <http://www.gnu.org/licenses/>.
 */
 """
 
@@ -104,8 +105,10 @@ class Field(object):
         self.unique = False
 
     def __repr__(self):
-        return '<Field name="{0}" type="{1}/{2}" pos="{3}">'.format(
-            self.name, self.type_sql, self.type_c, self.position
+        return (
+            f'<Field name="{self.name}" '
+            f'type="{self.type_sql}/{self.type_c}" '
+            f'pos="{self.position}">'
         )
 
     def set_index(self, i):
@@ -141,10 +144,10 @@ class Bool(Field):
 
 
 class Struct(object):
-    def __init__(self, name):
-        self.name = str(name)
-        self.c_name = str(name).upper()
-        self.sql_name = str(name).upper()
+    def __init__(self, name: str):
+        self.name = name
+        self.c_name = name.upper()
+        self.sql_name = name.upper()
         self.fields = []
         self.pk = None
         self.fk_outgoing = []
@@ -154,7 +157,7 @@ class Struct(object):
 
     def __repr__(self):
         repr_list = []
-        repr_list.append('<Struct name="' + str(self.name) + '">')
+        repr_list.append(f'<Struct name="{self.name}">')
         for f in self.fields:
             repr_list.append("\t" + repr(f))
         repr_list.append("</Struct>")
@@ -172,9 +175,8 @@ class Struct(object):
         self.pk = t
         return self
 
-    def index(self, n, fl):
-        i = (str(n), [str(x) for x in fl])
-        self.indexes.append(i)
+    def index(self, n: str, fl: list):
+        self.indexes.append((n, fl))
         return self
 
     def set_sql_name(self, n):
@@ -717,7 +719,7 @@ alias = generator.add_bean(
     .field(Int("ctime"))
     .field(Int("mtime"))
     .PK(("alias", "version"))
-    .index("alias_index_by_name", ["alias"])
+    .index("alias_index_by_name", ["alias", "version DESC"])
     .index("alias_index_by_header", ["content"])
     .set_sql_name("aliases")
 ).set_order(0)
@@ -786,11 +788,11 @@ generator.add_fk(
     ForeignKey((chunks, ("content",), "content"), (contents, ("id",), "chunks"))
 )
 
-with open("./autogen_codec.c", "w", encoding="utf-8") as out:
-    generator.dump_c_codec(out)
+with open("./autogen_codec.c", "w", encoding="utf-8") as OUT:
+    generator.dump_c_codec(OUT)
 
-with open("./autogen_storage.c", "w", encoding="utf-8") as out:
-    generator.dump_c_storage(out)
+with open("./autogen_storage.c", "w", encoding="utf-8") as OUT:
+    generator.dump_c_storage(OUT)
 
-with open("./autogen.h", "w", encoding="utf-8") as out:
-    generator.dump_c_header(out)
+with open("./autogen.h", "w", encoding="utf-8") as OUT:
+    generator.dump_c_header(OUT)
