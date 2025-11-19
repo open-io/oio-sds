@@ -137,6 +137,13 @@ class BatchReplicatorTracker(BucketFilter):
             self.skipped_replicator_not_finished += 1
             return self.app(env, cb)
 
+        progression_key = self._build_key(obj_wrapper, self.PROGRESSION_PREFIX)
+        error = self._add_tag(
+            obj_wrapper, progression_key, "Status", progression["status"]
+        )
+        if error:
+            return error(obj_wrapper, cb)
+
         # Batch replication finished, nothing more to do here
         # delete the "in progress" object
         error = self._delete_object(obj_wrapper, obj_wrapper.name)

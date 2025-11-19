@@ -235,6 +235,30 @@ class BucketFilter(Filter):
             self.errors += 1
             return BucketCrawlerError(obj_wrapper, body=str(err))
 
+    def _add_tag(
+        self, obj_wrapper: ObjectWrapper, key: str, tag_key: str, tag_value: str
+    ):
+        """
+        Put tag to an object. Note that existings tags will be replaced.
+        Returns: error (None if no error)
+        """
+        tag_set = [{"Key": tag_key, "Value": tag_value}]
+        try:
+            self.boto.put_object_tagging(
+                Bucket=self.internal_bucket, Key=key, Tagging={"TagSet": tag_set}
+            )
+            return None
+        except ClientError as err:
+            self.logger.error(
+                "Failed to add tag (%s=%s) on object %s (err=%s)",
+                tag_key,
+                tag_value,
+                key,
+                err,
+            )
+            self.errors += 1
+            return BucketCrawlerError(obj_wrapper, body=str(err))
+
     def process(self, env, cb):
         raise NotImplementedError
 
