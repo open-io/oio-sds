@@ -212,7 +212,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         self.assertDictEqual(expected_stats, stats)
 
         self.bucket_lister_creator.boto.get_object.assert_called_once()
-        self.bucket_lister_creator.boto.put_object.assert_called_once()
+        self.bucket_lister_creator.boto.put_object.assert_called()
         self.bucket_lister_creator.boto.delete_object.assert_called_once()
 
         if not check_xcute_result:
@@ -229,12 +229,14 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         object_list = self.storage.object_list(
             self.account, self.internal_bucket, properties=True
         )
-        # in_progress/lister/xx (on_hold was never created/deleted but mocked) ..
-        nb_expected_objects = 1
+        # in_progress/lister/xx and progression/xx
+        # (on_hold was never created/deleted but mocked) ..
+        nb_expected_objects = 2
         if job_status == "FINISHED":
             # .. and also listing
             nb_expected_objects += 1
         self.assertEqual(nb_expected_objects, len(object_list["objects"]))
+        progression_object_does_exist = False
         for obj in object_list["objects"]:
             if obj["name"] == "in_progress/lister/abc":
                 self.assertEqual(
@@ -247,8 +249,11 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
                 == f"listing/{self.account}/{self.container}/{job['job']['id']}/.jsonl"
             ):
                 self.assertEqual(str(nb_obj), obj["properties"]["nb_objects"])
+            elif obj["name"] == "progression/abc":
+                progression_object_does_exist = True
             else:
                 self.fail(f"obj_name {obj['name']} not expected")
+        self.assertTrue(progression_object_does_exist)
 
     def test_nominal(self):
         nb_obj = 10

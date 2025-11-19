@@ -29,6 +29,7 @@ class BucketFilter(Filter):
     ON_HOLD_PREFIX = "on_hold/"
     IN_PROGRESS_LISTER_PREFIX = "in_progress/lister/"
     IN_PROGRESS_REPLICATOR_PREFIX = "in_progress/replicator/"
+    PROGRESSION_PREFIX = "progression/"
     LOCK_IN_JOB_EXIST_PATTERN = re.compile(
         r"A job \(([^)]+)\) with the same lock \([^)]+\) is already in progress"
     )
@@ -74,27 +75,37 @@ class BucketFilter(Filter):
             self.errors += 1
             return None, None, BucketCrawlerError(obj_wrapper, body=str(err))
 
-    def _create_object(self, obj_wrapper: ObjectWrapper, key: str, data_raw):
+    def _create_object(
+        self,
+        obj_wrapper: ObjectWrapper,
+        key: str,
+        data_raw,
+        ignore_if_exists: bool = True,
+    ):
         """
         Create an object from a name and data.
+        Note that this method could heavily be improved with if-match if-none-match.
         Returns: tuple: in_progress_key (str), error (None if no error)
         """
-        try:
-            self.boto.head_object(
-                Bucket=self.internal_bucket,
-                Key=key,
-            )
-            # The object already exists, do nothing
-            return None
-        except ClientError as err:
-            self.logger.debug("Failed to head the object %s (err=%s)", key, err)
-            if err.response["Error"]["Code"] != "404":
-                self.logger.error(
-                    "Failed to check object before its creation %s (err=%s)", key, err
+        if ignore_if_exists:
+            try:
+                self.boto.head_object(
+                    Bucket=self.internal_bucket,
+                    Key=key,
                 )
-                self.errors += 1
-                return BucketCrawlerError(obj_wrapper, body=str(err))
-            # It is a 404, let's create it.
+                # The object already exists, do nothing
+                return None
+            except ClientError as err:
+                self.logger.debug("Failed to head the object %s (err=%s)", key, err)
+                if err.response["Error"]["Code"] != "404":
+                    self.logger.error(
+                        "Failed to check object before its creation %s (err=%s)",
+                        key,
+                        err,
+                    )
+                    self.errors += 1
+                    return BucketCrawlerError(obj_wrapper, body=str(err))
+                # It is a 404, let's create it.
 
         try:
             self.boto.put_object(

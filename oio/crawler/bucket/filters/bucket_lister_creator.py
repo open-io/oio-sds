@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import json
+
 from oio.common.utils import request_id
 from oio.crawler.bucket.filters.common import BucketFilter
 from oio.crawler.bucket.object_wrapper import ObjectWrapper
@@ -65,6 +67,15 @@ class BucketListerCreator(BucketFilter):
         )
         if error:
             return error(obj_wrapper, cb)
+
+        progression = {"status": "Preparing"}
+        progression_key = self._build_key(obj_wrapper, self.PROGRESSION_PREFIX)
+        error = self._create_object(
+            obj_wrapper,
+            progression_key,
+            json.dumps(progression, separators=(",", ":")),
+            ignore_if_exists=False,
+        )
 
         # Job xcute created, nothing more to do here, delete the "on hold" object
         error = self._delete_object(obj_wrapper, obj_wrapper.name)

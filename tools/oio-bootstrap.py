@@ -506,7 +506,7 @@ statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger bucket_lister_creator batch_replicator_creator
+pipeline = logger bucket_lister_creator batch_replicator_creator batch_replicator_tracker
 
 [filter:logger]
 use = egg:oio#logger
@@ -522,6 +522,14 @@ policy_manifest = SINGLE
 
 [filter:batch_replicator_creator]
 use = egg:oio#batch_replicator_creator
+boto_profile = keystone
+# boto_access_key = demo:demo
+# boto_secret_key = DEMO_PASS
+# boto_region = ${REGION}
+# boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+
+[filter:batch_replicator_tracker]
+use = egg:oio#batch_replicator_tracker
 boto_profile = keystone
 # boto_access_key = demo:demo
 # boto_secret_key = DEMO_PASS
