@@ -21,6 +21,7 @@ from oio.common.exceptions import (
     ServiceBusy,
 )
 from oio.common.kafka import get_retry_delay
+from oio.common.storage_method import ECDriverError
 from oio.common.utils import request_id
 from oio.event.evob import (
     Event,
@@ -70,7 +71,7 @@ class Transition(Filter):
             )
         except Conflict as exc:
             self.logger.info("Unable to transition object, reason: %s", exc)
-        except (OioNetworkException, OioTimeout, ServiceBusy) as exc:
+        except (OioNetworkException, OioTimeout, ServiceBusy, ECDriverError) as exc:
             resp = RetryableEventError(
                 event=event,
                 body=f"Failed to change policy: {exc}",

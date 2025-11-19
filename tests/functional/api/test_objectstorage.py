@@ -43,10 +43,7 @@ from oio.common.fullpath import encode_fullpath
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.kafka import DEFAULT_TRANSITION_TOPIC
 from oio.common.storage_functions import _sort_chunks as sort_chunks
-from oio.common.storage_method import (
-    STORAGE_METHODS,
-    parse_chunk_method,
-)
+from oio.common.storage_method import STORAGE_METHODS, ECDriverError, parse_chunk_method
 from oio.common.utils import cid_from_name, depaginate, get_hasher, request_id
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_data, random_id, random_str
@@ -4275,3 +4272,23 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertEqual(4, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
         self.assertDictEqual(expected_cache, self.cache)
+
+    def test_object_fetch_ec_driver_error_retry(self):
+        "Try to fecth object and retry after ECDriverError"
+        stg_method = self.storage_method_from_policy(self.conf["storage_policy"])
+        if not stg_method.ec:
+            self.skipTest("Run only in EC mode")
+
+        def custom_obj_fetch_impl(*args, **kwargs):
+            raise ECDriverError("")
+
+        self.api._object_fetch_impl = Mock(side_effect=custom_obj_fetch_impl)
+        self.assertRaises(
+            ECDriverError,
+            self.api.object_fetch,
+            self.account,
+            self.container,
+            self.path,
+        )
+        # 1 initial attempt + 5 retry attempts = 6 total calls
+        self.assertEqual(6, self.api._object_fetch_impl.call_count)

@@ -46,7 +46,7 @@ from oio.common.fullpath import encode_fullpath
 from oio.common.green import sleep
 from oio.common.logger import get_logger
 from oio.common.storage_functions import _sort_chunks, fetch_stream, fetch_stream_ec
-from oio.common.storage_method import STORAGE_METHODS, parse_chunk_method
+from oio.common.storage_method import STORAGE_METHODS, ECDriverError, parse_chunk_method
 from oio.common.utils import (
     GeneratorIO,
     cid_from_name,
@@ -1739,38 +1739,9 @@ class ObjectStorageApi(object):
             a stream of object data
         :rtype: tuple
         """
-        # Fetch object metadata (possibly from cache) and object stream.
-        meta, stream = self._object_fetch_impl(
-            account,
-            container,
-            obj,
-            version=version,
-            ranges=ranges,
-            key_file=key_file,
-            **kwargs,
-        )
 
-        try:
-            # Verify that the first block is recoverable before responding.
-            first_block = next(stream)
-        except (exc.UnrecoverableContent, exc.ObjectUnavailable):
-            # Maybe we got this error because the cached object
-            # metadata was stale or maybe the metadata is from an out of sync
-            # meta2 database.
-
-            # Clear the cache (if there is one).
-            del_cached_object_metadata(
-                account=account,
-                reference=container,
-                path=obj,
-                version=version,
-                **kwargs,
-            )
-            if kwargs.get("force_master"):
-                # Cache was already ignored.
-                raise
-            # Retry the request, retrieving up-to-date metadata.
-            kwargs["force_master"] = True
+        def check_first_block():
+            # Fetch object metadata (possibly from cache) and object stream.
             meta, stream = self._object_fetch_impl(
                 account,
                 container,
@@ -1780,21 +1751,73 @@ class ObjectStorageApi(object):
                 key_file=key_file,
                 **kwargs,
             )
-        except StopIteration:
 
-            def _empty_generator():
-                return
-                yield  # pylint: disable=unreachable
+            try:
+                # Verify that the first block is recoverable before responding.
+                first_block = next(stream)
+            except (exc.UnrecoverableContent, exc.ObjectUnavailable):
+                # Maybe we got this error because the cached object
+                # metadata was stale or maybe the metadata is from an out of sync
+                # meta2 database.
 
-            stream = _empty_generator()
-        else:
+                # Clear the cache (if there is one).
+                del_cached_object_metadata(
+                    account=account,
+                    reference=container,
+                    path=obj,
+                    version=version,
+                    **kwargs,
+                )
+                if kwargs.get("force_master"):
+                    # Cache was already ignored.
+                    raise
+                # Retry the request, retrieving up-to-date metadata.
+                kwargs["force_master"] = True
+                meta, stream = self._object_fetch_impl(
+                    account,
+                    container,
+                    obj,
+                    version=version,
+                    ranges=ranges,
+                    key_file=key_file,
+                    **kwargs,
+                )
+            except StopIteration:
 
-            def _prepend_stream(data, remaining_stream):
-                yield data
-                for remaining_data in remaining_stream:
-                    yield remaining_data
+                def _empty_generator():
+                    return
+                    yield  # pylint: disable=unreachable
 
-            stream = _prepend_stream(first_block, stream)
+                stream = _empty_generator()
+            else:
+
+                def _prepend_stream(data, remaining_stream):
+                    yield data
+                    for remaining_data in remaining_stream:
+                        yield remaining_data
+
+                stream = _prepend_stream(first_block, stream)
+            return meta, stream
+
+        try:
+            meta, stream = check_first_block()
+        except ECDriverError:
+            retry_after_ec_error = 0
+            # Occasionally, an incorrect chunk combination is selected, causing
+            # an ECDriverError. This is rare, so we retry a few times when it
+            # occurs.
+            while retry_after_ec_error < 5:
+                try:
+                    meta, stream = check_first_block()
+                    break
+                except ECDriverError:
+                    retry_after_ec_error += 1
+            else:
+                self.logger.warning(
+                    "After %s retries, failed to fetch object due to ECDriverError",
+                    retry_after_ec_error,
+                )
+                raise
 
         def _decache_if_unrecoverable(buggy_stream):
             try:
