@@ -7,11 +7,11 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Affero General Public License for more details.
 #
 # You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import json
 import os
@@ -42,7 +42,7 @@ from oio.common.utils import depaginate
 from oio.event.evob import EventTypes
 
 
-class ReplicationRecovery(Command):
+class ReplicationCatchUp(Command):
     """Send new events to replicate objects not yet replicated."""
 
     log = None
@@ -166,7 +166,6 @@ class ReplicationRecovery(Command):
 
     def send_event(
         self,
-        conf: Dict[str, Any],
         obj: Dict[str, Any],
         dest_buckets: List[str],
         event: Dict[str, Any],
@@ -197,9 +196,9 @@ class ReplicationRecovery(Command):
 
             if self.kafka_producer is None:
                 self.kafka_producer = KafkaSender(
-                    conf.get("broker_endpoint"),
+                    self.sender_conf.get("broker_endpoint"),
                     self.log,
-                    app_conf=conf,
+                    app_conf=self.sender_conf,
                 )
             try:
                 self.kafka_producer.send(DEFAULT_REPLICATION_TOPIC, event, flush=True)
@@ -208,7 +207,7 @@ class ReplicationRecovery(Command):
                 self.success = False
 
     def get_parser(self, prog_name):
-        parser = super(ReplicationRecovery, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument("bucket", help="Name of bucket to scan")
         group = parser.add_mutually_exclusive_group()
         group.add_argument(
@@ -257,7 +256,8 @@ class ReplicationRecovery(Command):
         )
         parser.add_argument(
             "--do-not-use-marker",
-            action="store_true",
+            action="store_false",
+            dest="use_marker",
             help="Use this option to disable the marker usage.",
         )
         parser.add_argument(
@@ -280,7 +280,7 @@ class ReplicationRecovery(Command):
         )
         return parser
 
-    def _clean_exit(self, account, bucket, *args):
+    def _clean_exit(self, account, bucket, *_args):
         """Exit the tool"""
         if self.kafka_producer is not None:
             nb_msg = self.kafka_producer.flush(1.0)
@@ -365,60 +365,19 @@ class ReplicationRecovery(Command):
                 f"Error while updating marker file {self.marker_file}: {err}"
             )
 
-    def take_action(self, parsed_args):
-        bucket = parsed_args.bucket
-        pending = parsed_args.pending
-        only_metadata = parsed_args.only_metadata
-        # invert the condition for readability
-        use_marker = not parsed_args.do_not_use_marker
-        marker_update_after = parsed_args.marker_update_after
-        if not (pending or only_metadata or parsed_args.all):
-            # When no option is defined, use pending by default
-            pending = True
-        until = int(parsed_args.until) * 1000000 if parsed_args.until else None
-        if pending and not until:
-            # List only objects having PENDING status and created more than 48 hours ago
-            until = (
-                int(datetime.timestamp(datetime.now() - timedelta(hours=48))) * 1000000
-            )
-        dry_run = parsed_args.dry_run
-        broker_endpoints = self.app.client_manager.sds_conf.get("event-agent", "")
-        namespace = self.app.options.ns
-        conf = {
-            "namespace": namespace,
-            "broker_endpoint": broker_endpoints,
-        }
-        max_messages = parsed_args.max_messages
-        self.success = True
-        self.log = self.app.client_manager.logger
-        self.kafka_cluster_health = KafkaClusterHealth(
-            {
-                "namespace": namespace,
-                "topics": ",".join(
-                    (DEFAULT_REPLICATION_TOPIC, DEFAULT_REPLICATION_DELAYED_TOPIC)
-                ),
-                "max_lag": parsed_args.kafka_max_lags,
-                "min_available_space": parsed_args.kafka_min_available_space,
-            },
-            pool_manager=self.app.client_manager.storage.container.pool_manager,
-        )
-        account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
-        signal.signal(signal.SIGTERM, partial(self._clean_exit, account, bucket))
-        if pending:
-            operation = "pending"
-        elif only_metadata:
-            operation = "metadata"
-        else:
-            operation = "all"
-        self.marker_file = self._get_marker_file_path(operation, account, bucket)
-        marker = None
-        use_marker = use_marker and self.marker_file
-        if use_marker:
-            if os.path.exists(self.marker_file):
-                with open(self.marker_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    marker = data.get(str((account, bucket)))
-
+    def scan_bucket(
+        self,
+        account,
+        bucket,
+        pending,
+        until,
+        only_metadata,
+        marker_update_after,
+        max_messages,
+        dry_run=False,
+        marker=None,
+        use_marker=False,
+    ):
         replication_conf = self._load_replication_configuration(account, bucket)
         self.log.info("Scan bucket %s in account %s", bucket, account)
         objects_to_replicate = self.get_objects_to_replicate(
@@ -442,14 +401,13 @@ class ReplicationRecovery(Command):
                     obj,
                     destinations,
                     role,
-                    namespace,
+                    self.app.options.ns,
                     account,
                     bucket,
                     event_type,
                     "s3-replication-recovery",
                 )
                 self.send_event(
-                    conf,
                     obj,
                     destinations,
                     object_event,
@@ -481,4 +439,64 @@ class ReplicationRecovery(Command):
                     self.log.error(
                         f"Failed to remove marker file: {self.marker_file}: {err}"
                     )
+
+    def take_action(self, parsed_args):
+        bucket = parsed_args.bucket
+        pending = parsed_args.pending
+        only_metadata = parsed_args.only_metadata
+        if not (pending or only_metadata or parsed_args.all):
+            # When no option is defined, use pending by default
+            pending = True
+        until = int(parsed_args.until) * 1000000 if parsed_args.until else None
+        if pending and not until:
+            # List only objects having PENDING status and created more than 48 hours ago
+            until = (
+                int(datetime.timestamp(datetime.now() - timedelta(hours=48))) * 1000000
+            )
+        broker_endpoints = self.app.client_manager.sds_conf.get("event-agent", "")
+        self.sender_conf = {
+            "namespace": self.app.options.ns,
+            "broker_endpoint": broker_endpoints,
+        }
+        self.success = True
+        self.log = self.app.client_manager.logger
+        self.kafka_cluster_health = KafkaClusterHealth(
+            {
+                "namespace": self.app.options.ns,
+                "topics": ",".join(
+                    (DEFAULT_REPLICATION_TOPIC, DEFAULT_REPLICATION_DELAYED_TOPIC)
+                ),
+                "max_lag": parsed_args.kafka_max_lags,
+                "min_available_space": parsed_args.kafka_min_available_space,
+            },
+            pool_manager=self.app.client_manager.storage.container.pool_manager,
+        )
+        account = self.app.client_manager.storage.bucket.bucket_get_owner(bucket)
+        signal.signal(signal.SIGTERM, partial(self._clean_exit, account, bucket))
+        if pending:
+            operation = "pending"
+        elif only_metadata:
+            operation = "metadata"
+        else:
+            operation = "all"
+        self.marker_file = self._get_marker_file_path(operation, account, bucket)
+        marker = None
+        if parsed_args.use_marker and self.marker_file:
+            if os.path.exists(self.marker_file):
+                with open(self.marker_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    marker = data.get(str((account, bucket)))
+
+        self.scan_bucket(
+            account,
+            bucket,
+            pending,
+            until,
+            only_metadata,
+            parsed_args.marker_update_after,
+            parsed_args.max_messages,
+            dry_run=parsed_args.dry_run,
+            marker=marker,
+            use_marker=parsed_args.use_marker,
+        )
         self._clean_exit(account, bucket)

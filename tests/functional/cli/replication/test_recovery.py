@@ -7,7 +7,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -25,8 +25,8 @@ from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
 
 
-class ReplicationRecoveryTest(CliTestCase):
-    """Functional tests for replication recovery."""
+class ReplicationCatchUpTest(CliTestCase):
+    """Functional tests for replication catch-up."""
 
     @classmethod
     def setUpClass(cls):
@@ -36,7 +36,7 @@ class ReplicationRecoveryTest(CliTestCase):
         )
 
     def setUp(self):
-        super(ReplicationRecoveryTest, self).setUp()
+        super().setUp()
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
 
     def _test_recovery_tool(
@@ -158,12 +158,12 @@ class ReplicationRecoveryTest(CliTestCase):
                 CommandFailed,
                 r"argument .+ not allowed with argument .+",
                 lambda: self.openio(
-                    f"replication recovery {container_src} {option}", ""
+                    f"replication catch-up {container_src} {option}", ""
                 ),
             )
             return
         self.openio(
-            f"replication recovery {container_src} {option}",
+            f"replication catch-up {container_src} {option}",
             coverage="",
         )
 
