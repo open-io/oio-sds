@@ -38,7 +38,7 @@ from oio.common.kafka import (
 )
 from oio.common.kafka_http import KafkaClusterHealth, OioUnhealthyKafkaClusterError
 from oio.common.replication import get_destination_for_object, object_to_event
-from oio.common.utils import depaginate
+from oio.common.utils import depaginate, request_id
 from oio.event.evob import EventTypes
 
 
@@ -59,7 +59,12 @@ class ReplicationCatchUp(Command):
         return replication_conf
 
     def _get_replication_status_on_previous_version(
-        self, account: str, bucket: str, key: str, version: str
+        self,
+        account: str,
+        bucket: str,
+        key: str,
+        version: str,
+        reqid: str,
     ) -> str:
         """
         Get the replication status of the previous version which is not a delete marker.
@@ -68,11 +73,19 @@ class ReplicationCatchUp(Command):
         try:
             older_version = str(int(version) - 1)
             props = self.app.client_manager.storage.object_get_properties(
-                account=account, container=bucket, obj=key, version=older_version
+                account=account,
+                container=bucket,
+                obj=key,
+                version=older_version,
+                reqid=reqid,
             )
             if boolean_value(props.get("deleted", False)):
                 return self._get_replication_status_on_previous_version(
-                    account, bucket, key, version - 1
+                    account,
+                    bucket,
+                    key,
+                    version - 1,
+                    reqid=reqid,
                 )
             else:
                 return props.get("properties", {}).get(REPLICATION_STATUS_KEY)
@@ -100,6 +113,7 @@ class ReplicationCatchUp(Command):
             properties=True,
             versions=True,
             marker=marker,
+            reqid=request_id("catch-up-"),
         )
         for obj in objects_gen:
             key = obj["name"]
@@ -129,13 +143,16 @@ class ReplicationCatchUp(Command):
                     # COMPLETED: replication is already done
                     # REPLICA: it's replicated object (cannot replicate)
                     continue
+            elif only_metadata:
+                # Delete markers have no metadata
+                continue
             else:
                 # For delete markers, only recreate events if the previous valid version
                 # is replicated.
                 # This is to avoid creating events for versions older than the
                 # replication conf if this tool is run on a big old bucket.
                 if not self._get_replication_status_on_previous_version(
-                    account, bucket, key, obj["version"]
+                    account, bucket, key, obj["version"], reqid=request_id("catch-up-")
                 ):
                     continue
 
@@ -397,6 +414,7 @@ class ReplicationCatchUp(Command):
         total_messages = 0
         try:
             for obj, destinations, role, is_delete_marker in objects_to_replicate:
+                reqid = request_id("catch-up-")
                 object_event = object_to_event(
                     obj,
                     destinations,
@@ -406,6 +424,7 @@ class ReplicationCatchUp(Command):
                     bucket,
                     event_type,
                     "s3-replication-recovery",
+                    reqid=reqid,
                 )
                 self.send_event(
                     obj,

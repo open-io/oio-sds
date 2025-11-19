@@ -262,6 +262,7 @@ def object_to_event(
     bucket: str,
     event_type: str,
     origin: str,
+    reqid: str | None = None,
 ) -> Dict[str, Any]:
     """
     Create an event as a dict from an object to replicate it through s3-replicator.
@@ -289,7 +290,7 @@ def object_to_event(
     event["url"]["path"] = obj["name"]
     event["url"]["content"] = obj["content"]
     event["url"]["version"] = obj["version"]
-    event["request_id"] = request_id()
+    event["request_id"] = reqid if reqid else request_id("repli-")
     event["origin"] = origin
     event["part"] = 0
     event["parts"] = 1
