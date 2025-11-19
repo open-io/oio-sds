@@ -13,7 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 import json
+from datetime import datetime
 from io import BytesIO
+from time import sleep
 from unittest.mock import MagicMock as Mock
 from unittest.mock import patch
 
@@ -75,6 +77,12 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
             self.bucket_lister_creator = BucketListerCreator(
                 App(self.app_env), self.filter_conf
             )
+        self.hold_object_last_modified = None
+
+    def _get_hold_last_modified(self):
+        if self.hold_object_last_modified is None:
+            self.hold_object_last_modified = datetime.now()
+        return self.hold_object_last_modified
 
     def _create_objects(self, container, obj_prefix, reqid, nb_obj=10):
         self.clean_later(self.container)
@@ -182,7 +190,8 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
             return_value={
                 "Body": BytesIO(
                     json.dumps(self._generate_on_hold_object_content()).encode("utf-8")
-                )
+                ),
+                "LastModified": self._get_hold_last_modified(),
             }
         )
 
@@ -255,6 +264,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         progression_object_does_exist = False
         for obj in object_list["objects"]:
             if obj["name"] == "in_progress/lister/abc/def":
+                self.assertIn("properties", obj)
                 self.assertEqual(
                     job["job"]["id"], obj["properties"]["xcute-job-id-bucket-lister"]
                 )
@@ -264,6 +274,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
                 obj["name"]
                 == f"listing/{self.account}/{self.container}/{job['job']['id']}/.jsonl"
             ):
+                self.assertIn("properties", obj)
                 self.assertEqual(str(nb_obj), obj["properties"]["nb_objects"])
             elif obj["name"] == "progression/abc/def":
                 progression_object_does_exist = True
@@ -276,6 +287,27 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         reqid = request_id("test_nominal-")
         self._create_objects(self.container, "test_nominal", reqid=reqid, nb_obj=nb_obj)
 
+        self._test_bucket_lister_creator_crawler(nb_obj=nb_obj)
+
+    def test_nominal_time_limit(self):
+        nb_obj = 10
+        reqid = request_id("test_nominal-")
+        self._create_objects(self.container, "test_nominal", reqid=reqid, nb_obj=nb_obj)
+        self.hold_object_last_modified = datetime.now()
+        sleep(1)
+        # Overwrite object 1
+        self._create_objects(self.container, "test_nominal", reqid=reqid, nb_obj=1)
+        nb_obj -= 1
+        self._test_bucket_lister_creator_crawler(nb_obj=nb_obj)
+
+    def test_nominal_no_time_limit(self):
+        nb_obj = 10
+        reqid = request_id("test_nominal-")
+        self._create_objects(self.container, "test_nominal", reqid=reqid, nb_obj=nb_obj)
+        sleep(1)
+        # Overwrite object 1
+        self._create_objects(self.container, "test_nominal", reqid=reqid, nb_obj=1)
+        self.hold_object_last_modified = datetime.now()
         self._test_bucket_lister_creator_crawler(nb_obj=nb_obj)
 
     def test_customer_bucket_not_found(self):

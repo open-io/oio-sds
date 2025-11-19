@@ -118,7 +118,7 @@ class BucketListerCreator(BucketFilter):
         if error_or_skip:
             return error_or_skip(env, cb)
 
-        data, data_raw, error = self._get_object_data(obj_wrapper)
+        data, data_raw, time_limit, error = self._get_object_data(obj_wrapper)
         if error:
             return error(env, cb)
 
@@ -135,6 +135,7 @@ class BucketListerCreator(BucketFilter):
             "technical_bucket": self.internal_bucket,
             "replication_configuration": data["replication_conf"],
             "policy_manifest": self.policy_manifest,
+            "time_limit": time_limit,
         }
         job_id, error = self._create_xcute_job(
             obj_wrapper,

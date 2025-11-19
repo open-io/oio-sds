@@ -17,6 +17,7 @@ import json
 from collections import Counter
 
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.easy_value import int_value
 from oio.common.replication import (
     get_destination_for_object,
     object_to_event,
@@ -43,6 +44,7 @@ class BucketListerTask(XcuteTask):
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         def objects_generator(resp: Counter):
             marker = task_payload["lower"]
+            time_limit = task_payload.get("time_limit", -1)
             while True:
                 listing = self.api.object_list(
                     account=self.customer_account,
@@ -54,6 +56,14 @@ class BucketListerTask(XcuteTask):
                     reqid=reqid,
                 )
                 for obj in listing["objects"]:
+                    if time_limit >= 0 and time_limit < obj["mtime"]:
+                        self.logger.debug(
+                            "object %s skipped: %d < %d",
+                            obj["name"],
+                            time_limit,
+                            obj["mtime"],
+                        )
+                        continue
                     key = obj["name"]
                     prefix = "x-object-sysmeta-"
                     metadata = {}
@@ -101,7 +111,7 @@ class BucketListerTask(XcuteTask):
                 else:
                     break
 
-        resp = Counter()
+        resp = Counter({"nb_objects": 0})
         self.api.object_create_ext(
             self.technical_account,
             self.technical_bucket,
@@ -136,6 +146,7 @@ class BucketListerJob(XcuteJob):
         sanitized_job_params["replication_configuration"] = optimize_replication_conf(
             job_params["replication_configuration"]
         )
+        sanitized_job_params["time_limit"] = int_value(job_params.get("time_limit"), -1)
         sanitized_job_params["policy_manifest"] = job_params["policy_manifest"]
         return sanitized_job_params, f"{job_params['account']}/{job_params['bucket']}"
 
@@ -150,7 +161,14 @@ class BucketListerJob(XcuteJob):
             lower = shard["lower"]
             upper = shard["upper"]
             task_id = upper  # used as a marker in the shard listing
-            yield (task_id, {"lower": lower, "upper": upper})
+            yield (
+                task_id,
+                {
+                    "lower": lower,
+                    "upper": upper,
+                    "time_limit": job_params["time_limit"],
+                },
+            )
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         shards = self.get_shards(job_params=job_params, marker=marker, reqid=reqid)

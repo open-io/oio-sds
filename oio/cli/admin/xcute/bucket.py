@@ -62,6 +62,14 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             help=f"Technical bucket (default: {DEFAULT_TECHNICAL_BUCKET})",
             default=DEFAULT_TECHNICAL_BUCKET,
         )
+        parser.add_argument(
+            "--time-limit",
+            dest="time_limit",
+            help="Set a time limit(Epoch timestamp in seconds) for replication. Only "
+            "objects older than the limit are replicated.(-1 means no limit)",
+            type=int,
+            default=-1,
+        )
         return parser
 
     def get_job_config(self, parsed_args):
@@ -73,6 +81,7 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             "technical_bucket": parsed_args.technical_bucket,
             "replication_configuration": parsed_args.replication_configuration,
             "policy_manifest": parsed_args.policy_manifest,
+            "time_limit": parsed_args.time_limit,
         }
         return {"params": job_params}
 

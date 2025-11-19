@@ -61,7 +61,8 @@ class BucketFilter(Filter):
     def _get_object_data(self, obj_wrapper: ObjectWrapper):
         """
         Download and decode json object.
-        Returns: tuple: data (as dict), data (as raw), error (None if no error)
+        Returns: tuple: data (as dict), data (as raw), lastmodified (as int),
+                        error (None if no error)
         """
         try:
             # Object is downloaded with boto because it could be encrypted
@@ -69,11 +70,12 @@ class BucketFilter(Filter):
                 Bucket=self.internal_bucket, Key=obj_wrapper.name
             )
             data_raw = get_resp["Body"].read()
-            return loads(data_raw), data_raw, None
+            last_modified = int(get_resp["LastModified"].timestamp())
+            return loads(data_raw), data_raw, last_modified, None
         except ClientError as err:
             self.logger.error("Failed to get object %s (err=%s)", obj_wrapper, err)
             self.errors += 1
-            return None, None, BucketCrawlerError(obj_wrapper.env, body=str(err))
+            return None, None, None, BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _create_object(
         self,
