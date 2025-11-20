@@ -39,21 +39,20 @@ class ReplicationCatchUpTest(CliTestCase):
         super().setUp()
         self.wait_for_score(("rawx", "meta2"), score_threshold=1, timeout=5.0)
 
-    def _test_recovery_tool(
+    def _prepare_test(
         self,
         is_deletion=False,
         is_update=False,
-        with_invalid_option=False,
         real_delete_version=False,
     ):
         account = self.account_from_env()
-        obj = "test-repli-recovery" + random_str(6)
-        container_src = "container" + random_str(6) + "-src"
-        container_dst = "container" + random_str(6) + "-dst"
-        self.bucket_client.bucket_create(container_src, account)
-        self.openio(f"container create {container_src} --bucket-name {container_src}")
-        self.openio(f"container set --versioning -1 {container_src}")
-        self.clean_later(container_src, account)
+        obj = "test-repli-catch-up-" + random_str(3)
+        src_container = "container-" + random_str(3)
+        dst_container = src_container + "-dst"
+        self.bucket_client.bucket_create(src_container, account)
+        self.openio(f"container create {src_container} --bucket-name {src_container}")
+        self.openio(f"container set --versioning -1 {src_container}")
+        self.clean_later(src_container, account)
         # Add replication conf to the source
         repli_conf = {
             "role": "arn:aws:iam::repliRecoveryRole:role/repliRecoveryId",
@@ -64,25 +63,25 @@ class ReplicationCatchUpTest(CliTestCase):
                     "Status": "Enabled",
                     "DeleteMarkerReplication": {"Status": "Enabled"},
                     "Filter": {},
-                    "Destination": {"Bucket": f"arn:aws:s3:::{container_dst}"},
+                    "Destination": {"Bucket": f"arn:aws:s3:::{dst_container}"},
                 }
             },
-            "replications": {f"arn:aws:s3:::{container_dst}": ["ReplicationRule-1"]},
-            "deletions": {f"arn:aws:s3:::{container_dst}": ["ReplicationRule-1"]},
+            "replications": {f"arn:aws:s3:::{dst_container}": ["ReplicationRule-1"]},
+            "deletions": {f"arn:aws:s3:::{dst_container}": ["ReplicationRule-1"]},
             "use_tags": False,
         }
         props = {"X-Container-Sysmeta-S3Api-Replication": json.dumps(repli_conf)}
-        self.storage.container_set_properties(account, container_src, properties=props)
-        reqid = request_id()
+        self.storage.container_set_properties(account, src_container, properties=props)
+        reqid = request_id("create-obj-")
         replication_status = "COMPLETED" if is_update else "PENDING"
         # Create an object
         _, _, _, obj_meta = self.storage.object_create_ext(
             account,
-            container_src,
+            src_container,
             obj_name=obj,
             data=b"Something",
             reqid=reqid,
-            replication_destinations=container_dst,
+            replication_destinations=dst_container,
             replication_replicator_id="repliRecoveryId",
             replication_role_project_id="repliRecoveryRole",
             properties={
@@ -97,17 +96,17 @@ class ReplicationCatchUpTest(CliTestCase):
             types=(EventTypes.CONTENT_NEW,),
         )
         self.assertIsNotNone(event)
-        self.assertEqual(container_dst, event.repli["destinations"])
+        self.assertEqual(dst_container, event.repli["destinations"])
         self.assertEqual("repliRecoveryId", event.repli["replicator_id"])
         self.assertEqual("repliRecoveryRole", event.repli["src_project_id"])
         if is_deletion:
-            reqid = request_id()
+            reqid = request_id("create-marker-")
             self.storage.object_delete(
                 account,
-                container_src,
+                src_container,
                 obj=obj,
                 reqid=reqid,
-                replication_destinations=container_dst,
+                replication_destinations=dst_container,
                 replication_replicator_id="repliRecoveryId",
                 replication_role_project_id="repliRecoveryRole",
                 properties={
@@ -130,10 +129,10 @@ class ReplicationCatchUpTest(CliTestCase):
 
             if real_delete_version:
                 # Now that delete marker is created, delete the version
-                reqid = request_id()
+                reqid = request_id("delete-obj-")
                 self.storage.object_delete(
                     account,
-                    container_src,
+                    src_container,
                     obj=obj,
                     reqid=reqid,
                     version=obj_version,
@@ -144,6 +143,41 @@ class ReplicationCatchUpTest(CliTestCase):
                 )
                 self.assertIsNotNone(event)
 
+        return account, src_container, dst_container, obj
+
+    def _check_event(self, event_to_check, dst_container, is_deletion, is_update):
+        # assertStartsWith available in Python 3.14+
+        self.assertTrue(event_to_check.reqid.startswith("catch-up-"))
+        self.assertEqual(dst_container, event_to_check.repli["destinations"])
+        self.assertEqual("repliRecoveryId", event_to_check.repli["replicator_id"])
+        self.assertEqual("repliRecoveryRole", event_to_check.repli["src_project_id"])
+        found = False
+        print(event_to_check.data)
+        for d in event_to_check.data:
+            deleted = d.get("deleted")
+            if deleted is not None:
+                if is_deletion and not is_update:
+                    self.assertTrue(true_value(deleted))
+                    break
+                self.assertFalse(true_value(deleted))
+            key = d.get("key")
+            if key and key == "x-object-sysmeta-s3api-acl":
+                self.assertEqual("myuseracls", d["value"])
+                found = True
+                break
+        if not is_deletion:
+            self.assertTrue(found)
+
+    def _test_recovery_tool(
+        self,
+        is_deletion=False,
+        is_update=False,
+        with_invalid_option=False,
+        real_delete_version=False,
+    ):
+        account, src_container, dst_container, obj = self._prepare_test(
+            is_deletion, is_update, real_delete_version
+        )
         option = "--pending"
         event_types = (EventTypes.CONTENT_NEW,)
         if is_update:
@@ -158,68 +192,54 @@ class ReplicationCatchUpTest(CliTestCase):
                 CommandFailed,
                 r"argument .+ not allowed with argument .+",
                 lambda: self.openio(
-                    f"replication catch-up {container_src} {option}", ""
+                    f"replication catch-up {src_container} {option}", ""
                 ),
             )
             return
         self.openio(
-            f"replication catch-up {container_src} {option}",
+            f"replication catch-up {src_container} {option}",
             coverage="",
         )
-
-        def _check_event(event_to_check, is_deletion):
-            self.assertIsNotNone(event_to_check)
-            self.assertEqual(container_dst, event_to_check.repli["destinations"])
-            self.assertEqual("repliRecoveryId", event_to_check.repli["replicator_id"])
-            self.assertEqual(
-                "repliRecoveryRole", event_to_check.repli["src_project_id"]
-            )
-            found = False
-            for d in event_to_check.data:
-                deleted = d.get("deleted")
-                if deleted is not None:
-                    if is_deletion:
-                        self.assertTrue(true_value(deleted))
-                        break
-                    else:
-                        self.assertFalse(true_value(deleted))
-                key = d.get("key")
-                if key and key == "x-object-sysmeta-s3api-acl":
-                    self.assertEqual("myuseracls", d["value"])
-                    found = True
-                    break
-            if not is_deletion:
-                self.assertTrue(found)
 
         event = self.wait_for_kafka_event(
             types=event_types,
             fields={
                 "account": account,
-                "user": container_src,
+                "user": src_container,
             },
             origin="s3-replication-recovery",
             kafka_consumer=self._cls_replication_consumer,
             timeout=30,
         )
         if not real_delete_version:
-            _check_event(event, is_deletion)
+            self.assertIsNotNone(event)
+            self._check_event(event, dst_container, is_deletion, is_update)
         else:
             # Only delete marker exists, we should not recreate any events
             self.assertIsNone(event)
 
-        # In case of deletion, the "valid" object also needs to be recovered.
+        # In case of deletion, the "valid" object also needs to be replicated.
         if is_deletion and not real_delete_version:
             event = self.wait_for_kafka_event(
                 types=event_types,
                 fields={
                     "account": account,
-                    "user": container_src,
+                    "user": src_container,
                 },
                 origin="s3-replication-recovery",
                 kafka_consumer=self._cls_replication_consumer,
-                timeout=30,
+                timeout=30 if not is_update else 10,
             )
-            _check_event(event, False)
+            if is_update:
+                # If we ask for an update on an object with a delete-marker,
+                # we expect only one event (already checked above)
+                self.assertIsNone(event)
+            else:
+                self.assertIsNotNone(event)
+                self._check_event(event, dst_container, False, is_update)
+
+    def test_replication_catch_up_ignores_markers(self):
+        self._test_recovery_tool(is_deletion=True, is_update=True)
 
     def test_replication_recovery_content_new(self):
         self._test_recovery_tool()
