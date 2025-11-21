@@ -360,6 +360,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 	guint count_success = 0;
 	guint other_master = 0;
 	guint slave_ahead = 0;
+	guint slave_ahead_one = 0;
 	guint slave_behind = 0;
 
 	NAME2CONST(n, ctx->sq3->name);
@@ -396,8 +397,12 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 				case CODE_IS_MASTER:
 					other_master++;
 					break;
-				case CODE_PIPETO:
 				case CODE_CONCURRENT:
+					if (g_strrstr(err->message, "local is 1 version ahead")) {
+						slave_ahead_one++;
+					}
+				// FALLTHROUGH
+				case CODE_PIPETO:
 					slave_ahead++;
 					break;
 				case CODE_PIPEFROM:
@@ -465,9 +470,12 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 		if (!other_master
 				// Quorum OK, need to fix a minority of slaves
 				&& ((!err && (slave_ahead || slave_behind))
-				// No quorum, but all agree about the master. Happens with slow DB_VACUUM.
-					|| (err && slave_behind && (slave_behind + count_success) == groupsize)))
-		{
+				// No quorum, but all agree about the master
+					// Happens with slow DB_VACUUM
+					|| (err && (slave_behind + count_success) == groupsize)
+					// All slaves timed out but applied change in the background
+					|| (err && (slave_ahead_one + count_success) == groupsize)
+		)) {
 			for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
 				GError *e = gridd_client_error(*pc);
 				if (!e) {
