@@ -32,6 +32,7 @@ License along with this library.
 #include <events/beanstalkd.h>
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
+#include <sqliterepo/sqliterepo_remote_variables.h>
 
 #include "sqliterepo.h"
 #include "hash.h"
@@ -2118,6 +2119,13 @@ sqlx_repository_vacuum(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 
 	sqlx_exec(sq3->db, "VACUUM");
 
+	/* Pages collected by VACUUM may be in the WAL (if enabled). */
+	err = sqlx_repository_flush_wal(sq3);
+	if (err) {
+		GRID_WARN("During vacuum: %s (reqid=%s)", err->message, oio_ext_get_reqid());
+		g_clear_error(&err);
+	}
+
 	fd = open(sq3->path_inline, O_RDONLY);
 	if (fd < 0) {
 		/* This is to prevent concurrent changes. */
@@ -2157,9 +2165,12 @@ asynchronous:
 			/* Trigger the resync before unlocking the database, to increase
 			* the chance that the first request handled by the service after
 			* the current one is the DB_DUMP triggered by the resync.
-			* No-op if replication is not enabled. */
+			* No-op if replication is not enabled.
+			* Notice we set a long timeout on purpose: the resync handler should
+			* respond quickly, but pass the timeout to the actual data transfer
+			* operation (which will take time). */
 			err = sqlx_remote_execute_RESYNC_many(peers, NULL, n,
-					oio_ext_get_deadline());
+					oio_ext_monotonic_time() + oio_election_resync_timeout_req);
 			g_strfreev(peers);
 			if (err) {
 				goto close;
