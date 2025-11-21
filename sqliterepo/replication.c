@@ -462,7 +462,12 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 				failure or service down). Send a full copy so the slave gets
 				the missed changes (including the current change).
 		*/
-		if (!err && !other_master && (slave_ahead || slave_behind)) {
+		if (!other_master
+				// Quorum OK, need to fix a minority of slaves
+				&& ((!err && (slave_ahead || slave_behind))
+				// No quorum, but all agree about the master. Happens with slow DB_VACUUM.
+					|| (err && slave_behind && (slave_behind + count_success) == groupsize)))
+		{
 			for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
 				GError *e = gridd_client_error(*pc);
 				if (!e) {
