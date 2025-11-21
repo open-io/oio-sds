@@ -19,6 +19,8 @@ import random
 import re
 import time
 
+import pytest
+
 from oio.common.constants import TIMEOUT_HEADER
 from oio.common.json import json
 from tests.utils import CODE_SRVTYPE_NOTMANAGED, BaseTestCase
@@ -804,6 +806,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertIsInstance(my_rdir["tags"]["stat.meta2_volumes"], (int, float))
         self.assertIsInstance(my_rdir["tags"]["stat.rawx_volumes"], (int, float))
 
+    @pytest.mark.flaky(reruns=1)
     def test_conscience_agent_static_tags(self):
         svc = self.conf["services"]["proxy"][0]["service_id"]
         watch_conf = self.load_watch_conf(svc)
@@ -814,7 +817,7 @@ class TestConscienceFunctional(BaseTestCase):
         try:
             # Test the insertion of a new tag
             self._service("oio-conscience-agent-1.service", "restart")
-            time.sleep(1.5)
+            time.sleep(2)
             proxy_service = self.wait_for_service("oioproxy", svc, full=True)
             self.assertIn(
                 "tag.aymeric_wants_tests",

@@ -366,7 +366,7 @@ class TestMeta2Database(BaseTestCase):
         self.clean_later(self.reference)
 
         # Disable container operations
-        disabled_until = time.time() + 1.0
+        disabled_until = time.time() + 2.0
         self.api.container_set_properties(
             self.account,
             self.reference,
@@ -444,7 +444,7 @@ class TestMeta2Database(BaseTestCase):
             # Restart the service even if the test above has failed
             self._service(sd_key, "start", wait=2.0)
 
-        self.wait_for_service("meta2", down_m2, timeout=10.0)
+        self.assertIsNotNone(self.wait_for_service("meta2", down_m2, timeout=10.0))
 
         # Contact directly the service which did not see the deletion,
         # and try to set a property in the database, but expect a failure.
