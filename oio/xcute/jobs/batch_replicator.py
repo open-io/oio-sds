@@ -14,6 +14,7 @@
 # License along with this library.
 
 import json
+import random
 from collections import Counter
 from time import sleep
 
@@ -159,7 +160,7 @@ class BatchReplicatorTask(XcuteTask):
         Wait for the object to be in "COMPLETED" / "FAILED" status
         """
         min_wait = 10  # Minimum value of the exponential backoff
-        max_wait = 600  # Maximal value of the exponential backoff
+        max_wait = 60  # Maximal value of the exponential backoff
 
         start_time = monotonic_time()
         wait_time = min_wait
@@ -192,8 +193,10 @@ class BatchReplicatorTask(XcuteTask):
             )
             sleep(wait_time)
 
-            # Exponential backoff with max
+            # Exponential backoff with max (with a randomization to prevent all first
+            # events to be restarted simultaneously).
             wait_time = min(wait_time * 2, max_wait)
+            wait_time = int(wait_time * random.uniform(0.5, 1.5))
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         resp = Counter()
