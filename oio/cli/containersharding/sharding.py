@@ -357,7 +357,7 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
                 timeout=self.app.options.timeout,
                 reqid=reqid,
             )
-        else:
+        elif next_step_msg:
             logger.warning(next_step_msg, cid)
         return ("Status",), [("Ok",)]
 
