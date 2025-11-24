@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,8 +24,9 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqlx_remote.h>
 
-/* Ask followers to download the whole database from the leader. */
-GError* sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
-		const struct sqlx_name_s *name, gint64 deadline);
+/* Ask followers to download the whole database from the leader.
+ * check_type decides which type of check to do before sending the database. */
+GError* sqlx_remote_execute_RESYNC_many(gchar **targets,
+		const struct sqlx_name_s *name, const gint check_type, gint64 deadline);
 
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_ex_h*/

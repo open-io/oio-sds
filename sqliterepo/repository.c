@@ -34,6 +34,7 @@ License along with this library.
 #include <sqliterepo/sqliterepo_variables.h>
 #include <sqliterepo/sqliterepo_remote_variables.h>
 
+#include "glib.h"
 #include "sqliterepo.h"
 #include "hash.h"
 #include "cache.h"
@@ -2168,9 +2169,10 @@ asynchronous:
 			* No-op if replication is not enabled.
 			* Notice we set a long timeout on purpose: the resync handler should
 			* respond quickly, but pass the timeout to the actual data transfer
-			* operation (which will take time). */
-			err = sqlx_remote_execute_RESYNC_many(peers, NULL, n,
-					oio_ext_monotonic_time() + oio_election_resync_timeout_req);
+			* operation (which will take time).
+			* We also set check_type=0 because we just rewrote the whole database. */
+			err = sqlx_remote_execute_RESYNC_many(peers, n, 0,
+					oio_ext_monotonic_time() + oio_election_resync_timeout_req * G_TIME_SPAN_SECOND);
 			g_strfreev(peers);
 			if (err) {
 				goto close;

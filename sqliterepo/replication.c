@@ -25,6 +25,7 @@ License along with this library.
 #include <metautils/lib/codec.h>
 #include <sqliterepo/sqliterepo_remote_variables.h>
 #include <sqliterepo/sqliterepo_variables.h>
+#include <sqliterepo/sqlx_remote_ex.h>
 
 #include "sqliterepo.h"
 #include "election.h"
@@ -650,10 +651,11 @@ hook_update(struct sqlx_repctx_s *ctx, int op, char const *bn, char const *tn,
 }
 
 static GError *
-sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
+sqlx_restore_peers(struct sqlx_repctx_s *ctx, gchar **peers)
 {
 	GByteArray *dump;
 	GError *err;
+	NAME2CONST(n, ctx->sq3->name);
 
 	// Generate the DUMP
 	err = sqlx_repository_dump_base_gba(ctx->sq3, sqliterepo_dump_check_type,
@@ -663,12 +665,16 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 				ctx->sq3->name.base, ctx->sq3->name.type,
 				err->code, err->message, oio_ext_get_reqid());
 		// We did not do the operation, but we still have the quorum.
-		g_clear_error(&err);
-		return NULL;
+		if (sqliterepo_auto_resync && err->code == CODE_EXCESSIVE_LOAD) {
+			g_clear_error(&err);
+			err = sqlx_remote_execute_RESYNC_many(peers, &n, -1, oio_ext_get_deadline());
+		} else {
+			g_clear_error(&err);
+		}
+		return err;
 	}
 
 	// Now send it to the SLAVES
-	NAME2CONST(n, ctx->sq3->name);
 	const gchar *local_addr = election_manager_get_local(ctx->sq3->manager);
 	err = peers_restore(peers, &n, dump, local_addr, oio_ext_get_deadline());
 	if (err) {
@@ -798,10 +804,10 @@ _sqlx_transaction_validate(struct sqlx_repctx_s *ctx)
 	if (ctx->resync_todo && ctx->resync_todo->len) {
 		// Detected the need of an explicit RESYNC on some SLAVES.
 		g_ptr_array_add(ctx->resync_todo, NULL);
-		GError *err2 = sqlx_synchronous_resync(
+		GError *err2 = sqlx_restore_peers(
 				ctx, (gchar**)ctx->resync_todo->pdata);
 		if (err2) {
-			GRID_WARN("Failed to synchronously resync peers: %s (reqid=%s)",
+			GRID_WARN("Failed to restore peers: %s (reqid=%s)",
 					err2->message, oio_ext_get_reqid());
 			if (!err) {
 				err = err2;

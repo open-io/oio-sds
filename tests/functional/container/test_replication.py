@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2025 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,7 @@ import time
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions
+from oio.common.utils import request_id
 from tests.utils import BaseTestCase, random_str
 
 
@@ -65,6 +66,14 @@ class TestContainerReplication(BaseTestCase):
         all_svc = [x["addr"] for x in self.conf["services"][type_]]
         for svc in all_svc:
             self.admin.service_set_live_config(svc, conf, request_attempts=4)
+
+    def _disable_synchronous_restore(self):
+        """Disable synchronous restore, restart all meta2 services"""
+        opts = {"sqliterepo.dump.max_size": 0}
+        opts.update(self.__class__.down_cache_opts)
+        self.set_ns_opts(opts)
+        self._apply_conf_on_all("meta2", opts)
+        self.must_restart_meta2 = True
 
     def _synchronous_restore_allowed(self):
         dump_max_size = int(self.ns_conf.get("sqliterepo.dump.max_size", 1073741824))
@@ -139,22 +148,16 @@ class TestContainerReplication(BaseTestCase):
             self.account, cname, params={"service_id": master}
         )
 
-    def test_disabled_synchronous_restore(self):
+    def test_asynchronous_restore_missed_diff(self):
         """
         Test what happens when the synchronous DB_RESTORE mechanism has been
         disabled, and some operations have been missed by a slave.
         """
-        allowed = self._synchronous_restore_allowed()
-        if allowed:
-            # Disable synchronous restore, restart all meta2 services
-            opts = {"sqliterepo.dump.max_size": 0}
-            opts.update(self.__class__.down_cache_opts)
-            self.set_ns_opts(opts)
-            self._apply_conf_on_all("meta2", opts)
-            self.must_restart_meta2 = True
+        if self._synchronous_restore_allowed():
+            self._disable_synchronous_restore()
         self._test_restore_after_missed_diff()
 
-    def test_synchronous_restore(self):
+    def test_synchronous_restore_missed_diff(self):
         """
         Test DB_RESTORE mechanism (the master send a dump of the whole
         database to one of the peers).
@@ -165,7 +168,7 @@ class TestContainerReplication(BaseTestCase):
             self.skipTest("Too buggy to run on public CI")
         self._test_restore_after_missed_diff()
 
-    def test_asynchronous_restore(self):
+    def test_synchronous_restore_missing_db(self):
         """
         Test DB_DUMP/DB_PIPEFROM mechanism (a slave peer knows it needs
         a fresh copy of the database and asks the master).
@@ -203,3 +206,60 @@ class TestContainerReplication(BaseTestCase):
             self.account, cname, params={"service_id": stopped}
         )
         self.assertEqual(ref_props["system"], copy_props["system"])
+
+    def _test_restore_failed_vacuum(self):
+        cname = "test_restore_after_vacuum" + random_str(3)
+        # Create a container
+        self.api.container_create(self.account, cname)
+        self.clean_later(cname)
+        # Locate the peers
+        db_status = self.admin.election_status("meta2", self.account, cname)
+        # Vacuum the database on the master only
+        reqid = request_id("vacuum-")
+        self.admin.vacuum_base(
+            "meta2",
+            self.account,
+            cname,
+            params={"local": True},
+            service_id=db_status["master"],
+            reqid=reqid,
+        )
+        # Ensure slave copies are outdated
+        master_vers = self.api.container_get_properties(
+            self.account, cname, params={"service_id": db_status["master"]}
+        )["system"]["version:main.admin"].split(":", 1)[0]
+        slave_vers = self.api.container_get_properties(
+            self.account, cname, params={"service_id": db_status["slaves"][0]}
+        )["system"]["version:main.admin"].split(":", 1)[0]
+        self.assertEqual(int(master_vers), int(slave_vers) + 2)
+
+        # Write something to the admin table
+        # FIXME(FVE): someday this may succeed if we are able to restore both
+        # slave copies before validating the transaction.
+        self.assertRaisesRegex(
+            exceptions.ServiceBusy,
+            ".*COMMIT failed:.*",
+            self.storage.container_set_properties,
+            self.account,
+            cname,
+            properties={"test": "tested"},
+        )
+
+        # Ensure slave copies are now in sync
+        master_vers = self.api.container_get_properties(
+            self.account, cname, params={"service_id": db_status["master"]}
+        )["system"]["version:main.admin"].split(":", 1)[0]
+        slave_vers = self.api.container_get_properties(
+            self.account, cname, params={"service_id": db_status["slaves"][0]}
+        )["system"]["version:main.admin"].split(":", 1)[0]
+        self.assertEqual(int(master_vers), int(slave_vers))
+
+    def test_asynchronous_restore_failed_vacuum(self):
+        if self._synchronous_restore_allowed():
+            self._disable_synchronous_restore()
+        self._test_restore_failed_vacuum()
+
+    def test_synchronous_restore_failed_vacuum(self):
+        if not self._synchronous_restore_allowed():
+            self.skipTest("Synchronous replication is disabled")
+        self._test_restore_failed_vacuum()

@@ -1816,7 +1816,7 @@ Used by `gcc`
 
 ### sqliterepo.election.lazy_recover
 
-> Should the election mecanism try to recreate missing DB?
+> Should the election mechanism try to recreate missing DB?
 
  * default: **FALSE**
  * type: gboolean
@@ -1964,6 +1964,14 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_RELEASE_SIZE*
  * range: 1 -> 2147483648
+
+### sqliterepo.replication.auto_resync
+
+> When synchronous restore is not possible (because the database is too big), allow to automatically call for an asynchronous resync.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_REPLICATION_AUTO_RESYNC*
 
 ### sqliterepo.repo.active_queue_ttl
 

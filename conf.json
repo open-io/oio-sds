@@ -629,7 +629,7 @@
 
 			{ "type": "bool", "name": "sqliterepo_election_lazy_recover",
 				"key": "sqliterepo.election.lazy_recover",
-				"descr": "Should the election mecanism try to recreate missing DB?",
+				"descr": "Should the election mechanism try to recreate missing DB?",
 				"def": false },
 
 			{ "type": "monotonic", "name": "oio_election_lock_alert_delay",
@@ -781,6 +781,11 @@
 				"key": "sqliterepo.zk.timeout",
 				"descr": "Sets the timeout of the zookeeper handle (in the meaning of the zookeeper client library)",
 				"def": "10s", "min": "1ms", "max": "1h" },
+
+			{ "type": "bool", "name": "sqliterepo_auto_resync",
+				"key": "sqliterepo.replication.auto_resync",
+				"descr": "When synchronous restore is not possible (because the database is too big), allow to automatically call for an asynchronous resync.",
+				"def": true },
 
 			{ "type": "uint", "name": "sqliterepo_repo_max_bases_hard",
 				"key": "sqliterepo.repo.hard_max",
