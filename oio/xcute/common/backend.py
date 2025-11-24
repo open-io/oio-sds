@@ -15,6 +15,7 @@
 # License along with this library.
 
 import random
+from collections import Counter
 from datetime import datetime
 from fnmatch import fnmatchcase
 from functools import wraps
@@ -27,6 +28,7 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
+from oio.common.utils import depaginate
 
 END_MARKER = "\U0010fffd"
 
@@ -592,11 +594,40 @@ class XcuteBackend(RedisConnection):
         status = {"job_count": job_count}
         return status
 
+    def metrics(
+        self,
+        prefix=None,
+        marker=None,
+        limit=None,
+        job_status=None,
+        job_type=None,
+        job_lock=None,
+    ):
+        jobs = depaginate(
+            self.list_jobs,
+            prefix=prefix,
+            marker=marker,
+            limit=limit,
+            job_status=job_status,
+            job_type=job_type,
+            job_lock=job_lock,
+            listing_key=lambda x: x["jobs"],
+            marker_key=lambda x: x["next_marker"],
+            truncated_key=lambda x: x["truncated"],
+        )
+        metrics = {}
+        for job in jobs:
+            type_ = job["job"]["type"]
+            status = job["job"]["status"]
+            metrics.setdefault(type_, Counter())
+            metrics[type_][status] += 1
+        return metrics
+
     def list_jobs(
         self,
         prefix=None,
         marker=None,
-        limit=1000,
+        limit=None,
         job_status=None,
         job_type=None,
         job_lock=None,
@@ -610,11 +641,11 @@ class XcuteBackend(RedisConnection):
         if job_lock:
             job_lock = job_lock.lower().strip().encode("utf-8")
 
-        jobs = []
+        jobs = {"jobs": []}
         next_marker = None
         job_id = None
         while True:
-            limit_ = limit - len(jobs)
+            limit_ = limit - len(jobs["jobs"])
             if limit_ <= 0:
                 break
 
@@ -654,7 +685,7 @@ class XcuteBackend(RedisConnection):
                         "Missing key %s in job %r", err, job_info.get(b"job.id")
                     )
 
-                jobs.append(self._unmarshal_job_info(job_info))
+                jobs["jobs"].append(self._unmarshal_job_info(job_info))
             if job_id:
                 marker = debinarize(job_id)
                 next_marker = marker
@@ -664,7 +695,12 @@ class XcuteBackend(RedisConnection):
             if len(job_ids) < limit_:
                 next_marker = None
                 break
-        return jobs, next_marker
+        if next_marker is not None:
+            jobs["next_marker"] = next_marker
+            jobs["truncated"] = True
+        else:
+            jobs["truncated"] = False
+        return jobs
 
     def _get_timestamp(self):
         return Timestamp().normal

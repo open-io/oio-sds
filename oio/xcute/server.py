@@ -34,6 +34,7 @@ from werkzeug.exceptions import (
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
+from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
 from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.json import json
@@ -74,6 +75,7 @@ class XcuteServer(WerkzeugApp):
         url_map = Map(
             [
                 Rule("/status", endpoint="status"),
+                Rule("/metrics", endpoint="metrics"),
                 Submount(
                     "/v1.0/xcute",
                     [
@@ -97,7 +99,38 @@ class XcuteServer(WerkzeugApp):
     @handle_exceptions
     def on_status(self, req, **kwargs):
         status = self.backend.status()
-        return Response(json.dumps(status), mimetype="application/json")
+        return Response(json.dumps(status), mimetype=HTTP_CONTENT_TYPE_JSON)
+
+    def _metrics_to_prometheus_format(self, metrics):
+        prom_output = []
+        for job_type, job_metrics in metrics.items():
+            for status, counter in job_metrics.items():
+                metric = f'obsto_xcute{{job="{job_type}",status="{status}"}} {counter}'
+                # Prometheus does not like hyphens
+                prom_output.append(metric.replace("-", "_"))
+        return "\n".join(prom_output)
+
+    @handle_exceptions
+    def on_metrics(self, req, **kwargs):
+        limit = int_value(req.args.get("limit"), None)
+        prefix = req.args.get("prefix")
+        marker = req.args.get("marker")
+        job_status = req.args.get("status")
+        job_type = req.args.get("type")
+        job_lock = req.args.get("lock")
+        metrics = self.backend.metrics(
+            limit=limit,
+            prefix=prefix,
+            marker=marker,
+            job_status=job_status,
+            job_type=job_type,
+            job_lock=job_lock,
+        )
+        if req.args.get("format") != "prometheus":
+            return Response(json.dumps(metrics), mimetype=HTTP_CONTENT_TYPE_JSON)
+
+        prom_metrics = self._metrics_to_prometheus_format(metrics)
+        return Response(prom_metrics, mimetype=HTTP_CONTENT_TYPE_TEXT)
 
     @handle_exceptions
     def on_job_list(self, req, **kwargs):
@@ -108,7 +141,7 @@ class XcuteServer(WerkzeugApp):
         job_type = req.args.get("type")
         job_lock = req.args.get("lock")
 
-        job_infos, next_marker = self.backend.list_jobs(
+        jobs = self.backend.list_jobs(
             limit=limit,
             prefix=prefix,
             marker=marker,
@@ -116,14 +149,7 @@ class XcuteServer(WerkzeugApp):
             job_type=job_type,
             job_lock=job_lock,
         )
-        jobs = {}
-        jobs["jobs"] = job_infos
-        if next_marker is not None:
-            jobs["next_marker"] = next_marker
-            jobs["truncated"] = True
-        else:
-            jobs["truncated"] = False
-        return Response(json.dumps(jobs), mimetype="application/json")
+        return Response(json.dumps(jobs), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     @handle_exceptions
     def on_job_create(self, req, **kwargs):
@@ -141,7 +167,9 @@ class XcuteServer(WerkzeugApp):
             job_type, job_config, lock, put_on_hold_if_locked=put_on_hold_if_locked
         )
         job_info = self.backend.get_job_info(job_id)
-        return Response(json.dumps(job_info), mimetype="application/json", status=202)
+        return Response(
+            json.dumps(job_info), mimetype=HTTP_CONTENT_TYPE_JSON, status=202
+        )
 
     def _get_job_id(self, req):
         """Fetch job ID from request query string."""
@@ -154,21 +182,25 @@ class XcuteServer(WerkzeugApp):
     def on_job_show(self, req, **kwargs):
         job_id = self._get_job_id(req)
         job_info = self.backend.get_job_info(job_id)
-        return Response(json.dumps(job_info), mimetype="application/json")
+        return Response(json.dumps(job_info), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     @handle_exceptions
     def on_job_pause(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.request_pause(job_id)
         job_info = self.backend.get_job_info(job_id)
-        return Response(json.dumps(job_info), mimetype="application/json", status=202)
+        return Response(
+            json.dumps(job_info), mimetype=HTTP_CONTENT_TYPE_JSON, status=202
+        )
 
     @handle_exceptions
     def on_job_resume(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.resume(job_id)
         job_info = self.backend.get_job_info(job_id)
-        return Response(json.dumps(job_info), mimetype="application/json", status=202)
+        return Response(
+            json.dumps(job_info), mimetype=HTTP_CONTENT_TYPE_JSON, status=202
+        )
 
     @handle_exceptions
     def on_job_update(self, req, **kwargs):
@@ -187,14 +219,18 @@ class XcuteServer(WerkzeugApp):
             raise ValueError("New configuration can not change the lock")
 
         self.backend.update_config(job_id, job_config)
-        return Response(json.dumps(job_config), mimetype="application/json", status=202)
+        return Response(
+            json.dumps(job_config), mimetype=HTTP_CONTENT_TYPE_JSON, status=202
+        )
 
     @handle_exceptions
     def on_job_abort(self, req, **kwargs):
         job_id = self._get_job_id(req)
         self.backend.fail(job_id)
         job_info = self.backend.get_job_info(job_id)
-        return Response(json.dumps(job_info), mimetype="application/json", status=202)
+        return Response(
+            json.dumps(job_info), mimetype=HTTP_CONTENT_TYPE_JSON, status=202
+        )
 
     @handle_exceptions
     def on_job_delete(self, req, **kwargs):
@@ -205,7 +241,7 @@ class XcuteServer(WerkzeugApp):
     @handle_exceptions
     def on_lock_list(self, req, **kwargs):
         locks = self.backend.list_locks()
-        return Response(json.dumps(locks), mimetype="application/json")
+        return Response(json.dumps(locks), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     @handle_exceptions
     def on_lock_show(self, req, **kwargs):
@@ -213,7 +249,7 @@ class XcuteServer(WerkzeugApp):
         if not lock:
             raise HTTPBadRequest("Missing lock")
         lock_info = self.backend.get_lock_info(lock)
-        return Response(json.dumps(lock_info), mimetype="application/json")
+        return Response(json.dumps(lock_info), mimetype=HTTP_CONTENT_TYPE_JSON)
 
 
 def create_app(conf):
