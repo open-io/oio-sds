@@ -2243,6 +2243,8 @@ bind_addr = ${IP}
 bind_port = ${PORT}
 graceful_timeout = 2
 workers = 2
+stuck_delay_job_batch-replicator = 300
+stuck_delay_job_bucket-lister = 60
 
 [xcute-orchestrator]
 orchestrator_id = orchestrator-customer-${SRVNUM}

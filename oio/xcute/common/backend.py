@@ -16,7 +16,7 @@
 
 import random
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from fnmatch import fnmatchcase
 from functools import wraps
 
@@ -29,6 +29,7 @@ from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate
+from oio.xcute.common.job import XcuteJobStatus
 
 END_MARKER = "\U0010fffd"
 
@@ -57,6 +58,7 @@ def handle_redis_exceptions(func):
 
 class XcuteBackend(RedisConnection):
     DEFAULT_LIMIT = 1000
+    DEFAULT_STUCK_DELAY = 172800  # 48 hours in seconds
 
     def generate_lua_scripts(self):
         self.lua_errors = {
@@ -589,6 +591,12 @@ class XcuteBackend(RedisConnection):
         self.script_total_tasks_done = self.register_script(self.lua_total_tasks_done)
         self.script_delete = self.register_script(self.lua_delete)
 
+        self.stuck_delays = {
+            k[16:]: float(v)
+            for k, v in self.conf.items()
+            if k.startswith("stuck_delay_job_")
+        }
+
     def status(self):
         job_count = self.conn.zcard(self.key_job_ids)
         status = {"job_count": job_count}
@@ -619,6 +627,20 @@ class XcuteBackend(RedisConnection):
         for job in jobs:
             type_ = job["job"]["type"]
             status = job["job"]["status"]
+
+            stuck_delay = self.stuck_delays.get(type_, self.DEFAULT_STUCK_DELAY)
+            if stuck_delay and status not in (
+                XcuteJobStatus.FINISHED,
+                XcuteJobStatus.FAILED,
+            ):
+                mtime = datetime.fromtimestamp(
+                    job.get("job", {}).get("mtime"), tz=timezone.utc
+                )
+                if mtime and datetime.now(timezone.utc) - mtime > timedelta(
+                    seconds=stuck_delay
+                ):
+                    status = "STUCK"
+
             metrics.setdefault(type_, Counter())
             metrics[type_][status] += 1
         return metrics
