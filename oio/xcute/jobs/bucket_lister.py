@@ -85,7 +85,7 @@ class BucketListerTask(XcuteTask):
                     )
                     event = json.dumps(event, separators=(",", ":")) + "\n"
 
-                    self.logger.info(
+                    self.logger.debug(
                         "Obj to replicate %s/%s/%s (%s) on destinations %s",
                         self.customer_account,
                         self.customer_bucket,

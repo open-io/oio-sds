@@ -164,6 +164,23 @@ class BatchReplicatorTracker(BucketFilter):
         if error:
             return error(obj_wrapper, cb)
 
+        account = None
+        bucket = None
+        lock = job.get("job", {}).get("lock")
+        if lock:
+            lock_values = lock.split("/")
+            account = lock_values[1]
+            bucket = lock_values[2]
+        self.logger.info(
+            "Job id %s completed for account=%s bucket=%s with status=%s "
+            "(nb_errors=%s nb_replicated=%s)",
+            repli_job_id,
+            account,
+            bucket,
+            progression["status"],
+            progression["nb_errors"],
+            progression["nb_replicated"],
+        )
         self.successes += 1
         return self.app(env, cb)
 

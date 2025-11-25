@@ -222,7 +222,7 @@ class BatchReplicatorTask(XcuteTask):
             # Something went wrong, retry later
             raise RetryLater(delay=self.delay_retry_later)
 
-        self.logger.info("Replication of obj=%s finished", event.url.get("path"))
+        self.logger.debug("Replication of obj=%s finished", event.url.get("path"))
         resp["object_replicated"] += 1
         return resp
 
