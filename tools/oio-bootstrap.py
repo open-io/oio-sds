@@ -535,6 +535,8 @@ boto_profile = keystone
 # boto_secret_key = DEMO_PASS
 # boto_region = ${REGION}
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+# Delay before considering a replication job is stucked (in seconds)
+delay_job_stuck = 300
 """
 
 template_placement_improver_crawler_service = """

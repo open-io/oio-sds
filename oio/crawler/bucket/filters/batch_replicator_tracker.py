@@ -14,13 +14,17 @@
 # License along with this library.
 
 import json
+from datetime import datetime, timedelta, timezone
 
+from oio.common.easy_value import int_value
 from oio.common.exceptions import NoSuchObject
 from oio.common.utils import request_id
 from oio.crawler.bucket.filters.common import BucketFilter
 from oio.crawler.bucket.object_wrapper import ObjectWrapper
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs.batch_replicator import BatchReplicatorJob
+
+DEFAULT_DELAY_JOB_STUCK = 172800  # 48 hours
 
 
 class BatchReplicatorTracker(BucketFilter):
@@ -30,6 +34,9 @@ class BatchReplicatorTracker(BucketFilter):
         super().init()
         self.skipped_replicator_not_finished = 0
         self.CURRENT_PREFIX = self.IN_PROGRESS_REPLICATOR_PREFIX
+        self.delay_job_stuck = int_value(
+            self.conf.get("delay_job_stuck"), DEFAULT_DELAY_JOB_STUCK
+        )
 
     def _check_if_object_should_be_process(
         self, obj_wrapper: ObjectWrapper, reqid: str
@@ -133,6 +140,13 @@ class BatchReplicatorTracker(BucketFilter):
             return error(obj_wrapper, cb)
 
         if progression["status"] == "Active":
+            mtime = datetime.fromtimestamp(
+                job.get("job", {}).get("mtime"), tz=timezone.utc
+            )
+            if mtime and datetime.now(timezone.utc) - mtime > timedelta(
+                seconds=self.delay_job_stuck
+            ):
+                self.logger.error("Job %s not updated for too long", repli_job_id)
             # Job is not finished, stop here
             self.skipped_replicator_not_finished += 1
             return self.app(env, cb)

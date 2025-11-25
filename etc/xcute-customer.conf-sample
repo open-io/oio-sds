@@ -44,5 +44,5 @@ broker_endpoint = kafka://localhost:19092
 jobs_topic = oio-xcute-customer-job
 reply_topic = oio-xcute-customer-job-reply
 group_id = xcute-customer-orchestrator
-# List of delays before considering a job is stucked (in seconds)
+# List of delays before considering a job is stuck (in seconds)
 stuck_delay_job_batch-replicator = 172800
