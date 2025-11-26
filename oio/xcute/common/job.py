@@ -163,3 +163,12 @@ class XcuteJob(object):
         :rtype: str
         """
         pass
+
+    def can_process_tasks(self, _job_params):
+        """
+        Check if tasks should be processed.
+        This method could be used to check cluster health.
+        :return True if the job can be processed, false if it should retry later
+        :rtype: bool
+        """
+        return True

@@ -284,7 +284,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
         self.logger.debug("[job_id=%s] Exited thread to dispatch tasks", job_id)
 
-    def adapt_speed(self, job_id, job_config, last_check, period=300):
+    def adapt_speed(self, job_id, job, job_config, last_check, period=300):
         """
         Pause and/or reduce the rate of creation of new tasks in case
         the number of pending tasks is too high.
@@ -292,6 +292,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         if last_check is not None and time.time() < last_check["last"] + period:
             return last_check
 
+        job_params = job_config["params"]
         waiting_time = 0
         while True:
             for _ in range(waiting_time):
@@ -350,6 +351,20 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     )
                     continue
                 return last_check
+
+            if not job.can_process_tasks(job_params):
+                last_check["last"] = now
+                last_check["mtime"] = job_mtime
+                last_check["processed"] = tasks_processed
+                waiting_time = period
+                self.logger.error(
+                    "[job_id=%s] Unable to accept tasks for the last %d seconds; "
+                    "wait %d seconds and check again",
+                    job_id,
+                    period,
+                    waiting_time,
+                )
+                continue
 
             tasks_processed_in_period = tasks_processed - last_check["processed"]
             if tasks_processed_in_period == 0:
@@ -467,7 +482,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
         job_tasks = job.get_tasks(job_params, marker=last_task_id, reqid=reqid)
 
-        last_check = self.adapt_speed(job_id, job_config, None)
+        last_check = self.adapt_speed(job_id, job, job_config, None)
         tasks_per_second = job_config["tasks_per_second"]
         tasks_batch_size = job_config["tasks_batch_size"]
         batch_per_second = tasks_per_second / float(tasks_batch_size)
@@ -543,7 +558,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
             # After each tasks batch sent, adapt the sending speed
             # according to the processing speed.
-            last_check = self.adapt_speed(job_id, job_config, last_check)
+            last_check = self.adapt_speed(job_id, job, job_config, last_check)
             tasks_per_second = job_config["tasks_per_second"]
             tasks_batch_size = job_config["tasks_batch_size"]
             batch_per_second = tasks_per_second / float(tasks_batch_size)

@@ -25,6 +25,7 @@ from oio.common.constants import (
     OBJECT_REPLICATION_PENDING,
     REPLICATION_STATUS_KEY,
 )
+from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import (
     NoSuchContainer,
     NoSuchObject,
@@ -66,25 +67,6 @@ class BatchReplicatorTask(XcuteTask):
             "check_replication_status_timeout"
         ]
         self.delay_retry_later = job_params["delay_retry_later"]
-
-        self.kafka_cluster_health = KafkaClusterHealth(
-            {
-                "namespace": self.namespace,
-                "topics": ",".join(
-                    (
-                        self.replication_topic,
-                        job_params["replication_delayed_topic"],
-                    )
-                ),
-                "max_lag": job_params["kafka_max_lags"],
-                "min_available_space": job_params["kafka_min_available_space"],
-            },
-            pool_manager=self.api.container.pool_manager,
-        )
-        self.kafka_sleep_between_health_check = job_params[
-            "kafka_sleep_between_health_check"
-        ]
-
         self.kafka_conf = {
             **self.conf,
             "delayed_topic": job_params["replication_delayed_topic"],
@@ -135,19 +117,7 @@ class BatchReplicatorTask(XcuteTask):
 
         return event
 
-    def _wait_for_healthy_kafka_cluster(self):
-        while True:
-            try:
-                self.kafka_cluster_health.check()
-                break
-            except OioUnhealthyKafkaClusterError:
-                self.logger.debug("Unhealthy kafka cluster, waiting..")
-                sleep(self.kafka_sleep_between_health_check)
-
     def _send_event(self, event: Event):
-        # Check and wait for a healthy kafka cluster before send the event
-        self._wait_for_healthy_kafka_cluster()
-
         if self.kafka_producer is None:
             self.kafka_producer = KafkaSender(
                 self.kafka_endpoint, self.logger, self.kafka_conf
@@ -265,7 +235,6 @@ class BatchReplicatorJob(XcuteJob):
 
     DEFAULT_KAFKA_MAX_LAGS = 1000000
     DEFAULT_KAFKA_MIN_AVAILABLE_SPACE = 40  # in percent
-    DEFAULT_KAFKA_CHECK_BETWEEN_HEALTH_CHECK = 60  # in seconds
     DEFAULT_DELAY_RETRY_LATER = 60  # in seconds
 
     @classmethod
@@ -284,22 +253,14 @@ class BatchReplicatorJob(XcuteJob):
         sanitized_job_params["replication_delayed_topic"] = job_params.get(
             "replication_delayed_topic", DEFAULT_REPLICATION_DELAYED_TOPIC
         )
-
         # Maximum lag allowed for kafka topics (<0 to disable)
-        sanitized_job_params["kafka_max_lags"] = int(
-            job_params.get("kafka_max_lags", cls.DEFAULT_KAFKA_MAX_LAGS)
+        sanitized_job_params["kafka_max_lags"] = int_value(
+            job_params.get("kafka_max_lags"), cls.DEFAULT_KAFKA_MAX_LAGS
         )
         # Minimal available space allowed for kafka cluster (in percent) (<0 to disable)
-        sanitized_job_params["kafka_min_available_space"] = int(
-            job_params.get(
-                "kafka_min_available_space", cls.DEFAULT_KAFKA_MIN_AVAILABLE_SPACE
-            )
-        )
-        sanitized_job_params["kafka_sleep_between_health_check"] = int(
-            job_params.get(
-                "kafka_sleep_between_health_check",
-                cls.DEFAULT_KAFKA_CHECK_BETWEEN_HEALTH_CHECK,
-            )
+        sanitized_job_params["kafka_min_available_space"] = float_value(
+            job_params.get("kafka_min_available_space"),
+            cls.DEFAULT_KAFKA_MIN_AVAILABLE_SPACE,
         )
         sanitized_job_params["check_replication_status_timeout"] = float(
             job_params.get(
@@ -307,14 +268,20 @@ class BatchReplicatorJob(XcuteJob):
                 DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
             )
         )
-        sanitized_job_params["delay_retry_later"] = int(
-            job_params.get("delay_retry_later", cls.DEFAULT_DELAY_RETRY_LATER)
+        sanitized_job_params["delay_retry_later"] = int_value(
+            job_params.get("delay_retry_later"), cls.DEFAULT_DELAY_RETRY_LATER
         )
         return sanitized_job_params, job_params["technical_manifest_prefix"]
 
     def __init__(self, conf, logger=None, **kwargs):
         super().__init__(conf, logger=logger, **kwargs)
         self.api = ObjectStorageApi(conf["namespace"], logger=logger)
+        self.kafka_cluster_health = KafkaClusterHealth(
+            {
+                "namespace": conf["namespace"],
+            },
+            pool_manager=self.api.container.pool_manager,
+        )
 
     def get_tasks(self, job_params, marker=None, reqid=None):
         manifest_marker = None
@@ -339,14 +306,11 @@ class BatchReplicatorJob(XcuteJob):
             line_marker = 0
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
-        nb_objects = 0
         manifests = self.get_manifests(
             job_params=job_params, marker=marker, reqid=reqid
         )
-
         for manifest in manifests:
-            nb_objects += int(manifest["properties"]["nb_objects"])
-        yield (manifest["name"], nb_objects)
+            yield (manifest["name"], int(manifest["properties"]["nb_objects"]))
 
     def get_manifests(self, job_params, marker=None, reqid=None):
         manifests = depaginate(
@@ -363,3 +327,19 @@ class BatchReplicatorJob(XcuteJob):
         )
         for manifest in manifests:
             yield manifest
+
+    def can_process_tasks(self, job_params):
+        try:
+            topics = [
+                job_params["replication_topic"],
+                job_params["replication_delayed_topic"],
+            ]
+            self.kafka_cluster_health.check(
+                topics=topics,
+                min_available_space=job_params["kafka_min_available_space"],
+                max_lag=job_params["kafka_max_lags"],
+            )
+        except OioUnhealthyKafkaClusterError:
+            self.logger.debug("Unhealthy kafka cluster, waiting..")
+            return False
+        return True

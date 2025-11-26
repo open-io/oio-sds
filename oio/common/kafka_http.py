@@ -273,34 +273,41 @@ class KafkaClusterHealth:
                 "'min_available_space' must be greater than or equal to -1"
             )
 
-    def check(self):
+    def check(self, topics=None, min_available_space=None, max_lag=None):
+        if min_available_space is None:
+            min_available_space = self._min_available_space
+        if max_lag is None:
+            max_lag = self._max_lag
+
         # Validate cluster status
         status = self.kafka_metrics_client.cluster_space_status
         if status != KafkaClusterSpaceStatus.OK:
             raise OioUnhealthyKafkaClusterError(f"Status is not OK: {status}")
 
-        if self._min_available_space >= 0.0:
+        if min_available_space >= 0.0:
             # Validate available space
             available_space_percent = (
                 self.kafka_metrics_client.cluster_free_space
                 / self.kafka_metrics_client.cluster_total_space
             ) * 100.0
-            if available_space_percent < self._min_available_space:
+            if available_space_percent < min_available_space:
                 raise OioUnhealthyKafkaClusterError(
                     f"Available space too low ({available_space_percent:.2%} < "
-                    f"{self._min_available_space:.2%})"
+                    f"{min_available_space:.2%})"
                 )
 
-        if self._max_lag == -1:
+        if max_lag == -1:
             return
 
+        if topics is None:
+            topics = self.topics
         # Validate max lag
-        for topic in self.topics:
+        for topic in topics:
             if "*" in topic:
                 lag, topic = self.kafka_metrics_client.get_topics_max_lag(topic)
             else:
                 lag = self.kafka_metrics_client.get_topic_max_lag(topic)
-            if lag > self._max_lag:
+            if lag > max_lag:
                 raise OioUnhealthyKafkaClusterError(
-                    f"Topic '{topic}' lag is too high({lag:.0f} > {self._max_lag})"
+                    f"Topic '{topic}' lag is too high({lag:.0f} > {max_lag})"
                 )

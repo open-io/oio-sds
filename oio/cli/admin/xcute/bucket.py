@@ -70,6 +70,7 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             type=int,
             default=-1,
         )
+
         return parser
 
     def get_job_config(self, parsed_args):
@@ -120,6 +121,20 @@ class BatchReplicator(CustomerCommand, XcuteJobStartCommand):
             ),
             default=DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
         )
+        parser.add_argument(
+            "--kafka-max-lags",
+            dest="kafka_max_lags",
+            help="Prevent to send more tasks if topic lags exceed threshold",
+            type=int,
+        )
+        parser.add_argument(
+            "--kafka-min-available-space",
+            dest="kafka_min_available_space",
+            help="Prevent to send more tasks if available space on kafka cluster is"
+            "below threshold",
+            type=float,
+        )
+
         return parser
 
     def get_job_config(self, parsed_args):
@@ -129,4 +144,10 @@ class BatchReplicator(CustomerCommand, XcuteJobStartCommand):
             "technical_bucket": parsed_args.technical_bucket,
             "check_replication_status_timeout": parsed_args.repli_status_timeout,
         }
+        if parsed_args.kafka_max_lags is not None:
+            job_params["kafka_max_lags"] = parsed_args.kafka_max_lags
+        if parsed_args.kafka_min_available_space is not None:
+            job_params["kafka_min_available_space"] = (
+                parsed_args.kafka_min_available_space
+            )
         return {"params": job_params}
