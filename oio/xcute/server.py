@@ -68,7 +68,6 @@ class XcuteServer(WerkzeugApp):
         xcute_type = self.conf.get("xcute_type")
         self.backend = XcuteBackend(self.conf, logger=self.logger)
 
-        mountpoint = f"/v1.0/xcute-{xcute_type}" if xcute_type else "/v1.0/xcute"
         self.job_types = INTERNAL_JOB_TYPES
         if xcute_type == "customer":
             self.job_types = CUSTOMER_JOB_TYPES
@@ -76,7 +75,7 @@ class XcuteServer(WerkzeugApp):
             [
                 Rule("/status", endpoint="status"),
                 Submount(
-                    mountpoint,
+                    "/v1.0/xcute",
                     [
                         Rule("/job/list", endpoint="job_list", methods=["GET"]),
                         Rule("/job/create", endpoint="job_create", methods=["POST"]),

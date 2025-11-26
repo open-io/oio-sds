@@ -104,7 +104,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${redis_server} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${redis_server} ${CFGPATH}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
@@ -181,7 +181,7 @@ Environment=PATH=${PATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
 #ExecStartPre=/usr/sbin/service foundationdb stop
-ExecStart=${fdbmonitor} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
+ExecStart=${fdbmonitor} --conffile ${CFGPATH} --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 ExecStartPost=/bin/sleep 5 ; ${fdbcli} -C ${CLUSTERFILE} --exec "configure new ssd single"
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
@@ -200,7 +200,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
@@ -220,7 +220,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
@@ -232,7 +232,7 @@ WantedBy=${PARENT}
 
 template_systemd_service_xcute = """
 [Unit]
-Description=[OpenIO] Service xcute ${SRVNUM}
+Description=[OpenIO] Service xcute ${SRVSUFFIX} ${SRVNUM}
 PartOf=${PARENT}
 OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 
@@ -240,27 +240,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-${ENVIRONMENT}
-TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
-template_systemd_service_xcute_customer = """
-[Unit]
-Description=[OpenIO] Service xcute customer ${SRVNUM}
-PartOf=${PARENT}
-OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
@@ -299,7 +279,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
@@ -514,7 +494,6 @@ use_marker = False
 interval = 1200
 report_interval = 300
 scanned_per_second = 10
-xcute_type = customer
 # represents 30 seconds at max rate
 # scanned_between_markers = 300
 limit_nb_objects_one_pass = 1000
@@ -827,7 +806,7 @@ stats:
     - {type: system}
 """
 
-template_account_xcute_watch = """
+template_account_watch = """
 host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
@@ -841,7 +820,7 @@ stats:
     - {type: system}
 """
 
-template_account_xcute_customer_watch = """
+template_xcute_watch = """
 host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
@@ -850,6 +829,7 @@ checks:
     - {type: tcp}
 slots:
     - ${SRVTYPE}
+    - ${EXTRASLOT}
 stats:
     - {type: http, path: /status, parser: json}
     - {type: system}
@@ -1202,10 +1182,6 @@ score_timeout=120
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
-[type:xcute-customer]
-score_expr=(1 + (num stat.cpu))
-score_timeout=120
-
 [type:echo]
 put_score_expr=root(4, (pow(2, (clamp((((num stat.space) - 20) * 1.25), 0, 100))) * clamp((((num stat.cpu) - 5) * 6.666667), 1, 100) * clamp((((num stat.io) - 5) * 1.333333), 1, 100))) * (num stat.unknown_stat:"1")
 get_score_expr=root(2, (clamp((((num stat.cpu) - 5) * 6.666667), 0, 100) * clamp((((num stat.io) - 5) * 1.333333), 0, 100))) * (num stat.unknown_stat:"1")
@@ -1328,7 +1304,7 @@ OioGroup=${NS},crawler,meta2-crawler,${SRVTYPE}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}
@@ -1347,7 +1323,7 @@ OioGroup=${NS},crawler,meta2-crawler,${SRVTYPE}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=oneshot
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
 """
@@ -1533,7 +1509,7 @@ OioGroup=${NS},event
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGPATH}
 Environment=PYTHONPATH=${PYTHONPATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
@@ -2415,8 +2391,23 @@ def systemd_dir():
     return HOME + "/.config/systemd/user"
 
 
+def volume(env):
+    volume_path = "{DATADIR}/{NS}-{SRVTYPE}"
+    if "SRVSUFFIX" in env:
+        volume_path += "-{SRVSUFFIX}"
+    if "SRVNUM" in env:
+        volume_path += "-{SRVNUM}"
+    return volume_path.format(**env)
+
+
 def config(env):
-    return "{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf".format(**env)
+    config_path = "{CFGDIR}/{NS}-{SRVTYPE}"
+    if "SRVSUFFIX" in env:
+        config_path += "-{SRVSUFFIX}"
+    if "SRVNUM" in env:
+        config_path += "-{SRVNUM}"
+    config_path += ".conf"
+    return config_path.format(**env)
 
 
 def httpd_config(env, internal=False):
@@ -2426,7 +2417,13 @@ def httpd_config(env, internal=False):
 
 
 def watch(env):
-    return "{WATCHDIR}/{NS}-{SRVTYPE}-{SRVNUM}.yml".format(**env)
+    watch_path = "{WATCHDIR}/{NS}-{SRVTYPE}"
+    if "SRVSUFFIX" in env:
+        watch_path += "-{SRVSUFFIX}"
+    if "SRVNUM" in env:
+        watch_path += "-{SRVNUM}"
+    watch_path += ".yml"
+    return watch_path.format(**env)
 
 
 def cluster(env):
@@ -2435,10 +2432,11 @@ def cluster(env):
 
 def systemd_service(env):
     filename = "{PREFIX}{SRVTYPE}"
+    if "SRVSUFFIX" in env:
+        filename += "-{SRVSUFFIX}"
     if "SRVNUM" in env:
-        filename = filename + "-{SRVNUM}"
-    filename = filename + ".service"
-
+        filename += "-{SRVNUM}"
+    filename += ".service"
     return filename.format(**env)
 
 
@@ -2615,7 +2613,8 @@ def generate(options):
         # remove Service Id from env for test.yml
         if "SERVICE_ID" in env and env["WANT_SERVICE_ID"] == "#":
             del env["SERVICE_ID"]
-        env["VOLUME"] = "{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
+        env["CFGPATH"] = config(env)
+        env["VOLUME"] = volume(env)
         return env
 
     def build_location(ip, num):
@@ -2797,7 +2796,7 @@ def generate(options):
             register_service(
                 env, template_systemd_service_conscience, conscience_target
             )
-            with open(config(env), "w+") as f:
+            with open(env["CFGPATH"], "w+") as f:
                 tpl = Template(template_conscience_service)
                 f.write(tpl.safe_substitute(env))
 
@@ -2896,7 +2895,7 @@ def generate(options):
         if t in ("meta1", "meta2"):
             if env.get("SERVICE_ID"):
                 tpl_meta = Template(template_meta_config)
-                with open(config(env), "w+") as f:
+                with open(env["CFGPATH"], "w+") as f:
                     f.write(tpl_meta.safe_substitute(env))
                 env["OPTARGS"] += " -O Config=%s" % config(env)
         register_service(env, tpl, parent_target)
@@ -3331,10 +3330,10 @@ def generate(options):
             }
         )
         register_service(env, template_systemd_service_redis, root_target)
-        with open(config(env), "w+") as f:
+        with open(env["CFGPATH"], "w+") as f:
             tpl = Template(template_redis)
             f.write(tpl.safe_substitute(env))
-        with open(config(env), "w+") as f:
+        with open(env["CFGPATH"], "w+") as f:
             tpl = Template(template_redis)
             f.write(tpl.safe_substitute(env))
         with open(watch(env), "w+") as f:
@@ -3370,7 +3369,7 @@ def generate(options):
 
     if options.get(ALLOW_FDB):
         register_service(env, template_systemd_service_foundationdb, root_target)
-        with open(config(env), "w+") as f:
+        with open(env["CFGPATH"], "w+") as f:
             tpl = Template(template_foundationdb)
             f.write(tpl.safe_substitute(env))
         with open(watch(env), "w+") as f:
@@ -3410,7 +3409,7 @@ def generate(options):
         }
     )
     register_service(env, template_systemd_service_kms, root_target)
-    with open(config(env), "w+") as f:
+    with open(env["CFGPATH"], "w+") as f:
         tpl = Template(template_kms)
         f.write(tpl.safe_substitute(env))
     ENV["KMSIP"] = env["IP"]
@@ -3424,7 +3423,7 @@ def generate(options):
             }
         )
         register_service(env, template_systemd_service_statsd, root_target)
-        with open(config(env), "w+") as f:
+        with open(env["CFGPATH"], "w+") as f:
             tpl = Template(template_kms)
             f.write(tpl.safe_substitute(env))
 
@@ -3448,12 +3447,12 @@ def generate(options):
             coverage_wrapper=shutil.which("coverage")
             + " run --context account --concurrency=gevent -p ",
         )
-        with open(config(env), "w+") as f:
+        with open(env["CFGPATH"], "w+") as f:
             tpl = Template(template_account)
             f.write(tpl.safe_substitute(env))
         if not options.get(REMOTE_ACCOUNT):
             with open(watch(env), "w+") as f:
-                tpl = Template(template_account_xcute_watch)
+                tpl = Template(template_account_watch)
                 f.write(tpl.safe_substitute(env))
         elif num == 0:
             options["config"]["account"] = f"http://{env['IP']}:{port_account}"
@@ -3472,7 +3471,7 @@ def generate(options):
         )
         env["SERVICE_ID"] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
         register_service(env, template_systemd_service_rdir, rdir_target)
-        with open(config(env), "w+") as f:
+        with open(env["CFGPATH"], "w+") as f:
             tpl = Template(template_rdir)
             f.write(tpl.safe_substitute(env))
         with open(watch(env), "w+") as f:
@@ -3531,7 +3530,7 @@ def generate(options):
                 + " --concurrency=eventlet -p "
             ),
         )
-        with open(config(env), "w+", encoding="utf-8") as f:
+        with open(env["CFGPATH"], "w+", encoding="utf-8") as f:
             tpl = Template(template_agent)
             f.write(tpl.safe_substitute(env))
         with open(handler_path, "w+", encoding="utf-8") as f:
@@ -3851,6 +3850,7 @@ def generate(options):
     env = subenv(
         {
             "SRVTYPE": "xcute",
+            "EXTRASLOT": "xcute_internal",
             "SRVNUM": 1,
             "PORT": next(ports),
             "REDIS_PORT": 6379,
@@ -3865,16 +3865,18 @@ def generate(options):
         coverage_wrapper=shutil.which("coverage")
         + " run --context xcute --concurrency=eventlet -p ",
     )
-    with open(config(env), "w+") as f:
+    with open(env["CFGPATH"], "w+") as f:
         tpl = Template(template_xcute)
         f.write(tpl.safe_substitute(env))
     with open(watch(env), "w+", encoding="utf8") as f:
-        tpl = Template(template_account_xcute_watch)
+        tpl = Template(template_xcute_watch)
         f.write(tpl.safe_substitute(env))
 
     env = subenv(
         {
-            "SRVTYPE": "xcute-customer",
+            "SRVTYPE": "xcute",
+            "SRVSUFFIX": "customer",
+            "EXTRASLOT": "xcute_customer",
             "SRVNUM": 1,
             "PORT": next(ports),
             "REDIS_PORT": 6379,
@@ -3884,16 +3886,16 @@ def generate(options):
     )
     register_service(
         env,
-        template_systemd_service_xcute_customer,
+        template_systemd_service_xcute,
         root_target,
         coverage_wrapper=shutil.which("coverage")
         + " run --context xcute-customer --concurrency=eventlet -p ",
     )
-    with open(config(env), "w+") as f:
+    with open(env["CFGPATH"], "w+") as f:
         tpl = Template(template_xcute_customer)
         f.write(tpl.safe_substitute(env))
     with open(watch(env), "w+", encoding="utf8") as f:
-        tpl = Template(template_account_xcute_customer_watch)
+        tpl = Template(template_xcute_watch)
         f.write(tpl.safe_substitute(env))
 
     # billing buckets

@@ -384,7 +384,6 @@ class PipelineWorker(CrawlerWorker):
         self.app_env = {}
         self.app_env["api"] = api or ObjectStorageApi(
             self.namespace,
-            xcute_type=self.conf.get("xcute_type"),
             logger=self.logger,
             watchdog=watchdog,
         )

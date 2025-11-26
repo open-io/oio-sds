@@ -20,12 +20,16 @@ from oio.common.service_client import ServiceClient
 class XcuteClient(ServiceClient):
     """Simple client API for the xcute service."""
 
-    def __init__(self, conf, **kwargs):
-        xcute_type = conf.get("xcute_type") or kwargs.get("xcute_type")
-        request_prefix = f"v1.0/xcute-{xcute_type}" if xcute_type else "v1.0/xcute"
-        service_type = f"xcute-{xcute_type}" if xcute_type else "xcute"
+    def __init__(self, conf, xcute_type=None, **kwargs):
+        if not xcute_type:
+            xcute_type = "internal"
+        service_slot = f"xcute_{xcute_type}"
         super(XcuteClient, self).__init__(
-            service_type, conf, request_prefix=request_prefix, **kwargs
+            "xcute",
+            conf,
+            service_slot=service_slot,
+            request_prefix="v1.0/xcute",
+            **kwargs,
         )
 
     def xcute_request(self, job_id, *args, **kwargs):

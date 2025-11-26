@@ -32,7 +32,8 @@ class TestBucketLister(XcuteTest):
         super().setUp()
         # Override xcute client with customer one
         self.xcute_client = XcuteClient(
-            {"namespace": self.ns, "xcute_type": "customer"}
+            {"namespace": self.ns},
+            xcute_type="customer",
         )
         self._cleanup_jobs()
         self.internal_bucket = "test-bucket-lister-internal"

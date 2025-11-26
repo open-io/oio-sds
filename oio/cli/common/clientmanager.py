@@ -110,19 +110,23 @@ class ClientManager(object):
             from oio.xcute.client import XcuteClient
 
             self._xcute_client = XcuteClient(
-                self.client_conf, pool_manager=self.pool_manager, logger=self.logger
+                self.client_conf,
+                xcute_type="internal",
+                pool_manager=self.pool_manager,
+                logger=self.logger,
             )
         return self._xcute_client
 
     @property
     def xcute_customer_client(self):
         if self._xcute_customer_client is None:
-            conf = self.client_conf.copy()
-            conf["xcute_type"] = "customer"
             from oio.xcute.client import XcuteClient
 
             self._xcute_customer_client = XcuteClient(
-                conf, pool_manager=self.pool_manager, logger=self.logger
+                self.client_conf,
+                xcute_type="customer",
+                pool_manager=self.pool_manager,
+                logger=self.logger,
             )
         return self._xcute_customer_client
 

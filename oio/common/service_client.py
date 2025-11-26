@@ -20,7 +20,12 @@ from oio.common.configuration import load_namespace_conf
 from oio.common.constants import TIMEOUT_KEYS
 from oio.common.decorators import ensure_headers, patch_kwargs
 from oio.common.easy_value import float_value
-from oio.common.exceptions import OioException, OioNetworkException, OioProtocolError
+from oio.common.exceptions import (
+    Conflict,
+    OioException,
+    OioNetworkException,
+    OioProtocolError,
+)
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 
@@ -32,6 +37,7 @@ class ServiceClient(MultiEndpointHttpApi):
         self,
         service_type,
         conf,
+        service_slot=None,
         endpoint=None,
         proxy_endpoint=None,
         request_prefix="",
@@ -58,6 +64,7 @@ class ServiceClient(MultiEndpointHttpApi):
         :type refresh_delay: `float` seconds
         :param logger:
         """
+        self.service_slot = service_slot
         self.location = location
         self.netloc = None
         # Look for an endpoint in the application configuration
@@ -104,6 +111,18 @@ class ServiceClient(MultiEndpointHttpApi):
         self._refresh_delay_after_error = refresh_delay / 10.0
         self._next_refresh = 0.0
 
+    def _create_pool(self):
+        pool_name = f"__{self.service_type}__{self.service_slot}__1"
+        try:
+            self.conscience.lb.create_pool(
+                pool_name,
+                ((1, self.service_slot),),
+            )
+        except Conflict:
+            # Pool already exists
+            pass
+        return pool_name
+
     def _get_service_addresses(self, **kwargs):
         """
         Fetch IP and port of services of specified service type from Conscience.
@@ -115,9 +134,16 @@ class ServiceClient(MultiEndpointHttpApi):
             all_services = self.conscience.all_services(
                 self.service_type, requester_location=self.location, **kwargs
             )
-            all_services.sort(
-                reverse=True, key=lambda s: s["score"] / (s.get("distance") or 0.5)
-            )
+            if self.service_slot:
+                all_services = [
+                    s
+                    for s in all_services
+                    if self.service_slot in s["tags"]["tag.slots"].split(",")
+                ]
+            if self.location:
+                all_services.sort(
+                    reverse=True, key=lambda s: s["score"] / (s.get("distance") or 0.5)
+                )
             addresses = [s["addr"] for s in all_services if s["score"] > 0]
             if not addresses:
                 raise OioException(
@@ -125,8 +151,13 @@ class ServiceClient(MultiEndpointHttpApi):
                     "services has a score > 0"
                 )
         else:
-            instance = self.conscience.next_instance(self.service_type, **kwargs)
-            addresses = [instance.get("addr")]
+            if self.service_slot:
+                pool_name = self._create_pool()
+                instances = self.conscience.poll(pool_name, **kwargs)
+                addresses = [instance.get("addr") for instance in instances]
+            else:
+                instance = self.conscience.next_instance(self.service_type, **kwargs)
+                addresses = [instance.get("addr")]
         return addresses
 
     def _schedule_endpoint_refresh(self, now=None, quickly=False):

@@ -145,7 +145,7 @@ class BucketListerCreator(Filter):
         }
         error = None
         try:
-            job_resp = self.app_env["api"].xcute.job_create(
+            job_resp = self.app_env["api"].xcute_customer.job_create(
                 BucketListerJob.JOB_TYPE,
                 job_config={"params": job_params},
             )

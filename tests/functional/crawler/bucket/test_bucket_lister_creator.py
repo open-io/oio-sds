@@ -49,12 +49,11 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         self.internal_bucket = "internal-bucket"
         self.container = "testbucketlister-" + random_str(4)
         self.container_segment = f"{self.container}+segments"
-        # Force the xcute type to be a customer one
-        self._storage_kwargs["xcute_type"] = "customer"
 
         # Override xcute client with customer one
         self.xcute_client = XcuteClient(
-            {"namespace": self.ns, "xcute_type": "customer"}
+            {"namespace": self.ns},
+            xcute_type="customer",
         )
         self._cleanup_jobs()
 
