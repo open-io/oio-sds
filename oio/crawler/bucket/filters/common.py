@@ -124,7 +124,7 @@ class BucketFilter(Filter):
         obj_wrapper: ObjectWrapper,
         key: str,
         job_type: str,
-        job_params: dict,
+        job_config: dict,
         reqid: str,
     ):
         """
@@ -150,7 +150,7 @@ class BucketFilter(Filter):
         try:
             job_resp = self.app_env["api"].xcute_customer.job_create(
                 job_type,
-                job_config={"params": job_params},
+                job_config=job_config,
             )
             return job_resp["job"]["id"], None
         except Forbidden as err:

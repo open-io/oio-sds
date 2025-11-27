@@ -527,6 +527,7 @@ boto_profile = keystone
 # boto_secret_key = DEMO_PASS
 # boto_region = ${REGION}
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+tasks_per_second = 100
 
 [filter:batch_replicator_tracker]
 use = egg:oio#batch_replicator_tracker

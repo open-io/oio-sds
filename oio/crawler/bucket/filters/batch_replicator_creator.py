@@ -31,6 +31,9 @@ class BatchReplicatorCreator(BucketFilter):
         self.skipped_lister_not_finished = 0
         self.skipped_lister_error = 0
         self.CURRENT_PREFIX = self.IN_PROGRESS_LISTER_PREFIX
+        self.tasks_per_second = self.conf.get(
+            "tasks_per_second", BatchReplicatorJob.DEFAULT_TASKS_PER_SECOND
+        )
 
     def _check_if_object_should_be_process(
         self, obj_wrapper: ObjectWrapper, reqid: str
@@ -76,7 +79,7 @@ class BatchReplicatorCreator(BucketFilter):
         # Object should be process, let's continue
         return lister_job_id
 
-    def _build_job_params(self, account: str, bucket: str, lister_job_id: str):
+    def _build_job_config(self, account: str, bucket: str, lister_job_id: str):
         job_params = {
             "technical_manifest_prefix": f"listing/{account}/{bucket}/{lister_job_id}/",
             "technical_account": self.internal_account,
@@ -105,7 +108,7 @@ class BatchReplicatorCreator(BucketFilter):
         if self.conf.get("delay_retry_later"):
             job_params["delay_retry_later"] = self.conf.get("delay_retry_later")
 
-        return job_params
+        return {"params": job_params, "tasks_per_second": self.tasks_per_second}
 
     def process(self, env, cb):
         obj_wrapper = ObjectWrapper(env)
@@ -126,11 +129,15 @@ class BatchReplicatorCreator(BucketFilter):
         if error:
             return error(obj_wrapper, cb)
 
-        job_params = self._build_job_params(
+        job_config = self._build_job_config(
             data["account"], data["bucket"], lister_job_id
         )
         job_id, error = self._create_xcute_job(
-            obj_wrapper, in_progress_key, BatchReplicatorJob.JOB_TYPE, job_params, reqid
+            obj_wrapper,
+            in_progress_key,
+            BatchReplicatorJob.JOB_TYPE,
+            job_config,
+            reqid,
         )
         if error:
             return error(obj_wrapper, cb)

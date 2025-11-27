@@ -57,7 +57,11 @@ class BucketListerCreator(BucketFilter):
             "policy_manifest": self.policy_manifest,
         }
         job_id, error = self._create_xcute_job(
-            obj_wrapper, in_progress_key, BucketListerJob.JOB_TYPE, job_params, reqid
+            obj_wrapper,
+            in_progress_key,
+            BucketListerJob.JOB_TYPE,
+            {"params": job_params},
+            reqid,
         )
         if error:
             return error(obj_wrapper, cb)

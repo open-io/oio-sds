@@ -53,6 +53,8 @@ boto_profile = keystone
 # boto_secret_key = DEMO_PASS
 # boto_region = RegionOne
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
+# Number of replication tasks to create per second (default to 200)
+# tasks_per_second = 200
 
 # replication_topic = oio-replication
 # replication_delayed_topic = oio-replication-delayed
