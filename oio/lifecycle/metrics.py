@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -73,13 +73,29 @@ class LifecycleMetricTracker:
             self.DEFAULT_METRICS_EXPIRATION,
         )
 
-        redis_conf = {k[6:]: v for k, v in self._conf.items() if k.startswith("redis_")}
-        self._redis_client = RedisConnection(**redis_conf)
+        self._redis_client = None
+        self._script_set_container_objects = None
 
-        # Register scripts
-        self._script_set_container_objects = self._redis_client.register_script(
-            self.SET_CONTAINER_OBJECTS
-        )
+        self._redis_conf = {
+            k[6:]: v for k, v in self._conf.items() if k.startswith("redis_")
+        }
+
+        self.connect()
+
+    def connect(self):
+        if self._redis_client is None:
+            self._redis_client = RedisConnection(**self._redis_conf)
+
+            # Register scripts
+            self._script_set_container_objects = self._redis_client.register_script(
+                self.SET_CONTAINER_OBJECTS
+            )
+
+    def disconnect(self):
+        # close applies for both modes: master and sentinel
+        self._redis_client.conn.close()
+        self._redis_client = None
+        self._script_set_container_objects = None
 
     def __key(self, *fields, separator="/"):
         return separator.join([f for f in fields if f is not None])

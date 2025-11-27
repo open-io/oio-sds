@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -878,6 +878,12 @@ class Lifecycle(Meta2Filter):
         self.container_budget_reached = 0
         self.events_count = {a.value: 0 for a in self.ACTIONS_ALLOWED}
         self.events_count_per_container = {a.value: 0 for a in self.ACTIONS_ALLOWED}
+
+    def _open_resources(self):
+        self._metrics.connect()
+
+    def _close_resources(self):
+        self._metrics.disconnect()
 
 
 def filter_factory(global_conf, **local_conf):

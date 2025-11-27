@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -416,6 +416,8 @@ class PipelineWorker(CrawlerWorker):
             hash_width=self.hash_width,
             hash_depth=self.hash_depth,
         )
+        # open resources
+        self.pipeline.open_resources()
 
         self.report("starting", force=True)
         last_scan_time = 0
@@ -439,6 +441,8 @@ class PipelineWorker(CrawlerWorker):
         self.report("ended", force=True)
         # reset stats for each filter
         self.pipeline.reset_stats()
+        # close resources
+        self.pipeline.close_resources()
         # reset crawler stats
         self.errors = 0
         self.successes = 0

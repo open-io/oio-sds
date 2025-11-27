@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -67,6 +67,20 @@ class Filter(object):
     def reset_stats(self):
         self.app.reset_stats()
         self._reset_filter_stats()
+
+    def _open_resources(self):
+        return
+
+    def open_resources(self):
+        self.app.open_resources()
+        self._open_resources()
+
+    def _close_resources(self):
+        return
+
+    def close_resources(self):
+        self.app.close_resources()
+        self._close_resources()
 
 
 class ChunkSymlinkFilter(Filter):
