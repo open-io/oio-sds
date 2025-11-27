@@ -65,7 +65,7 @@ class BucketListerCreator(BucketFilter):
         for obj in objs:
             if obj["name"] == progression_key:
                 # It's ourself, just continue (object should be deleted by the filter)
-                return None, None
+                return None
             # It's another batch replication request, check it is completed
             try:
                 response = self.boto.get_object_tagging(
@@ -77,14 +77,14 @@ class BucketListerCreator(BucketFilter):
                     "Failed to check progression object %s (err=%s)", obj["name"], err
                 )
                 self.errors += 1
-                return BucketCrawlerError(obj_wrapper, body=str(err)), None
+                return BucketCrawlerError(obj_wrapper, body=str(err))
 
             tagset = response["TagSet"]
             if len(tagset) == 0:
                 # No tag yet, another batch replication is in progress,
                 # Do not start this one and try later.
                 self.skipped_lock_already_taken += 1
-                return None, self.app
+                return self.app
             for tag in tagset:
                 if tag["Key"] == "Status" and tag["Value"] in (
                     "Completed",
@@ -100,7 +100,7 @@ class BucketListerCreator(BucketFilter):
             json.dumps({"status": "Preparing"}, separators=(",", ":")),
             ignore_if_exists=False,
         )
-        return error, None
+        return error
 
     def process(self, env, cb):
         obj_wrapper = ObjectWrapper(env)
@@ -114,20 +114,18 @@ class BucketListerCreator(BucketFilter):
             self.skipped += 1
             return self.app(env, cb)
 
-        error, skip = self._create_progression_object(obj_wrapper)
-        if error:
-            return error(obj_wrapper, cb)
-        if skip:
-            return skip(env, cb)
+        error_or_skip = self._create_progression_object(obj_wrapper)
+        if error_or_skip:
+            return error_or_skip(env, cb)
 
         data, data_raw, error = self._get_object_data(obj_wrapper)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         in_progress_key = self._build_key(obj_wrapper, self.IN_PROGRESS_LISTER_PREFIX)
         error = self._create_object(obj_wrapper, in_progress_key, data_raw)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         job_params = {
             # Account comes from the common parser
@@ -146,18 +144,18 @@ class BucketListerCreator(BucketFilter):
             reqid,
         )
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         error = self._save_job_id(
             obj_wrapper, in_progress_key, BucketListerJob.JOB_TYPE, job_id, reqid
         )
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         # Job xcute created, nothing more to do here, delete the "on hold" object
         error = self._delete_object(obj_wrapper, obj_wrapper.name)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         self.successes += 1
         return self.app(env, cb)

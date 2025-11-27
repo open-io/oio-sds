@@ -73,7 +73,7 @@ class BucketFilter(Filter):
         except ClientError as err:
             self.logger.error("Failed to get object %s (err=%s)", obj_wrapper, err)
             self.errors += 1
-            return None, None, BucketCrawlerError(obj_wrapper, body=str(err))
+            return None, None, BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _create_object(
         self,
@@ -104,7 +104,7 @@ class BucketFilter(Filter):
                         err,
                     )
                     self.errors += 1
-                    return BucketCrawlerError(obj_wrapper, body=str(err))
+                    return BucketCrawlerError(obj_wrapper.env, body=str(err))
                 # It is a 404, let's create it.
 
         try:
@@ -117,7 +117,7 @@ class BucketFilter(Filter):
         except ClientError as err:
             self.logger.error("Failed to create object %s (err=%s)", key, err)
             self.errors += 1
-            return BucketCrawlerError(obj_wrapper, body=str(err))
+            return BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _create_xcute_job(
         self,
@@ -144,7 +144,7 @@ class BucketFilter(Filter):
                 "Failed to check if xcute job exists for %s (err=%s)", obj_wrapper, err
             )
             self.errors += 1
-            return None, BucketCrawlerError
+            return None, BucketCrawlerError(obj_wrapper.env, body=str(err))
 
         error = None
         try:
@@ -173,7 +173,7 @@ class BucketFilter(Filter):
             error = err
         self.logger.error("Failed to create job %s (err=%s)", job_type, error)
         self.errors += 1
-        return None, BucketCrawlerError(obj_wrapper, body=str(error))
+        return None, BucketCrawlerError(obj_wrapper.env, body=str(error))
 
     def _get_properties(
         self, obj_wrapper: ObjectWrapper, key: str, reqid: str, raise_on_error=False
@@ -196,7 +196,7 @@ class BucketFilter(Filter):
                 raise
             self.logger.error("Failed to get properties of %s (err=%s)", key, err)
             self.errors += 1
-            return BucketCrawlerError(obj_wrapper, body=str(err))
+            return BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _save_job_id(
         self,
@@ -224,7 +224,7 @@ class BucketFilter(Filter):
                 "Failed to save job id to metadata to %s (err=%s)", key, err
             )
             self.errors += 1
-            return BucketCrawlerError(obj_wrapper, body=str(err))
+            return BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _delete_object(self, obj_wrapper: ObjectWrapper, key: str):
         try:
@@ -233,7 +233,7 @@ class BucketFilter(Filter):
         except ClientError as err:
             self.logger.error("Failed to delete object %s (err=%s)", key, err)
             self.errors += 1
-            return BucketCrawlerError(obj_wrapper, body=str(err))
+            return BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _add_tag(
         self, obj_wrapper: ObjectWrapper, key: str, tag_key: str, tag_value: str
@@ -257,7 +257,7 @@ class BucketFilter(Filter):
                 err,
             )
             self.errors += 1
-            return BucketCrawlerError(obj_wrapper, body=str(err))
+            return BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def process(self, env, cb):
         raise NotImplementedError

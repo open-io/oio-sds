@@ -38,10 +38,10 @@ class ObjectWrapper:
 
 
 class BucketCrawlerResponse:
-    def __init__(self, obj, body=None, status=200, **kwargs):
+    def __init__(self, env, body=None, status=200, **kwargs):
         self.status = status
-        self.obj = obj
-        self.env = obj.env
+        self.obj = ObjectWrapper(env)
+        self.env = env
         self.body = body
 
     def __call__(self, env, cb):

@@ -135,7 +135,7 @@ class BatchReplicatorTracker(BucketFilter):
 
         progression, error = self._update_progression(obj_wrapper, job)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         if progression["status"] == "Active":
             mtime = datetime.fromtimestamp(
@@ -154,13 +154,13 @@ class BatchReplicatorTracker(BucketFilter):
             obj_wrapper, progression_key, "Status", progression["status"]
         )
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         # Batch replication finished, nothing more to do here
         # delete the "in progress" object
         error = self._delete_object(obj_wrapper, obj_wrapper.name)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         account = None
         bucket = None

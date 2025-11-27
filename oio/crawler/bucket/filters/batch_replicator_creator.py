@@ -107,14 +107,14 @@ class BatchReplicatorCreator(BucketFilter):
 
         data, data_raw, error = self._get_object_data(obj_wrapper)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         in_progress_key = self._build_key(
             obj_wrapper, self.IN_PROGRESS_REPLICATOR_PREFIX
         )
         error = self._create_object(obj_wrapper, in_progress_key, data_raw)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         job_config = self._build_job_config(
             data["account"], data["bucket"], lister_job_id
@@ -127,18 +127,18 @@ class BatchReplicatorCreator(BucketFilter):
             reqid,
         )
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         error = self._save_job_id(
             obj_wrapper, in_progress_key, BatchReplicatorJob.JOB_TYPE, job_id, reqid
         )
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         # Job xcute created, nothing more to do here, delete the "on hold" object
         error = self._delete_object(obj_wrapper, obj_wrapper.name)
         if error:
-            return error(obj_wrapper, cb)
+            return error(env, cb)
 
         self.successes += 1
         return self.app(env, cb)
