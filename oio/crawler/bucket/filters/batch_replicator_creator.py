@@ -14,7 +14,6 @@
 # License along with this library.
 
 
-from oio.common.exceptions import NoSuchObject
 from oio.common.utils import request_id
 from oio.crawler.bucket.filters.common import BucketFilter
 from oio.crawler.bucket.object_wrapper import ObjectWrapper
@@ -61,18 +60,6 @@ class BatchReplicatorCreator(BucketFilter):
             self.skipped_lister_error += 1
             return None
         if lister_status != XcuteJobStatus.FINISHED or not lister_status:
-            self.skipped_lister_not_finished += 1
-            return None
-
-        # Make sure the lister cleaned its leftovers
-        on_hold_key = self._build_key(obj_wrapper, self.ON_HOLD_PREFIX)
-        try:
-            self._get_properties(obj_wrapper, on_hold_key, reqid, raise_on_error=True)
-        except NoSuchObject:
-            pass
-        else:
-            # On hold object still exists, return as it is the responsibility
-            # of the bucket_lister_creator filter.
             self.skipped_lister_not_finished += 1
             return None
 

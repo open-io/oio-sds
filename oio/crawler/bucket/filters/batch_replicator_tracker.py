@@ -111,11 +111,9 @@ class BatchReplicatorTracker(BucketFilter):
         obj_wrapper = ObjectWrapper(env)
         reqid = request_id(prefix="batchreplitracker-")
 
-        repli_job_id, error_or_skip = self._check_if_object_should_be_process(
-            obj_wrapper, reqid
-        )
-        if error_or_skip:
-            return error_or_skip(obj_wrapper, cb)
+        repli_job_id, skip = self._check_if_object_should_be_process(obj_wrapper, reqid)
+        if skip:
+            return skip(env, cb)
 
         # Make sure the batch repli creator cleaned its leftovers
         in_progress_lister_key = self._build_key(

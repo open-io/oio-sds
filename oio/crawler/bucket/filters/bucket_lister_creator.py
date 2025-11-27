@@ -15,9 +15,11 @@
 
 import json
 
-from oio.common.utils import request_id
+from botocore.exceptions import ClientError
+
+from oio.common.utils import depaginate, request_id
 from oio.crawler.bucket.filters.common import BucketFilter
-from oio.crawler.bucket.object_wrapper import ObjectWrapper
+from oio.crawler.bucket.object_wrapper import BucketCrawlerError, ObjectWrapper
 from oio.xcute.jobs.bucket_lister import BucketListerJob
 
 
@@ -26,17 +28,97 @@ class BucketListerCreator(BucketFilter):
 
     def init(self):
         super().init()
+        self.skipped_lock_already_taken = 0
         self.policy_manifest = self.conf["policy_manifest"]
         self.CURRENT_PREFIX = self.ON_HOLD_PREFIX
+
+    def _create_progression_object(self, obj_wrapper: ObjectWrapper):
+        """
+        Create the progression object (for the customer to be able to track the
+        operation).
+
+        Memo: a progression key is formatted as:
+        progression/account/bucket/uuid
+        Before creating the object, list all progression keys related to this
+        account/bucket:
+        - if the key already exists with the same uuid, do not create the progression
+          object (it's our batch repli job (which is maybe retrying for some reasons))
+          but continue to go deeper in the filter
+        - if a status tag exists (Completed or Failed), ignore this key (it's
+          an older batch repli job)
+        - if a key with another uuid and not tag exists, make the filter skip
+          (another batch repli job is already running for this account/bucket)
+        """
+        progression_key = self._build_key(obj_wrapper, self.PROGRESSION_PREFIX)
+
+        # Check if lock does not already exist
+        objs = depaginate(
+            self.app_env["api"].object_list,
+            listing_key=lambda x: x["objects"],
+            marker_key=lambda x: x.get("next_marker"),
+            version_marker_key=lambda x: x.get("next_version_marker"),
+            truncated_key=lambda x: x["truncated"],
+            account=self.internal_account,
+            container=self.internal_bucket,
+            prefix=progression_key.rsplit("/", 1)[0],
+        )
+        for obj in objs:
+            if obj["name"] == progression_key:
+                # It's ourself, just continue (object should be deleted by the filter)
+                return None, None
+            # It's another batch replication request, check it is completed
+            try:
+                response = self.boto.get_object_tagging(
+                    Bucket=self.internal_bucket,
+                    Key=obj["name"],
+                )
+            except ClientError as err:
+                self.logger.error(
+                    "Failed to check progression object %s (err=%s)", obj["name"], err
+                )
+                self.errors += 1
+                return BucketCrawlerError(obj_wrapper, body=str(err)), None
+
+            tagset = response["TagSet"]
+            if len(tagset) == 0:
+                # No tag yet, another batch replication is in progress,
+                # Do not start this one and try later.
+                self.skipped_lock_already_taken += 1
+                return None, self.app
+            for tag in tagset:
+                if tag["Key"] == "Status" and tag["Value"] in (
+                    "Completed",
+                    "Failed",
+                ):
+                    # Another batch replication has already been completed
+                    continue
+
+        # Now we can create the progression object
+        error = self._create_object(
+            obj_wrapper,
+            progression_key,
+            json.dumps({"status": "Preparing"}, separators=(",", ":")),
+            ignore_if_exists=False,
+        )
+        return error, None
 
     def process(self, env, cb):
         obj_wrapper = ObjectWrapper(env)
         reqid = request_id(prefix="bucketlistercreator-")
 
-        # Only work on objects with the prefix
-        if not obj_wrapper.name.startswith(self.CURRENT_PREFIX):
+        # Only work on objects with the prefix and object has at least two slashes
+        if (
+            not obj_wrapper.name.startswith(self.CURRENT_PREFIX)
+            or obj_wrapper.name.count("/") < 2
+        ):
             self.skipped += 1
             return self.app(env, cb)
+
+        error, skip = self._create_progression_object(obj_wrapper)
+        if error:
+            return error(obj_wrapper, cb)
+        if skip:
+            return skip(env, cb)
 
         data, data_raw, error = self._get_object_data(obj_wrapper)
         if error:
@@ -72,15 +154,6 @@ class BucketListerCreator(BucketFilter):
         if error:
             return error(obj_wrapper, cb)
 
-        progression = {"status": "Preparing"}
-        progression_key = self._build_key(obj_wrapper, self.PROGRESSION_PREFIX)
-        error = self._create_object(
-            obj_wrapper,
-            progression_key,
-            json.dumps(progression, separators=(",", ":")),
-            ignore_if_exists=False,
-        )
-
         # Job xcute created, nothing more to do here, delete the "on hold" object
         error = self._delete_object(obj_wrapper, obj_wrapper.name)
         if error:
@@ -88,6 +161,15 @@ class BucketListerCreator(BucketFilter):
 
         self.successes += 1
         return self.app(env, cb)
+
+    def _get_filter_stats(self):
+        result = super()._get_filter_stats()
+        result["skipped_lock_already_taken"] = self.skipped_lock_already_taken
+        return result
+
+    def _reset_filter_stats(self):
+        super()._reset_filter_stats()
+        self.skipped_lock_already_taken = 0
 
 
 def filter_factory(global_conf, **local_conf):
