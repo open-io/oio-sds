@@ -928,7 +928,7 @@ class EcChunkWriter(object):
                 resp = self.conn.getresponse()
                 return resp
         finally:
-            if self.perfdata is not None:
+            if self.perfdata is not None and self.conn.upload_start:
                 perfdata_rawx = self.perfdata.setdefault("rawx", {})
                 chunk_url = self.conn.chunk["url"]
                 upload_end = monotonic_time()
