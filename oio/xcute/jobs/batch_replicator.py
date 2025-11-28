@@ -92,17 +92,21 @@ class BatchReplicatorTask(XcuteTask):
         self.kafka_endpoint = self.conf["broker_endpoint"]
         self.kafka_producer = None
 
+    def _is_delete_marker(self, event: Event):
+        for metadata in event.env["data"]:
+            if metadata["type"] == "aliases":
+                return metadata.get("deleted", False)
+
     def _set_status_to_pending(self, event: Event, reqid):
         obj = event.url.get("path")
         version = event.url.get("version")
 
         # Set the metadata on the object
-        metadata = {REPLICATION_STATUS_KEY: OBJECT_REPLICATION_PENDING}
         self.api.object_set_properties(
             account=get_account_from_event(event),
             container=get_root_container_from_event(event),
             obj=obj,
-            properties=metadata,
+            properties={REPLICATION_STATUS_KEY: OBJECT_REPLICATION_PENDING},
             version=version,
             reqid=reqid,
         )
@@ -199,17 +203,24 @@ class BatchReplicatorTask(XcuteTask):
             wait_time = int(wait_time * random.uniform(0.5, 1.5))
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
+        """
+        Note that a delete marker has no replication status, the event is sent et voilà.
+        With OBSTO-3344, delete marker will have a status, then we will be able to
+        track their status.
+        """
         resp = Counter()
         event = Event(task_payload)
-
+        is_delete_marker = self._is_delete_marker(event)
         try:
-            event = self._set_status_to_pending(event, reqid)
+            if not is_delete_marker:
+                event = self._set_status_to_pending(event, reqid)
 
             # Can raise KafkaError
             self._send_event(event)
 
-            # Can raise ReplicationError
-            self._wait_for_replication(event, reqid)
+            if not is_delete_marker:
+                # Can raise ReplicationError
+                self._wait_for_replication(event, reqid)
         except NoSuchContainer:
             self.logger.info("Container does not exist anymore")
             resp["object_skipped_container_deleted"] += 1
