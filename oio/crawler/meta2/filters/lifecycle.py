@@ -30,8 +30,14 @@ from oio.common.constants import (
     SHARDING_ACCOUNT_PREFIX,
     S3StorageClasses,
 )
-from oio.common.easy_value import debinarize, int_value
-from oio.common.exceptions import NoSuchContainer, NotFound, OioException
+from oio.common.easy_value import boolean_value, debinarize, int_value
+from oio.common.exceptions import (
+    NoSuchContainer,
+    NotFound,
+    OioException,
+    OioUnhealthyKafkaClusterError,
+)
+from oio.common.kafka_http import KafkaClusterHealth
 from oio.common.utils import (
     get_bucket_owner_from_acl,
     read_storage_mappings,
@@ -184,6 +190,7 @@ class Lifecycle(Meta2Filter):
         self.skipped = 0
         self.processed = 0
         self.bucket_budget_reached = 0
+        self.unhealthy_kafka_cluster = 0
         self.container_budget_reached = 0
         self.events_count = {}
         self.events_count_for_container = {}
@@ -230,6 +237,21 @@ class Lifecycle(Meta2Filter):
         self.shorten_days_dates_factor = int_value(
             self.conf.get("shorten_days_dates_factor"), 1
         )
+
+        self.use_kafka_health_check = boolean_value(
+            self.conf.get("use_kafka_health_check"), False
+        )
+        if self.use_kafka_health_check:
+            kafka_cluster_health_conf = {
+                k[21:]: v
+                for k, v in self.conf.items()
+                if k.startswith("kafka_cluster_health_")
+            }
+            kafka_cluster_health_conf["namespace"] = self.api.namespace
+            self.kafka_cluster_health = KafkaClusterHealth(
+                kafka_cluster_health_conf, pool_manager=self.api.container.pool_manager
+            )
+
         self.reset_stats()
 
     def _get_storage_class_order(self, storage_class):
@@ -335,11 +357,17 @@ class Lifecycle(Meta2Filter):
         return budget_left
 
     def _get_next_limit(self):
-        return min(
-            self._get_container_budget_left(),
-            self._get_bucket_budget_left(),
-            self.batch_size,
-        )
+        if self.use_kafka_health_check:
+            return min(
+                self._get_container_budget_left(),
+                self.batch_size,
+            )
+        else:
+            return min(
+                self._get_container_budget_left(),
+                self._get_bucket_budget_left(),
+                self.batch_size,
+            )
 
     def _prepare_context(self, meta2db):
         account, container = self.api.resolve_cid(meta2db.cid)
@@ -462,6 +490,13 @@ class Lifecycle(Meta2Filter):
             elif isinstance(exc, ContainerPassBudgetReached):
                 self.container_budget_reached += 1
                 budget_reached = "container"
+        except OioUnhealthyKafkaClusterError as exc:
+            self.logger.warning(
+                "Unhealthy kafka cluster, lifecycle operation on hold: %s", exc
+            )
+            self.unhealthy_kafka_cluster += 1
+            # A unhealthy kafka cluster shouldn't stop the pipeline from continuing
+            return self.app(env, cb)
         except Exception as exc:
             self.logger.error(
                 "Failed to process container: %s (%s), reason: %s",
@@ -774,7 +809,9 @@ class Lifecycle(Meta2Filter):
 
         while True:
             next_batch_size = self._get_next_limit()
-
+            # Check kafka health
+            if self.use_kafka_health_check:
+                self.kafka_cluster_health.check()
             data = {
                 "action": action_class.field,
                 "suffix": self.context.suffix,
@@ -846,6 +883,7 @@ class Lifecycle(Meta2Filter):
             "skipped": self.skipped,
             "processed": self.processed,
             "bucket_budget_reached": self.bucket_budget_reached,
+            "unhealthy_kafka_cluster": self.unhealthy_kafka_cluster,
             "container_budget_reached": self.container_budget_reached,
             "total_events": total,
             **events_count,
@@ -857,6 +895,7 @@ class Lifecycle(Meta2Filter):
         self.skipped = 0
         self.processed = 0
         self.bucket_budget_reached = 0
+        self.unhealthy_kafka_cluster = 0
         self.container_budget_reached = 0
         self.events_count = {a.value: 0 for a in self.ACTIONS_ALLOWED}
         self.events_count_per_container = {a.value: 0 for a in self.ACTIONS_ALLOWED}
