@@ -39,32 +39,35 @@ class BatchReplicatorCreator(BucketFilter):
     ) -> bool:
         """
         Return xcute lister job id if found.
-        Returns: tuple: job_id (str) (or None if we should stop here)
+        Returns: tuple: job_id (str), error_or_skip (None if should continue)
         """
         # Only work on objects with the prefix
         if not obj_wrapper.name.startswith(self.CURRENT_PREFIX):
             self.skipped += 1
-            return None
+            return None, self.app
 
         # Check lister xcute job id metadata exists
-        props = self._get_properties(obj_wrapper, obj_wrapper.name, reqid)
+        props, error = self._get_properties(obj_wrapper, obj_wrapper.name, reqid)
+        if error:
+            self.errors += 1
+            return None, error
         lister_job_id = props.get(f"xcute-job-id-{BucketListerJob.JOB_TYPE}")
 
         # Make sure the lister job is finished
         if not lister_job_id:
             self.skipped_lister_not_finished += 1
-            return None
+            return None, self.app
         lister_job = self.app_env["api"].xcute_customer.job_show(lister_job_id)
         lister_status = lister_job.get("job", {}).get("status")
         if lister_status == XcuteJobStatus.FAILED:
             self.skipped_lister_error += 1
-            return None
+            return None, self.app
         if lister_status != XcuteJobStatus.FINISHED or not lister_status:
             self.skipped_lister_not_finished += 1
-            return None
+            return None, self.app
 
         # Object should be process, let's continue
-        return lister_job_id
+        return lister_job_id, None
 
     def _build_job_config(self, account: str, bucket: str, lister_job_id: str):
         job_params = {
@@ -101,9 +104,11 @@ class BatchReplicatorCreator(BucketFilter):
         obj_wrapper = ObjectWrapper(env)
         reqid = request_id(prefix="batchreplicreator-")
 
-        lister_job_id = self._check_if_object_should_be_process(obj_wrapper, reqid)
-        if not lister_job_id:
-            return self.app(env, cb)
+        lister_job_id, error_or_skip = self._check_if_object_should_be_process(
+            obj_wrapper, reqid
+        )
+        if error_or_skip:
+            return error_or_skip(env, cb)
 
         data, data_raw, error = self._get_object_data(obj_wrapper)
         if error:

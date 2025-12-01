@@ -136,7 +136,9 @@ class BucketFilter(Filter):
         # First, check on the in_progress object that the xcute job does not already
         # exist (still running or finished (finished means it could be created again..))
         try:
-            props = self._get_properties(obj_wrapper, key, reqid, raise_on_error=True)
+            props, _ = self._get_properties(
+                obj_wrapper, key, reqid, raise_on_error=True
+            )
             job_id = props.get(f"xcute-job-id-{job_type}")
             if job_id:
                 self.logger.warning("Xcute job already exists for %s", obj_wrapper)
@@ -192,13 +194,13 @@ class BucketFilter(Filter):
                 reqid=reqid,
                 force_master=True,
             )
-            return props.get("properties", {})
+            return props.get("properties", {}), None
         except OioException as err:
             if raise_on_error:
                 raise
             self.logger.error("Failed to get properties of %s (err=%s)", key, err)
             self.errors += 1
-            return BucketCrawlerError(obj_wrapper.env, body=str(err))
+            return None, BucketCrawlerError(obj_wrapper.env, body=str(err))
 
     def _save_job_id(
         self,
