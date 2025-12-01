@@ -21,6 +21,7 @@ from importlib import import_module
 import pytest
 from mock import MagicMock as Mock
 from mock import patch
+from pika.exceptions import AMQPError
 
 from oio.account.backend_fdb import BYTES_FIELD, OBJECTS_FIELD
 from oio.billing.agents import agent_factory
@@ -281,6 +282,39 @@ class TestBillingAgent(BaseTestCase):
         self.assertRaises(
             MalformedBucket, self.agent.bucket_to_sample, malformed_bucket
         )
+
+    def test_raise_after_max_retries(self):
+        """Test that AMQP connection resets after maximum retries
+        and raises an error when publish retries are exceeded."""
+
+        bucket1 = {
+            "name": "mybucket1",
+            "account": "AUTH_myaccount1",
+            "region": "MYREGION",
+            "bytes": 42,
+            "bytes-details": {"TWOCOPIES": 5, "THREECOPIES": 15, "EC": 22},
+            "objects": 12,
+            "objects-details": {"SINGLE": 1, "TWOCOPIES": 2, "THREECOPIES": 3, "EC": 6},
+        }
+        self.agent.publish_retries = 5
+        self.agent.max_retries_before_reset = 4
+
+        def custom_ampq_connect(*args, **kwargs):
+            self.agent._amqp_channel = FakeChannel()
+
+        self.agent._amqp_connect = custom_ampq_connect
+        self.agent._amqp_channel = FakeChannel()
+        with patch.object(
+            FakeChannel, "basic_publish", side_effect=AMQPError
+        ) as mock_publish:
+            orig_reset = self.agent._amqp_reset
+            self.agent._amqp_reset = Mock(side_effect=orig_reset)
+            samples = []
+            samples.append(self.agent.bucket_to_sample(bucket1))
+            with self.assertRaises(AMQPError):
+                self.agent.send_message(samples)
+            self.assertEqual(self.agent._amqp_reset.call_count, 1)
+            self.assertEqual(mock_publish.call_count, 6)
 
     def test_send_message(self):
         bucket1 = {

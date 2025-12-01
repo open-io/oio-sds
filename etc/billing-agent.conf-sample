@@ -48,6 +48,10 @@ agent_type = account
 # Limit the number of retries to 5 for message publication
 publish_retries = 5
 
+# Max number of retries to 3 before ampqp connection reset.
+# The value must be inferior to publish_retries value
+max_retries_before_reset = 3
+
 # Storage classes
 ## The storage policies associed with their storage class
 #storage_class.GLACIER = SINGLE,TWOCOPIES

@@ -51,6 +51,7 @@ class IBillingAgent:
     DEFAULT_COUNTER_NAME = "default.counter"
     DEFAULT_BATCH_SIZE = 50
     DEFAULT_PUBLISH_RETRIES = -1  # Infinite
+    DEFAULT_MAX_RETRIES_BEFORE_RESET = 3
     AGENT_NAME = "base-agent"
 
     status_codes = (200, 204, 400, 500)
@@ -78,6 +79,18 @@ class IBillingAgent:
         self.publish_retries = int_value(
             self.conf.get("publish_retries"), self.DEFAULT_PUBLISH_RETRIES
         )
+        self.max_retries_before_reset = int_value(
+            self.conf.get("max_retries_before_reset"),
+            self.DEFAULT_MAX_RETRIES_BEFORE_RESET,
+        )
+        if (
+            self.publish_retries >= 0
+            and self.publish_retries <= self.max_retries_before_reset
+        ):
+            raise ValueError(
+                f"max_retries_before_reset(={self.max_retries_before_reset}) "
+                f"must be < publish_retries(={self.publish_retries})"
+            )
 
         # AMQP
         self._amqp_url = conf.get("amqp_url", self.DEFAULT_AMQP_URL)
@@ -140,6 +153,13 @@ class IBillingAgent:
             self._amqp_connection.close()
             self._amqp_connection = None
 
+    def _amqp_reset(self):
+        """Reset AMQP connection and chanel for the provided URL"""
+        # Close current connection if it exits
+        self._amqp_close()
+        # Re open a new connection
+        self._amqp_connect()
+
     def _amqp_prepare_message(self, event_type: str, payload: dict) -> dict:
         return {
             "event_type": event_type,
@@ -180,6 +200,10 @@ class IBillingAgent:
                 )
                 break
             except AMQPError as exc:
+                if (attempt % self.max_retries_before_reset) == 0:
+                    # Try reset the amqp connection
+                    self._amqp_reset()
+
                 if self.publish_retries >= 0 and attempt > self.publish_retries:
                     raise
                 self.logger.warning(
