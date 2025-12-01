@@ -211,8 +211,8 @@ use = egg:oio#lifecycle_delete_restore
 [filter:deadletter]
 use = egg:oio#deadletter
 
-# Name of the topic where to send events which have been
-# retried too many times.
+# Name of the topic where to send events which have been retried
+# too many times. This topic must be declared before start.
 graveyard = "oio-graveyard"
 
 # Maximum number of passes through the deadletter topic
@@ -221,8 +221,19 @@ graveyard = "oio-graveyard"
 # Set to 0 to always send to the graveyard.
 max_deadletter_count = 2
 
-#redirect_event.name = destination_topic
-redirect_storage_container_state = oio
+# Redirect event types to specific topics (or drop them).
+# Use prefix "redirect_" as a default if there is no destination_topic in
+# original event, use prefix "force_" to ignore the original topic, use prefix
+# "drop_" to do nothing with the event. If you want to keep the event for
+# later but remove it from the deadletter, send it to another topic
+# (ex: "force_event_name = my-new-topic"). Notice that event type names
+# must be written with dots replaced by underscores.
+#
+#force_event_type_name = destination_topic
+#redirect_event_type_name = destination_topic
+
+drop_storage_container_state = 1  # value does not matter
+force_storage_content_transitioned = oio-transitioned
 redirect_storage_chunk_new = oio-chunk
 
 # -----------------------------------------------------------------

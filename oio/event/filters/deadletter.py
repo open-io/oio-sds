@@ -7,7 +7,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -26,6 +26,8 @@ class DeadletterFilter(Filter):
 
     DEFAULT_DEADLETTER_COUNT = -1  # Retry indefinitely
     DEFAULT_GRAVEYARD_TOPIC = "oio-graveyard"
+    DROP_PREFIX = "drop_"
+    OVERRIDE_PREFIX = "force_"
     REDIRECT_PREFIX = "redirect_"
 
     def __init__(self, *args, endpoint=None, **kwargs):
@@ -42,18 +44,45 @@ class DeadletterFilter(Filter):
             self.conf.get("max_deadletter_count"),
             self.DEFAULT_DEADLETTER_COUNT,
         )
-        # Map the event type and the destination topic
-        mapping = {}
-        for k, v in self.conf.items():
-            if not k.startswith(self.REDIRECT_PREFIX):
-                continue
-            mapping[k[len(self.REDIRECT_PREFIX) :].replace("_", ".")] = v
-        self.mapping = mapping
+        self.drop_set = {
+            k.removeprefix(self.DROP_PREFIX).replace("_", ".")
+            for k, _ in self.conf.items()
+            if k.startswith(self.DROP_PREFIX)
+        }
+        self.override_map = {
+            k.removeprefix(self.OVERRIDE_PREFIX).replace("_", "."): v
+            for k, v in self.conf.items()
+            if k.startswith(self.OVERRIDE_PREFIX)
+        }
+        self.redirect_map = {
+            k.removeprefix(self.REDIRECT_PREFIX).replace("_", "."): v
+            for k, v in self.conf.items()
+            if k.startswith(self.REDIRECT_PREFIX)
+        }
         super().init()
+
+    def _find_destination(self, event_type: str, orig_destination_topic: str | None):
+        """
+        Find the expected destination topic for the specified type of event.
+        """
+        if event_type in self.drop_set:
+            return "__drop__"
+        if event_type in self.override_map:
+            return self.override_map[event_type]
+        if event_type in self.redirect_map:
+            if orig_destination_topic:
+                # To avoid handling unforeseen event types, only event types specified
+                # in the configuration can redirect to their original destination topic
+                return orig_destination_topic
+            return self.redirect_map[event_type]
+        raise ValueError(
+            f"Failed to get destination topic for event type '{event_type}', "
+            "will remain in deadletter topic"
+        )
 
     def _process(self, env):
         event: Event = Event(env)
-        destination_topic = None
+        orig_topic = None
         new_env = env.copy()
         try:
             # Retrieves the deadletter counter (the number of times the event
@@ -67,8 +96,8 @@ class DeadletterFilter(Filter):
                 if not event.data:
                     raise ValueError("'data' field is missing")
 
-                destination_topic = event.data.get("dest_topic")
-                if not destination_topic:
+                orig_topic = event.data.get("dest_topic")
+                if not orig_topic:
                     raise ValueError("'dest_topic' field is missing")
 
                 source_event = event.data.get("source_event")
@@ -85,24 +114,35 @@ class DeadletterFilter(Filter):
                 self.max_deadletter_count < 0
                 or deadletter_counter <= self.max_deadletter_count
             ):
-                # If we don't have the destination topic in the event
-                # we retrieve it via the mapping.
-                if not destination_topic:
-                    event_type = new_env.get("event")
-                    if not event_type:
-                        raise ValueError("'event' field is missing")
-                    if event_type not in self.mapping:
-                        raise ValueError(
-                            "Failed to get destination topic for this event"
-                        )
-                    destination_topic = self.mapping[event_type]
-                self._producer.send(destination_topic, new_env, flush=True)
+                event_type = new_env.get("event")
+                if not event_type:
+                    raise ValueError("'event' field is missing")
+
+                new_topic = self._find_destination(event_type, orig_topic)
+
+                if new_topic == "__drop__":
+                    # Note: the configuration file asks for this type of event
+                    # to be dropped.
+                    self.logger.debug(
+                        "Dropping event of type %s from %s",
+                        event_type,
+                        new_env.get("when"),
+                    )
+                else:
+                    # Note: either the original event had a destination topic
+                    # or there is a destination topic in the configuration file
+                    # for this type of event.
+                    self._producer.send(new_topic, new_env, flush=True)
             else:
+                # Note: the event has already been retried, send it to the graveyard
+                # (which is some kind of "super deadletter").
                 self.logger.error(
                     "Event exceeded the retry count, sending to graveyard"
                 )
                 self._producer.send(self.graveyard, new_env, flush=True)
         except ValueError as err:
+            # Note: the event is sent back to the deadletter, but with a higher offset
+            # so other events will be consumed before this one is consumed again.
             event.env["deadletter_counter"] = deadletter_counter
             return EventError(body=err)
         return None

@@ -7,7 +7,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -51,16 +51,96 @@ class TestDeadletterConsumer(BaseTestCase):
             "chunk_size": "41287",
         },
     }
+    CONTAINER_STATE_EVENT = {
+        "event": "storage.container.state",
+        "when": 1764671877311493,
+        "url": {
+            "ns": "NS",
+            "account": "myaccount",
+            "user": "FVE",
+            "id": "9360156FE5329E8AF6D3B8F5096F0B31E4B88A876EB87439136A8D11F2330331",
+        },
+        "request_id": "CLI-object-create-0-A8DDA2101AD8",
+        "origin": "python-urllib3/1.26.20",
+        "data": {
+            "bucket": None,
+            "policy": None,
+            "ctime": 1764671877300898,
+            "bytes-count": 0,
+            "bytes-details": {},
+            "object-count": 1,
+            "objects-details": {"THREECOPIES": 1},
+        },
+    }
 
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         # Initialize producer
-        cls._producer = KafkaSender(cls._cls_conf["kafka_endpoints"], cls._cls_logger)
+        cls._producer = KafkaSender(
+            cls._cls_conf["kafka_endpoints"],
+            cls._cls_logger,
+            cls._cls_conf,
+        )
         cls._graveyard_consumer = cls._register_consumer(topic="oio-graveyard")
         one_rawx = cls._cls_conf["services"]["rawx"][0]
         cls.CHUNK_NEW_EVENT_BASE["data"]["volume_id"] = one_rawx["addr"]
         cls.CHUNK_NEW_EVENT_BASE["data"]["volume_service_id"] = one_rawx["service_id"]
+
+    def test_drop_event(self):
+        self.clear_events()
+        reqid = request_id("test-deadletter-")
+
+        # Send valid events to the deadletter topic
+        src_event_0 = deepcopy(self.__class__.CONTAINER_STATE_EVENT)
+        src_event_1 = deepcopy(self.__class__.CHUNK_NEW_EVENT_BASE)
+        src_event_0["request_id"] = reqid
+        src_event_1["request_id"] = reqid
+        self._producer.send("oio-deadletter", src_event_0)
+        self._producer.send("oio-deadletter", src_event_1)
+
+        # Ensure the valid event has been handled (topic=oio-preserved)
+        revived_event_1 = self.wait_for_event(
+            reqid=reqid,
+            timeout=10.0,
+            types=("storage.chunk.new",),
+        )
+        # And the storage.container.state has been dropped
+        revived_event_0 = self.wait_for_event(
+            reqid=reqid,
+            timeout=2.0,
+            types=("storage.container.state",),
+        )
+        self.assertIsNotNone(revived_event_1)
+        self.assertIsNone(revived_event_0)
+
+    def test_retry_unknown_event_type(self):
+        """
+        Ensure unknown event types remain in deadletter (with a higher offset).
+        """
+        self.clear_events()
+        reqid = request_id("test-deadletter-")
+
+        # Send an event of to the deadletter topic, with a type unknown
+        # to the deadletter filter.
+        src_event = deepcopy(self.__class__.CHUNK_NEW_EVENT_BASE)
+        src_event["request_id"] = reqid
+        src_event["event"] = "storage.meta2.deleted"
+        self._producer.send("oio-deadletter", src_event)
+
+        revived_event = self.wait_for_event(
+            kafka_consumer=self._graveyard_consumer,
+            reqid=reqid,
+            timeout=10.0,
+            types=("storage.meta2.deleted",),
+        )
+        self.assertIsNotNone(revived_event)
+        self.assertEqual(revived_event.env["data"], src_event["data"])
+        # In test platforms, deadletter is short and consumed until the end.
+        # Therefore, the unknown event is analyzed several times and end up
+        # in the graveyard.
+        self.assertIn("deadletter_counter", revived_event.env)
+        self.assertEqual(revived_event.env["deadletter_counter"], 3)
 
     def test_retry_valid_event(self):
         self.clear_events()

@@ -1984,10 +1984,16 @@ pipeline = consume_deadletter
 [handler:storage.container.new]
 pipeline = consume_deadletter
 
+[handler:storage.container.state]
+pipeline = consume_deadletter
+
 [handler:storage.content.deleted]
 pipeline = consume_deadletter
 
 [handler:storage.content.transitioned]
+pipeline = consume_deadletter
+
+[handler:storage.meta2.deleted]
 pipeline = consume_deadletter
 
 [handler:test.grouping]
@@ -2000,9 +2006,12 @@ max_deadletter_count = 2
 #redirect_event.name = destination_topic
 redirect_storage_chunk_new = oio-chunks-127.0.0.1
 redirect_storage_container_new = oio
+drop_storage_container_state = 1
 redirect_storage_content_deleted = oio-delete
 redirect_storage_content_transitioned = oio-transitioned
-redirect_test.grouping = oio-graveyard
+redirect_storage_content_update = oio
+# redirect_storage_meta2_deleted ## commented-out for testing purpose!
+force_test_grouping = oio-graveyard
 """
 
 template_xcute_event_agent = """
