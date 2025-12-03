@@ -110,7 +110,7 @@ class BatchReplicatorCreator(BucketFilter):
         if error_or_skip:
             return error_or_skip(env, cb)
 
-        data, data_raw, error = self._get_object_data(obj_wrapper)
+        data, data_raw, _, error = self._get_object_data(obj_wrapper)
         if error:
             return error(env, cb)
 
