@@ -48,7 +48,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
     def setUp(self):
         super().setUp()
         self.account = "testbucketlister"
-        self.internal_bucket = "internal-bucket"
+        self.internal_bucket = "internal-bucket-lister"
         self.container = "testbucketlister-" + random_str(4)
         self.container_segment = f"{self.container}+segments"
 
@@ -145,6 +145,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
             "errors": 0,
             "skipped": 1,
             "skipped_lock_already_taken": 0,
+            "skipped_vanished": 0,
         }
         self.assertDictEqual(expected_stats, stats)
 
@@ -168,9 +169,10 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
         stats = self.bucket_lister_creator.get_stats()["BucketListerCreator"]
         expected_stats = {
             "successes": 0,
-            "errors": 1,
+            "errors": 0,
             "skipped": 0,
             "skipped_lock_already_taken": 0,
+            "skipped_vanished": 1,
         }
         self.assertDictEqual(expected_stats, stats)
 
@@ -232,6 +234,7 @@ class TestBucketListerCreatorCrawler(XcuteTest, BaseTestCase):
             "errors": 0,
             "skipped": 0,
             "skipped_lock_already_taken": 0,
+            "skipped_vanished": 0,
         }
         self.assertDictEqual(expected_stats, stats)
 

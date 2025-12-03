@@ -20,7 +20,7 @@ from json import loads
 from botocore.exceptions import ClientError
 
 from oio.common.boto import get_boto_client
-from oio.common.exceptions import Forbidden, NotFound, OioException
+from oio.common.exceptions import Forbidden, NoSuchObject, NotFound, OioException
 from oio.crawler.bucket.object_wrapper import BucketCrawlerError, ObjectWrapper
 from oio.crawler.common.base import Filter
 
@@ -38,6 +38,7 @@ class BucketFilter(Filter):
         self.successes = 0
         self.errors = 0
         self.skipped = 0
+        self.skipped_vanished = 0
 
         self.internal_bucket = self.app_env["volume_id"]
         boto_conf = {k[5:]: v for k, v in self.conf.items() if k.startswith("boto_")}
@@ -73,6 +74,15 @@ class BucketFilter(Filter):
             last_modified = int(get_resp["LastModified"].timestamp())
             return loads(data_raw), data_raw, last_modified, None
         except ClientError as err:
+            if err.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
+                # Object does not exist anymore, maybe another filter is dealing with it
+                self.skipped_vanished += 1
+                self.logger.info(
+                    "Object %s does not exist anymore while downloading data "
+                    "(consider vanished)",
+                    obj_wrapper,
+                )
+                return None, None, None, self.app
             self.logger.error("Failed to get object %s (err=%s)", obj_wrapper, err)
             self.errors += 1
             return None, None, None, BucketCrawlerError(obj_wrapper.env, body=str(err))
@@ -99,7 +109,7 @@ class BucketFilter(Filter):
                 return None
             except ClientError as err:
                 self.logger.debug("Failed to head the object %s (err=%s)", key, err)
-                if err.response["Error"]["Code"] != "404":
+                if err.response["ResponseMetadata"]["HTTPStatusCode"] != 404:
                     self.logger.error(
                         "Failed to check object before its creation %s (err=%s)",
                         key,
@@ -143,6 +153,14 @@ class BucketFilter(Filter):
             if job_id:
                 self.logger.warning("Xcute job already exists for %s", obj_wrapper)
                 return job_id, None
+        except NotFound:
+            self.logger.info(
+                "Object %s does not exist anymore while getting properties "
+                "for checking if xcute job exists (consider vanished)",
+                obj_wrapper,
+            )
+            self.skipped_vanished += 1
+            return None, self.app
         except OioException as err:
             self.logger.error(
                 "Failed to check if xcute job exists for %s (err=%s)", obj_wrapper, err
@@ -198,6 +216,14 @@ class BucketFilter(Filter):
         except OioException as err:
             if raise_on_error:
                 raise
+            if isinstance(err, NoSuchObject):
+                self.logger.info(
+                    "Object %s does not exist anymore while getting properties "
+                    "(consider vanished)",
+                    obj_wrapper,
+                )
+                self.skipped_vanished += 1
+                return None, self.app
             self.logger.error("Failed to get properties of %s (err=%s)", key, err)
             self.errors += 1
             return None, BucketCrawlerError(obj_wrapper.env, body=str(err))
@@ -223,6 +249,14 @@ class BucketFilter(Filter):
                 reqid=reqid,
             )
             return None
+        except NotFound:
+            self.logger.info(
+                "Object %s does not exist anymore while saving xcute job "
+                "(consider vanished)",
+                obj_wrapper,
+            )
+            self.skipped_vanished += 1
+            return self.app
         except OioException as err:
             self.logger.error(
                 "Failed to save job id to metadata to %s (err=%s)", key, err
@@ -243,7 +277,7 @@ class BucketFilter(Filter):
         self, obj_wrapper: ObjectWrapper, key: str, tag_key: str, tag_value: str
     ):
         """
-        Put tag to an object. Note that existings tags will be replaced.
+        Put tag to an object. Note that existing tags will be replaced.
         Returns: error (None if no error)
         """
         tag_set = [{"Key": tag_key, "Value": tag_value}]
@@ -271,9 +305,11 @@ class BucketFilter(Filter):
             "successes": self.successes,
             "errors": self.errors,
             "skipped": self.skipped,
+            "skipped_vanished": self.skipped_vanished,
         }
 
     def _reset_filter_stats(self):
         self.successes = 0
         self.errors = 0
         self.skipped = 0
+        self.skipped_vanished = 0

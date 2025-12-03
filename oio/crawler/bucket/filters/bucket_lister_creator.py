@@ -73,6 +73,9 @@ class BucketListerCreator(BucketFilter):
                     Key=obj["name"],
                 )
             except ClientError as err:
+                # Object may have been lifecycled between listing and now (not lucky!)
+                if err.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
+                    continue
                 self.logger.error(
                     "Failed to check progression object %s (err=%s)", obj["name"], err
                 )

@@ -17,10 +17,10 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from oio.common.easy_value import int_value
-from oio.common.exceptions import NoSuchObject
+from oio.common.exceptions import NoSuchObject, NotFound
 from oio.common.utils import request_id
 from oio.crawler.bucket.filters.common import BucketFilter
-from oio.crawler.bucket.object_wrapper import ObjectWrapper
+from oio.crawler.bucket.object_wrapper import BucketCrawlerError, ObjectWrapper
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs.batch_replicator import BatchReplicatorJob
 
@@ -136,7 +136,14 @@ class BatchReplicatorTracker(BucketFilter):
             self.skipped_replicator_not_finished += 1
             return self.app(env, cb)
 
-        job = self.app_env["api"].xcute_customer.job_show(repli_job_id)
+        try:
+            job = self.app_env["api"].xcute_customer.job_show(repli_job_id)
+        except NotFound as err:
+            self.logger.error("Repli job %s does not exist", repli_job_id)
+            # Consider error instead of skip_vanished because xcute jobs are not
+            # deleted as quickly.
+            self.errors += 1
+            return BucketCrawlerError(obj_wrapper.env, body=str(err))
 
         progression, error = self._update_progression(obj_wrapper, job)
         if error:
@@ -167,6 +174,7 @@ class BatchReplicatorTracker(BucketFilter):
         if error:
             return error(env, cb)
 
+        # Build kind of access log
         account = None
         bucket = None
         lock = job.get("job", {}).get("lock")

@@ -14,9 +14,10 @@
 # License along with this library.
 
 
+from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
 from oio.crawler.bucket.filters.common import BucketFilter
-from oio.crawler.bucket.object_wrapper import ObjectWrapper
+from oio.crawler.bucket.object_wrapper import BucketCrawlerError, ObjectWrapper
 from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs.batch_replicator import BatchReplicatorJob
 from oio.xcute.jobs.bucket_lister import BucketListerJob
@@ -49,7 +50,6 @@ class BatchReplicatorCreator(BucketFilter):
         # Check lister xcute job id metadata exists
         props, error = self._get_properties(obj_wrapper, obj_wrapper.name, reqid)
         if error:
-            self.errors += 1
             return None, error
         lister_job_id = props.get(f"xcute-job-id-{BucketListerJob.JOB_TYPE}")
 
@@ -57,8 +57,20 @@ class BatchReplicatorCreator(BucketFilter):
         if not lister_job_id:
             self.skipped_lister_not_finished += 1
             return None, self.app
-        lister_job = self.app_env["api"].xcute_customer.job_show(lister_job_id)
+        try:
+            lister_job = self.app_env["api"].xcute_customer.job_show(lister_job_id)
+        except NotFound as err:
+            self.logger.error("Lister job %s does not exist", lister_job_id)
+            # Consider error instead of skip_vanished because xcute jobs are not
+            # deleted as quickly.
+            self.errors += 1
+            return None, BucketCrawlerError(obj_wrapper.env, body=str(err))
         lister_status = lister_job.get("job", {}).get("status")
+        if not lister_status:
+            msg = f"Job {lister_job_id} has no status"
+            self.logger.error(msg)
+            self.errors += 1
+            return None, BucketCrawlerError(obj_wrapper.env, body=msg)
         if lister_status == XcuteJobStatus.FAILED:
             self.skipped_lister_error += 1
             return None, self.app
