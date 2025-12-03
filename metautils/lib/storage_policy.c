@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2021 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -263,10 +263,14 @@ _ec_policy_to_chunk_method(const struct data_security_s *datasec)
 	const gint64 k = data_security_get_int64_param(datasec, DS_KEY_K, 6);
 	const gint64 m = data_security_get_int64_param(datasec, DS_KEY_M, 4);
 	const char *algo = data_security_get_param(datasec, DS_KEY_ALGO);
+	const char *chksum = data_security_get_param(datasec, DS_KEY_CHECKSUM_TYPE);
 
 	g_string_append_printf(result,
 			"ec/algo=%s,k=%" G_GINT64_FORMAT",m=%" G_GINT64_FORMAT,
 			algo, k, m);
+	if (oio_str_is_set(chksum)) {
+		g_string_append_printf(result, ",%s=%s", DS_KEY_CHECKSUM_TYPE, chksum);
+	}
 
 	return result;
 }

@@ -468,7 +468,11 @@ class ECStream(object):
                 if self.perfdata is not None:
                     ec_start = monotonic_time()
                 try:
-                    segment = self.storage_method.driver.decode(data)
+                    # Note: force_metadata_checks is a no-op unless
+                    # we set chksum_type=something in ECDriver constructor
+                    segment = self.storage_method.driver.decode(
+                        data, force_metadata_checks=True
+                    )
                 except ECDriverError:
                     # something terrible happened
                     self.logger.exception(

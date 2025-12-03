@@ -536,7 +536,7 @@ boto_profile = keystone
 # boto_secret_key = DEMO_PASS
 # boto_region = ${REGION}
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
-# Delay before considering a replication job is stucked (in seconds)
+# Delay before considering a replication job is stuck (in seconds)
 delay_job_stuck = 300
 """
 
@@ -1013,6 +1013,7 @@ THREECOPIES_FR=rawx3:DUPONETHREE
 THREECOPIES_DA=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:E63
+ECC=NONE:E63C
 EC21=NONE:E21
 ECX21=NONE:EX21
 
@@ -1033,6 +1034,7 @@ DUP17=plain/min_dist=1,nb_copy=17
 
 E93=ec/k=9,m=3,algo=liberasurecode_rs_vand,min_dist=1
 E63=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
+E63C=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1,checksum_type=inline_crc32
 E21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
 EX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
 

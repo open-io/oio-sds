@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2025 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,7 +28,7 @@ License along with this library.
 #define DS_KEY_K "k"
 #define DS_KEY_M "m"
 #define DS_KEY_ALGO "algo"
-#define DS_KEY_WEAK "weak"
+#define DS_KEY_CHECKSUM_TYPE "checksum_type"
 #define DS_KEY_ACCOUNT_ID "account_id"
 #define DS_KEY_BUCKET_NAME "bucket_name"
 

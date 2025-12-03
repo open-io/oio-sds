@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -19,12 +19,12 @@ from oio.common import exceptions
 try:
     from pyeclib.ec_iface import ECDriver, ECDriverError
 except ImportError as err:
-    EC_MSG = "Erasure coding not available: %s" % err
+    EC_MSG = f"Erasure coding not available: {err}"
 
     class ECDriverError(RuntimeError):
         pass
 
-    class ECDriver(object):
+    class ECDriver:
         """Dummy wrapper for ECDriver, when erasure-coding is not available."""
 
         def __init__(self, *_args, **_kwargs):
@@ -39,7 +39,7 @@ def parse_chunk_method(chunk_method):
     Split a "packed" chunk method description into the chunk method type
     and a dictionary of parameters.
     """
-    param_list = dict()
+    param_list = {}
     if "/" in chunk_method:
         chunk_method, params = chunk_method.split("/", 1)
         params = params.split(",")
@@ -140,12 +140,12 @@ class StorageMethod(object):
 
 class ReplicatedStorageMethod(StorageMethod):
     def __init__(self, name, nb_copy, **kwargs):
-        super(ReplicatedStorageMethod, self).__init__(name=name, **kwargs)
+        super().__init__(name=name, **kwargs)
 
         try:
             self._params["nb_copy"] = int(nb_copy)
-        except (TypeError, ValueError):
-            raise exceptions.InvalidStorageMethod("Invalid %r nb_copy" % nb_copy)
+        except (TypeError, ValueError) as exc:
+            raise exceptions.InvalidStorageMethod(f"Invalid {nb_copy} nb_copy") from exc
         self._quorum = (self.nb_copy + 1) // 2
 
     @classmethod
@@ -172,32 +172,45 @@ class ReplicatedStorageMethod(StorageMethod):
 
 class ECStorageMethod(StorageMethod):
     def __init__(
-        self, name, ec_segment_size, ec_type, ec_nb_data, ec_nb_parity, **kwargs
+        self,
+        name,
+        ec_segment_size,
+        ec_type,
+        ec_nb_data,
+        ec_nb_parity,
+        checksum_type="none",
+        **kwargs,
     ):
-        super(ECStorageMethod, self).__init__(name=name, ec=True, **kwargs)
+        super().__init__(name=name, ec=True, **kwargs)
 
         try:
             self.params["k"] = int(ec_nb_data)
-        except (TypeError, ValueError):
-            raise exceptions.InvalidStorageMethod("Invalid %r ec_nb_data" % ec_nb_data)
+        except (TypeError, ValueError) as exc:
+            raise exceptions.InvalidStorageMethod(
+                f"Invalid value {ec_nb_data!r} for ec_nb_data"
+            ) from exc
 
         try:
             self.params["m"] = int(ec_nb_parity)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError) as exc:
             raise exceptions.InvalidStorageMethod(
-                "Invalid %r ec_nb_parity" % ec_nb_parity
-            )
+                f"Invalid value {ec_nb_parity!r} for ec_nb_parity"
+            ) from exc
 
         self._ec_segment_size = ec_segment_size
         self.params["algo"] = ec_type
 
         try:
-            self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity, ec_type=ec_type)
+            self.driver = ECDriver(
+                k=ec_nb_data,
+                m=ec_nb_parity,
+                ec_type=ec_type,
+                chksum_type=checksum_type,  # Not a typo
+            )
         except ECDriverError as exc:
-            msg = "'%s' (%s: %s) Check erasure code packages." % (
-                ec_type,
-                exc.__class__.__name__,
-                exc,
+            msg = (
+                f"'{ec_type}' ({exc.__class__.__name__}: {exc}) "
+                "Check erasure code packages."
             )
             raise exceptions.InvalidStorageMethod(msg) from exc
         self._ec_quorum_size = (
