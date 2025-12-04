@@ -25,8 +25,8 @@ from oio.common.easy_value import float_value
 from oio.common.exceptions import (
     BadRequest,
     ClientException,
+    ConfigurationException,
     Forbidden,
-    OioException,
     OioTimeout,
     ServiceBusy,
 )
@@ -54,7 +54,7 @@ class AccountUpdateFilter(Filter):
 
         self.read_timeout = float_value(self.conf.get("read_timeout"), READ_TIMEOUT)
         if not self.account.region:
-            raise OioException("Missing region key in namespace conf")
+            raise ConfigurationException("Missing region key in namespace conf")
 
         self.retry_delay = get_retry_delay(self.conf)
         self.features_whitelist = (

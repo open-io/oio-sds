@@ -27,6 +27,7 @@ from oio.common.constants import (
 )
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import (
+    ConfigurationException,
     NoSuchContainer,
     NoSuchObject,
     OioNetworkException,
@@ -71,12 +72,15 @@ class BatchReplicatorTask(XcuteTask):
             **self.conf,
             "delayed_topic": job_params["replication_delayed_topic"],
         }
-        self.kafka_endpoint = self.conf["broker_endpoint"]
+        self.kafka_endpoint = self.conf.get("broker_endpoint")
+        if not self.kafka_endpoint:
+            self.logger.error("Missing kafka broker_endpoint in conf")
+            raise ConfigurationException("Missing kafka broker_endpoint in conf")
         self.kafka_producer = None
 
     def _is_delete_marker(self, event: Event):
         for metadata in event.env["data"]:
-            if metadata["type"] == "aliases":
+            if metadata.get("type") == "aliases":
                 return metadata.get("deleted", False)
 
     def _set_status_to_pending(self, event: Event, reqid):
@@ -97,8 +101,8 @@ class BatchReplicatorTask(XcuteTask):
         found = False
         for metadata in event.env["data"]:
             if (
-                metadata["type"] == "properties"
-                and metadata["key"] == REPLICATION_STATUS_KEY
+                metadata.get("type") == "properties"
+                and metadata.get("key") == REPLICATION_STATUS_KEY
             ):
                 # Enforce the value
                 metadata["value"] = "PENDING"
