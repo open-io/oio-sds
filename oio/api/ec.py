@@ -473,12 +473,13 @@ class ECStream(object):
                     segment = self.storage_method.driver.decode(
                         data, force_metadata_checks=True
                     )
-                except ECDriverError:
+                except ECDriverError as exc:
                     # something terrible happened
                     self.logger.exception(
                         "ERROR decoding fragments (reqid=%s)", self.reqid
                     )
-                    raise
+                    # TODO(FVE): identify broken chunk, retry with another
+                    raise exceptions.ObjectUnavailable(str(exc)) from exc
                 finally:
                     if self.perfdata is not None:
                         ec_end = monotonic_time()

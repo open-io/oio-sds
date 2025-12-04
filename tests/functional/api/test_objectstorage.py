@@ -8,7 +8,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -181,13 +181,23 @@ class UnreliableResponse(CustomHTTPResponse):
     def reset_instance_count(cls):
         cls.inst_count = 0
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, action="short_read", **kwargs):
         CustomHTTPResponse.__init__(self, *args, **kwargs)
         self._read_count = 0
         self._limit_reads = self.__class__.inst_count == 0
         self.__class__.inst_count += 1
+        self.read = self._short_read if action == "short_read" else self._corrupt_read
 
-    def read(self, amount=None):
+    def _corrupt_read(self, amount=None):
+        res = CustomHTTPResponse.read(self, amount=amount)
+        if self._limit_reads:
+            if self._read_count > 0 and len(res) > 100:
+                # insert random bytes
+                res = res[0:-96] + random_data(16) + res[-80:]
+        self._read_count += 1
+        return res
+
+    def _short_read(self, amount=None):
         if self._limit_reads:
             if self._read_count > 2:
                 raise IOError("Failed to read more data")
@@ -862,12 +872,16 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 meta["extra_properties"], {"Foo": "bar", "Foo+2": "bar+2"}
             )
 
-    def _upload_data(self, name):
+    def _upload_data(self, name, policy=None):
         chunksize = int(self.conf["chunk_size"])
         size = chunksize * 12
         data = random_data(size)
         _, _, _, obj_meta = self.api.object_create_ext(
-            self.account, name, obj_name=name, data=data
+            self.account,
+            name,
+            obj_name=name,
+            data=data,
+            policy=policy,
         )
         self.created.append((name, name, obj_meta["version"]))
         _, chunks = self.api.object_locate(self.account, name, name)
@@ -963,23 +977,27 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             + data[4:7],
         )
 
-    def test_object_fetch_range_recover(self):
+    def _test_object_fetch_range_recover(
+        self, action="short_read", policy="EC", expect_corruption=False
+    ):
         """
         Check that the client can continue reading after the failure
         of a chunk in the middle of the download.
         """
-        chunk_size = self.conf["chunk_size"]
-        stg_method = self.storage_method_from_policy(self.conf["storage_policy"])
-        if not stg_method.ec:
+        def_stg_method = self.storage_method_from_policy(self.conf["storage_policy"])
+        if not def_stg_method.ec:
             self.skipTest("Run only in EC mode")
-        elif chunk_size <= (stg_method.ec_fragment_size * 3):
+
+        chunk_size = self.conf["chunk_size"]
+        stg_method = self.storage_method_from_policy(policy)
+        if chunk_size <= (stg_method.ec_fragment_size * 3):
             self.skipTest(
                 "Run only in EC mode and when "
                 f"chunk size > {stg_method.ec_fragment_size * 3}"
             )
 
         name = "range_test_" + random_str(6)
-        _, data = self._upload_data(name)
+        _, data = self._upload_data(name, policy=policy)
 
         # Start reading the object just before the end of an EC segment
         start = stg_method.ec_segment_size - 16
@@ -990,10 +1008,42 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         UnreliableResponse.reset_instance_count()
         with patch(
             "oio.common.http_eventlet.CustomHttpConnection.response_class",
-            UnreliableResponse,
+            partial(UnreliableResponse, action=action),
         ):
             fetched_data = self._fetch_range(name, (start, end))
-        self.assertEqual(expected_data, fetched_data)
+        if expect_corruption:
+            self.assertNotEqual(expected_data, fetched_data)
+        else:
+            self.assertEqual(expected_data, fetched_data)
+
+    def test_object_fetch_range_returns_corrupt_data(self):
+        """
+        Prove that the EC lib with no checksum configuration
+        does not detect corrupt data.
+        """
+        self._test_object_fetch_range_recover(
+            action="corrupt_read", policy="EC", expect_corruption=True
+        )
+
+    def test_object_fetch_range_recover_corrupt_data(self):
+        """
+        Prove that the EC lib with checksum configuration
+        recovers from corrupt input data.
+        """
+        # FIXME(FVE): fix the EC code so it can recover from data corruption
+        self.assertRaises(
+            exc.ObjectUnavailable,
+            self._test_object_fetch_range_recover,
+            action="corrupt_read",
+            policy="ECC",
+        )
+
+    def test_object_fetch_range_recover_short_read(self):
+        """
+        Check that we can detect a short read and
+        recover the missing data from another source.
+        """
+        self._test_object_fetch_range_recover(action="short_read")
 
     def test_object_create_then_append(self):
         """Create an object then append data"""

@@ -88,12 +88,12 @@ def random_id(size):
     return random_str(size, chars=RANDOM_CHARS_ID)
 
 
-def random_data(size):
-    """Return `size` bytes of random data as a str object"""
+def random_data(size: int) -> bytes:
+    """Return `size` bytes of random data"""
     try:
         return os.urandom(size)
     except NotImplementedError:
-        return random_str(size)
+        return random_str(size).encode("utf-8")
 
 
 def trim_srv(srv):
