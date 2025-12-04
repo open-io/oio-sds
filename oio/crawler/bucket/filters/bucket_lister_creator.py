@@ -32,7 +32,7 @@ class BucketListerCreator(BucketFilter):
         self.policy_manifest = self.conf["policy_manifest"]
         self.CURRENT_PREFIX = self.ON_HOLD_PREFIX
 
-    def _create_progression_object(self, obj_wrapper: ObjectWrapper):
+    def _create_progression_object(self, obj_wrapper: ObjectWrapper, reqid: str):
         """
         Create the progression object (for the customer to be able to track the
         operation).
@@ -61,6 +61,7 @@ class BucketListerCreator(BucketFilter):
             account=self.internal_account,
             container=self.internal_bucket,
             prefix=progression_key.rsplit("/", 1)[0],
+            reqid=reqid,
         )
         for obj in objs:
             if obj["name"] == progression_key:
@@ -117,7 +118,7 @@ class BucketListerCreator(BucketFilter):
             self.skipped += 1
             return self.app(env, cb)
 
-        error_or_skip = self._create_progression_object(obj_wrapper)
+        error_or_skip = self._create_progression_object(obj_wrapper, reqid)
         if error_or_skip:
             return error_or_skip(env, cb)
 

@@ -92,6 +92,7 @@ class BucketListerTask(XcuteTask):
                         bucket=self.customer_bucket,
                         event_type=EventTypes.CONTENT_NEW,
                         origin="xcute-bucket-lister",
+                        reqid=reqid,
                     )
                     event = json.dumps(event, separators=(",", ":")) + "\n"
 
@@ -124,6 +125,7 @@ class BucketListerTask(XcuteTask):
             # Transmit the counters as metadata of the object for further processing
             # (values should be converted as strings to be accepted).
             properties_callback=lambda **_: {k: str(v) for k, v in resp.items()},
+            reqid=reqid,
         )
 
         return resp
@@ -184,7 +186,9 @@ class BucketListerJob(XcuteJob):
 
     def get_shards(self, job_params, marker=None, reqid=None):
         props = self.api.container_get_properties(
-            job_params["account"], job_params["bucket"]
+            job_params["account"],
+            job_params["bucket"],
+            reqid=reqid,
         )
         if int(props.get("system", {}).get("sys.m2.shards", 0)) == 0:
 

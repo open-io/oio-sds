@@ -298,6 +298,7 @@ class BatchReplicatorJob(XcuteJob):
                 job_params["technical_account"],
                 job_params["technical_bucket"],
                 manifest["name"],
+                reqid=reqid,
             )
             lines = iter_lines_from_stream(stream, line_marker)
             for index, event in lines:
