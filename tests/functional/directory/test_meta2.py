@@ -33,6 +33,11 @@ from tests.utils import BaseTestCase, random_str
 
 
 class TestMeta2Database(BaseTestCase):
+    down_cache_opts = {
+        "client.down_cache.avoid": False,
+        "client.down_cache.shorten": True,
+    }
+
     def setUp(self):
         super().setUp()
         self.api = self.storage
@@ -40,6 +45,13 @@ class TestMeta2Database(BaseTestCase):
         self.reference = "meta2_database_" + random_str(4)
         self.meta2_database = Meta2Database(self.conf)
         self.service_type = "meta2"
+
+    def _apply_conf_on_proxy(self, reverse=False):
+        if reverse:
+            config = {x: str(not y) for x, y in self.__class__.down_cache_opts.items()}
+        else:
+            config = {x: str(y) for x, y in self.__class__.down_cache_opts.items()}
+        self.admin.proxy_set_live_config(config=config)
 
     def _get_peers(self):
         linked_services = self.api.directory.list(self.account, self.reference)
@@ -452,15 +464,19 @@ class TestMeta2Database(BaseTestCase):
         # have a copy of the database) respond with "Base not managed",
         # which makes the election fail.
         reqid = request_id("set-prop-")
-        self.assertRaisesRegex(
-            ServiceBusy,
-            r"Election failed.*",
-            self.admin.set_properties,
-            "meta2",
-            account=self.account,
-            reference=self.reference,
-            properties={"user.writable": "false"},
-            service_id=down_m2,
-            reqid=reqid,
-            # timeout=5.0,  # A short timeout may fail on CI env
-        )
+        self._apply_conf_on_proxy()
+        try:
+            self.assertRaisesRegex(
+                ServiceBusy,
+                r"Election failed.*",
+                self.admin.set_properties,
+                "meta2",
+                account=self.account,
+                reference=self.reference,
+                properties={"user.writable": "false"},
+                service_id=down_m2,
+                reqid=reqid,
+                # timeout=5.0,  # A short timeout may fail on CI env
+            )
+        finally:
+            self._apply_conf_on_proxy(reverse=True)
