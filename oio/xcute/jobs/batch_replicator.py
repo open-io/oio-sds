@@ -7,7 +7,7 @@
 #
 # This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
 # Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public
@@ -294,21 +294,41 @@ class BatchReplicatorJob(XcuteJob):
             manifest_marker, line_marker = marker.split(";")
             line_marker = int(line_marker)
 
-        manifests = self.get_manifests(
-            job_params=job_params, marker=manifest_marker, reqid=reqid
-        )
-        for manifest in manifests:
+        # Prepare iterators for each manifests
+        manifest_iters = []
+        for manifest in self.get_manifests(job_params=job_params, reqid=reqid):
             _, stream = self.api.object_fetch(
                 job_params["technical_account"],
                 job_params["technical_bucket"],
                 manifest["name"],
                 reqid=reqid,
             )
-            lines = iter_lines_from_stream(stream, line_marker)
-            for index, event in lines:
-                task_id = f"{manifest['name']};{index}"
-                yield (task_id, json.loads(event))
-            line_marker = 0
+            manifest_iters.append(
+                (manifest["name"], iter_lines_from_stream(stream, line_marker))
+            )
+
+        manifest_name_finished = []
+        while True:
+            for manifest_name, it in manifest_iters:
+                try:
+                    index, event = next(it)
+                    if manifest_marker:
+                        if manifest_name != manifest_marker:
+                            # Marker not reached, continue
+                            continue
+                        manifest_marker = None
+                        # Marker reached, next manifest will be the good one
+                        continue
+                    task_id = f"{manifest_name};{index}"
+                    yield (task_id, json.loads(event))
+                except StopIteration:
+                    manifest_name_finished.append(manifest_name)
+
+            for manifest_name in manifest_name_finished:
+                manifest_iters = [m for m in manifest_iters if m[0] != manifest_name]
+            if not manifest_iters:
+                break
+            manifest_name_finished = []
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         manifests = self.get_manifests(
