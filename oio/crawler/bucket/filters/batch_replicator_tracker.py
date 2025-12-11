@@ -180,8 +180,8 @@ class BatchReplicatorTracker(BucketFilter):
         lock = job.get("job", {}).get("lock")
         if lock:
             lock_values = lock.split("/")
-            account = lock_values[1]
-            bucket = lock_values[2]
+            account = lock_values[0]
+            bucket = lock_values[1]
         self.logger.info(
             "Job id %s completed for account=%s bucket=%s with status=%s "
             "(nb_errors=%s nb_replicated=%s)",

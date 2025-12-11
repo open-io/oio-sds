@@ -275,7 +275,9 @@ class BatchReplicatorJob(XcuteJob):
         sanitized_job_params["delay_retry_later"] = int_value(
             job_params.get("delay_retry_later"), cls.DEFAULT_DELAY_RETRY_LATER
         )
-        return sanitized_job_params, job_params["technical_manifest_prefix"]
+        # prefix looks like listing/account/bucket/xxx
+        _, account, bucket, *_ = job_params["technical_manifest_prefix"].split("/")
+        return sanitized_job_params, f"{account}/{bucket}"
 
     def __init__(self, conf, logger=None, **kwargs):
         super().__init__(conf, logger=logger, **kwargs)

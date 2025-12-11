@@ -2234,7 +2234,7 @@ template_xcute_customer = """
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+syslog_prefix = OIO,${NS},${SRVTYPE}-customer,${SRVNUM}
 namespace = ${NS}
 # Let this option empty to connect directly to redis_host
 #redis_sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
