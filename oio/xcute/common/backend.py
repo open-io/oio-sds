@@ -661,7 +661,7 @@ class XcuteBackend(RedisConnection):
         if job_type:
             job_type = job_type.lower().strip().encode("utf-8")
         if job_lock:
-            job_lock = job_lock.lower().strip().encode("utf-8")
+            job_lock = job_lock.strip().encode("utf-8")
 
         jobs = {"jobs": []}
         next_marker = None
