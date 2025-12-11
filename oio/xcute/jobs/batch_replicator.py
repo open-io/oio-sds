@@ -33,6 +33,7 @@ from oio.common.exceptions import (
     OioNetworkException,
     OioUnhealthyKafkaClusterError,
     RetryLater,
+    ServiceBusy,
 )
 from oio.common.kafka import (
     DEFAULT_REPLICATION_DELAYED_TOPIC,
@@ -203,7 +204,7 @@ class BatchReplicatorTask(XcuteTask):
             self.logger.info("Source object does not exist anymore")
             resp["object_skipped_deleted"] += 1
             return resp
-        except OioNetworkException:
+        except (OioNetworkException, ServiceBusy):
             # Something went wrong, retry later
             raise RetryLater(delay=self.delay_retry_later)
 
