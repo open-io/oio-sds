@@ -52,7 +52,7 @@ class KafkaError(Exception):
     pass
 
 
-class ReplicationError(Exception):
+class ReplicationStuck(Exception):
     pass
 
 
@@ -156,14 +156,14 @@ class BatchReplicatorTask(XcuteTask):
                 OBJECT_REPLICATION_FAILED,
                 OBJECT_REPLICATION_COMPLETED,
             ):
-                break
+                return replication_status
 
             # Check if timeout reached
             elapsed = monotonic_time() - start_time
             if elapsed >= self.check_replication_status_timeout:
-                msg = "Timeout reached, consider replication failed"
+                msg = "Timeout reached, consider replication stuck"
                 self.logger.error(msg)
-                raise ReplicationError(msg)
+                raise ReplicationStuck(msg)
 
             self.logger.debug(
                 "Replication of obj=%s still in progress, waiting %ds ...",
@@ -194,8 +194,8 @@ class BatchReplicatorTask(XcuteTask):
             self._send_event(event)
 
             if not is_delete_marker:
-                # Can raise ReplicationError
-                self._wait_for_replication(event, reqid)
+                # Can raise ReplicationStuck
+                status = self._wait_for_replication(event, reqid)
         except NoSuchContainer:
             self.logger.info("Container does not exist anymore")
             resp["object_skipped_container_deleted"] += 1
@@ -204,12 +204,19 @@ class BatchReplicatorTask(XcuteTask):
             self.logger.info("Source object does not exist anymore")
             resp["object_skipped_deleted"] += 1
             return resp
+        except ReplicationStuck:
+            resp["object_replication_stuck"] += 1
+            return resp
         except (OioNetworkException, ServiceBusy):
             # Something went wrong, retry later
             raise RetryLater(delay=self.delay_retry_later)
 
-        self.logger.debug("Replication of obj=%s finished", event.url.get("path"))
-        resp["object_replicated"] += 1
+        self.logger.debug(
+            "Replication of obj=%s finished with status %s",
+            event.url.get("path"),
+            status,
+        )
+        resp[f"object_replication_{status}"] += 1
         return resp
 
 

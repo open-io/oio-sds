@@ -89,18 +89,21 @@ class BatchReplicatorTracker(BucketFilter):
             if total is not None:
                 progression["total"] = total
 
-        nb_errors = job.get("errors", {}).get("total", 0)
-        nb_processed = job.get("tasks", {}).get("processed", 0)
-        if nb_errors > nb_processed:
-            self.logger.error(
-                "Job %s has more errors (%d) than processed (%d)",
-                job["job"]["id"],
-                nb_errors,
-                nb_processed,
-            )
-        else:
-            progression["nb_errors"] = nb_errors
-            progression["nb_replicated"] = nb_processed - nb_errors
+        nb_completed = job.get("results", {}).get("object_replication_COMPLETED", 0)
+        nb_failed = (
+            job.get("errors", {}).get("total", 0)
+            + job.get("results", {}).get("object_replication_FAILED", 0)
+            + job.get("results", {}).get("object_skipped_container_deleted", 0)
+            + job.get("results", {}).get("object_skipped_deleted", 0)
+        )
+        nb_stuck = job.get("results", {}).get("object_replication_stuck", 0)
+
+        if nb_completed > 0:
+            progression["nb_completed"] = nb_completed
+        if nb_failed > 0:
+            progression["nb_failed"] = nb_failed
+        if nb_stuck > 0:
+            progression["nb_stuck"] = nb_stuck
 
         progression_key = self._build_key(obj_wrapper, self.PROGRESSION_PREFIX)
         return progression, self._create_object(
@@ -184,13 +187,14 @@ class BatchReplicatorTracker(BucketFilter):
             bucket = lock_values[1]
         self.logger.info(
             "Job id %s completed for account=%s bucket=%s with status=%s "
-            "(nb_errors=%s nb_replicated=%s)",
+            "(nb_completed=%s nb_failed=%s nb_stuck=%s)",
             repli_job_id,
             account,
             bucket,
             progression["status"],
-            progression["nb_errors"],
-            progression["nb_replicated"],
+            progression.get("nb_completed", 0),
+            progression.get("nb_failed", 0),
+            progression.get("nb_stuck", 0),
         )
         self.successes += 1
         return self.app(env, cb)
