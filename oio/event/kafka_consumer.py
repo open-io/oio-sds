@@ -16,6 +16,7 @@ import bisect
 import copy
 import json
 import os
+import re
 import signal
 import time
 import uuid
@@ -635,6 +636,16 @@ class KafkaBatchFeeder(
         # still be present in queues
         self.events_queue.reset()
 
+    def _get_position_from_exception(self, exc):
+        bad_column = re.search(r"column (\d+)\ ", str(exc))
+        bad_pos = re.search(r"position (\d+):", str(exc))
+        pos = None
+        if bad_column:
+            pos = int(bad_column.group(1))
+        elif bad_pos:
+            pos = int(bad_pos.group(1))
+        return pos
+
     def _fill_batch(self):
         # Create a new batch
         self._batch_id = uuid.uuid4().hex
@@ -661,7 +672,29 @@ class KafkaBatchFeeder(
                     deadline = monotonic_time() + self._commit_interval
 
                 try:
-                    event_data = json.loads(value)
+                    event_data = None
+                    try:
+                        str_value = value.decode("utf-8")
+                        event_data = json.loads(str_value)
+                    except UnicodeDecodeError as exc:
+                        # occurs when message ends with invalid UTF-8 character.
+                        # error occuring during decode()
+                        pos = self._get_position_from_exception(exc)
+                        if pos is not None and pos > 0:
+                            new_value = value[:pos]
+                            str_value = new_value.decode("utf-8")
+                            event_data = json.loads(str_value)
+                        else:
+                            raise
+                    except json.JSONDecodeError as exc:
+                        # Handle case where the message ends with invalid JSON data.
+                        # error occurs during json.loads()
+                        pos = self._get_position_from_exception(exc)
+                        if pos is not None and pos > 0:
+                            new_value = str_value[: pos - 1]
+                            event_data = json.loads(new_value)
+                        else:
+                            raise
                     queue_id = self._events_queue.id_from_event(event_data)
                     self._events_queue.put(
                         queue_id,
