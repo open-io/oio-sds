@@ -38,6 +38,11 @@ class XcuteWorker(object):
         self.tasks = CacheDict(
             size=self.conf.get("cache_size", self.DEFAULT_CACHE_SIZE)
         )
+        self.producer = None
+
+        self.kafka_reply_topic = self.conf.get(
+            "xcute_job_reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
+        )
 
     def process(self, job):
         job_id = job["job_id"]
@@ -102,25 +107,16 @@ class XcuteWorker(object):
                     )
                     task_errors[type(exc).__name__] += 1
 
-        return (
-            job_id,
-            list(tasks.keys()),
-            task_results,
-            task_errors,
+        reply_payload = json.dumps(
+            {
+                "job_id": job_id,
+                "task_ids": list(tasks.keys()),
+                "task_results": task_results,
+                "task_errors": task_errors,
+            }
         )
-
-    def reply(self, job_id, task_ids, task_results, task_errors, *extra):
-        raise NotImplementedError()
-
-
-class KafkaXcuteWorker(XcuteWorker):
-    def __init__(self, conf, logger=None, watchdog=None):
-        super().__init__(conf, logger=logger, watchdog=watchdog)
-        self.producer = None
-
-        self.kafka_reply_topic = self.conf.get(
-            "xcute_job_reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
-        )
+        self._connect()
+        self.producer.send(self.kafka_reply_topic, reply_payload, flush=True)
 
     def _connect(self):
         if not self.producer:
@@ -132,15 +128,3 @@ class KafkaXcuteWorker(XcuteWorker):
                     "acks": "all",
                 },
             )
-
-    def reply(self, job_id, task_ids, task_results, task_errors, *extra):
-        reply_payload = json.dumps(
-            {
-                "job_id": job_id,
-                "task_ids": task_ids,
-                "task_results": task_results,
-                "task_errors": task_errors,
-            }
-        )
-        self._connect()
-        self.producer.send(self.kafka_reply_topic, reply_payload, flush=True)

@@ -16,63 +16,34 @@
 
 from oio.event.evob import Event
 from oio.event.filters.base import Filter
-from oio.xcute.common.worker import KafkaXcuteWorker
+from oio.xcute.common.worker import XcuteWorker
 
 
 class XcuteFilter(Filter):
-    def __init__(self, app, conf, endpoint=None):
+    def __init__(self, app, conf):
         super().__init__(app, conf)
-        self.endpoint = endpoint
+        self.endpoint = conf.get("broker_endpoint")
+        if not self.endpoint:
+            raise ValueError("Endpoint is missing")
 
     def init(self):
-        self.worker = self._instanciate_worker()
-
-    def _instanciate_worker(self):
-        raise NotImplementedError("Worker instanciation not defined")
-
-    def _reply(self, job_id, task_ids, task_results, task_errors, *args):
-        self.worker.reply(job_id, task_ids, task_results, task_errors)
-
-    def _get_extra_from_event(self, _event, _env):
-        return []
+        self.worker = XcuteWorker(
+            self.conf, logger=self.logger, watchdog=self.app_env.get("watchdog")
+        )
 
     def process(self, env, cb):
         event = Event(env)
 
-        if event.data.get("processed"):
-            job_id = event.data["job_id"]
-            task_ids = event.data["task_ids"]
-            task_results = event.data["task_results"]
-            task_errors = event.data["task_errors"]
-        else:
-            (
-                job_id,
-                task_ids,
-                task_results,
-                task_errors,
-            ) = self.worker.process(event.data)
-        extra = self._get_extra_from_event(event, env)
-        self._reply(job_id, task_ids, task_results, task_errors, *extra)
+        self.worker.process(event.data)
 
         return self.app(env, cb)
-
-
-class KafkaXcuteFilter(XcuteFilter):
-    def _instanciate_worker(self):
-        return KafkaXcuteWorker(
-            self.conf, logger=self.logger, watchdog=self.app_env.get("watchdog")
-        )
 
 
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()
     conf.update(local_conf)
 
-    endpoint = conf.get("broker_endpoint", conf.get("queue_url"))
-    if not endpoint:
-        raise ValueError("Endpoint is missing")
+    def xcute_filter(app):
+        return XcuteFilter(app, conf)
 
-    def account_filter(app):
-        return KafkaXcuteFilter(app, conf, endpoint=endpoint)
-
-    return account_filter
+    return xcute_filter
