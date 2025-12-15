@@ -46,6 +46,8 @@ from oio.common.exceptions import (
     BadRequest,
     DeadlineReached,
     Forbidden,
+    NoSuchContainer,
+    NotFound,
     OioException,
     OioNetworkException,
     OioTimeout,
@@ -1194,7 +1196,17 @@ class ContainerSharding(ProxyClient):
             account=root_account, reference=root_container, cid=root_cid, **kwargs
         )
         params.update({"max": limit, "marker": marker})
-        resp, body = self._request("GET", "/show", params=params, **kwargs)
+        try:
+            resp, body = self._request("GET", "/show", params=params, **kwargs)
+        except NotFound as exc:
+            if root_cid:
+                err_msg = f"Root container cid={root_cid} not found."
+            else:
+                err_msg = (
+                    f"Root container {root_container}, "
+                    f"account={root_account}, not found."
+                )
+            raise NoSuchContainer(err_msg) from exc
         if resp.status != 200:
             raise exceptions.from_response(resp, body)
         body["truncated"] = true_value(
