@@ -1753,6 +1753,7 @@ pipeline = delay
 [filter:delay]
 use = egg:oio#delay
 topic = oio-delayed
+# events_time_to_live = 120
 
 [filter:log]
 use = egg:oio#logger

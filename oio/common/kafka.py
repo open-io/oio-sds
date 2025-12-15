@@ -298,7 +298,9 @@ class KafkaSender(KafkaClient):
                 "Failed to send event to topic %s: producer closed", retriable=True
             ) from aerr
 
-    def _generate_delayed_event(self, topic, event, delay, key=None):
+    def _generate_delayed_event(
+        self, topic, event, delay, key=None, do_not_expire=False
+    ):
         if delay < self._delay_granularity:
             self._logger.warning(
                 "Delay(%ds) is not a multiple of delay granularity(%ds). "
@@ -321,12 +323,24 @@ class KafkaSender(KafkaClient):
             },
         }
 
+        if do_not_expire:
+            delayed_event["data"]["do_not_expire"] = True
+
         if key is not None:
             delayed_event["data"]["key"] = key
 
         return delayed_event
 
-    def send(self, topic, data, delay=0, key=None, flush=False, delayed_topic=None):
+    def send(
+        self,
+        topic,
+        data,
+        delay=0,
+        key=None,
+        flush=False,
+        delayed_topic=None,
+        do_not_expire=False,
+    ):
         # Strip any _internal field
         if isinstance(data, dict) and "_internal" in data:
             data = {
@@ -336,7 +350,9 @@ class KafkaSender(KafkaClient):
 
         if delay > 0:
             # Encapsulate event in a delayed one
-            data = self._generate_delayed_event(topic, data, delay, key=key)
+            data = self._generate_delayed_event(
+                topic, data, delay, key=key, do_not_expire=do_not_expire
+            )
             topic = delayed_topic if delayed_topic is not None else self._delayed_topic
             key = None
 

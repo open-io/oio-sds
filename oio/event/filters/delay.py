@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -73,6 +73,10 @@ class DelayFilter(Filter):
         if not source_event:
             return EventError(body="'source_event' field is missing")
 
+        # do_not_expire prevents the event to go to the deadletter.
+        # It will be requeued in delayed topic but with an extra parameter "expired".
+        do_not_expire = data.get("do_not_expire")
+
         requeue = due_time > next_due_time
         now = datetime.now().timestamp()
         delta_time = max(min(due_time, next_due_time) - now, 0)
@@ -81,10 +85,17 @@ class DelayFilter(Filter):
         when_sec = source_event.get("when", 0) / 1000000
         expirency_date = when_sec + self._events_time_to_live
         if now + delta_time > expirency_date:
-            return EventError(
-                body=f"Event expired (older than {self._events_time_to_live}s)",
-                status=410,
-            )
+            if do_not_expire:
+                # This allows the source to be aware of the expiration of the event.
+                # But it is its responsibility to reject it to the deadletter or not.
+                # For example, xcute filter does not want to send any event
+                # to the deadletter.
+                data["source_event"]["expired"] = True
+            else:
+                return EventError(
+                    body=f"Event expired (older than {self._events_time_to_live}s)",
+                    status=410,
+                )
 
         if delta_time > 0:
             sleep(delta_time)
