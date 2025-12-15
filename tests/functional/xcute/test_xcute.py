@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,8 @@
 
 import time
 from urllib.parse import urlparse
+
+import pytest
 
 from oio.common.exceptions import Forbidden
 from oio.xcute.client import XcuteClient
@@ -67,9 +69,9 @@ class XcuteTest(BaseTestCase):
         """
         for _ in range(wait_time * 2):
             time.sleep(0.5)
-            job_status = self.xcute_client.job_show(job_id)
-            if job_status["job"]["status"] == status:
-                return job_status
+            job_show = self.xcute_client.job_show(job_id)
+            if job_show["job"]["status"] == status:
+                return job_show
         else:
             self.fail(f"Xcute job {job_id} did not reach status {status}")
 
@@ -153,10 +155,15 @@ class TestXcuteJobs(XcuteTest):
             self.assertFalse(data["truncated"])
             self.assertNotIn("next_marker", data)
 
+    @pytest.mark.flaky(reruns=2)
     def test_create_with_lock(self):
-        self._service("oio-xcute-event-agent-1.service", "stop")
-        self._service("oio-xcute-event-agent-local-1.service", "stop", wait=3)
-
+        """
+        A job is created (with at least one task) then, we try to create another job
+        with the same lock, it should be forbidden.
+        Timing is a little tricky, the first job is still in WAITING state but if it
+        starts too soon, the second job might be authorized. Hence the flaky tag,
+        even if "chez moi ça marche".
+        """
         # We need to create an object in order to have at least 1 task to execute.
         chunks, _, _ = self.storage.object_create(
             self.account,
@@ -189,16 +196,79 @@ class TestXcuteJobs(XcuteTest):
         )
         self.assertEqual(expected_msg, str(error.exception))
 
-        # Now abort the job to be able to delete it later in teardown (we need
-        # to wait to pass from WAITING to RUNNING to abort it).
-        self._wait_for_job_status(job["job"]["id"], "RUNNING")
-        self.xcute_client.job_abort(job["job"]["id"])
-
-        self.storage.object_delete(
-            self.account,
-            "test_create_with_lock",
-            "test_create_with_lock",
+    def test_retry_all_tasks(self):
+        """
+        All tasks should always retry, but job can still be completed (with all
+        tasks in error).
+        """
+        nb_task = 5
+        job = self.xcute_client.job_create(
+            "tester",
+            job_config={
+                "params": {
+                    "lock": "lock",
+                    "service_id": "0",
+                    "end": nb_task,
+                    "retry_percentage": 100,
+                }
+            },
         )
-        self._service("oio-xcute-event-agent-1.service", "start")
-        # Rebalance can take some time, unfortunately it is a passive sleep.
-        self._service("oio-xcute-event-agent-local-1.service", "start", wait=5)
+        job_show = self._wait_for_job_status(job["job"]["id"], "FINISHED")
+        self.assertEqual(nb_task, job_show["errors"]["XcuteExpiredRetryTask"])
+        self.assertEqual(nb_task, job_show["errors"]["total"])
+        self.assertEqual({}, job_show["results"])
+
+    @pytest.mark.flaky(reruns=2)
+    def test_retry_some_tasks(self):
+        """
+        All tasks should always retry, but job can still be completed (with all
+        tasks in error).
+        This test is marked as flaky as some randomness is present (a task has 50%
+        chance of succeeding/retrying, but if all tasks succeed or retried, then the
+        test will fail.
+        """
+        # The lower, instable is the test.
+        # The higher, longer is the test.
+        nb_task = 32
+        job = self.xcute_client.job_create(
+            "tester",
+            job_config={
+                "params": {
+                    "lock": "lock",
+                    "service_id": "0",
+                    "end": nb_task,
+                    "retry_percentage": 50,
+                }
+            },
+        )
+        job_show = self._wait_for_job_status(job["job"]["id"], "FINISHED")
+        # At least one retry at the end
+        self.assertTrue(job_show["errors"]["XcuteExpiredRetryTask"] > 0)
+        # All errors are due to retries (expired)
+        self.assertEqual(
+            job_show["errors"]["XcuteExpiredRetryTask"], job_show["errors"]["total"]
+        )
+        # At least one result at the end
+        self.assertTrue(job_show["results"]["counter"] > 0)
+
+        self.assertEqual(
+            nb_task,
+            job_show["results"]["counter"]
+            + job_show["errors"]["XcuteExpiredRetryTask"],
+        )
+
+        # Get the first delayed event
+        event = self.wait_for_event(
+            prefix_reqid=job["job"]["id"],
+            types=["xcute.tasks"],
+            delayed=True,
+        )
+        self.assertIsNotNone(event)
+        # Should always be true for xcute events
+        self.assertTrue(event.data["do_not_expire"])
+        # Not all tasks are present in a delayed
+        self.assertTrue(len(event.data["source_event"]["data"]["tasks"]) < nb_task)
+        self.assertTrue(len(event.data["source_event"]["data"]["tasks"]) > 0)
+        # Extra data (added via the XcuteExpiredRetryTask exception) is present
+        for task in event.data["source_event"]["data"]["tasks"].items():
+            self.assertEqual(f"foobar-{task[0]}", task[1]["extra"])

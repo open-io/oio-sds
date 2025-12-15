@@ -158,6 +158,29 @@ class RetryLater(RejectMessage):
         self.topic = topic
 
 
+class XcuteRetryTaskLater(OioException):
+    """
+    Exception raised by xcute task when it should be retried.
+    It does not inherit from RetryLater on purpose (the responsibility is
+    given to the xcute worker because a xcute event should never finish in the
+    deadletter but be considered as an error by xcute.
+    """
+
+    def __init__(self, *args, delay=None, topic=None, extra=None):
+        super().__init__(*args)
+        self.delay = delay
+        self.topic = topic
+        self.extra = extra  # added to the payload of the task
+
+
+class XcuteExpiredRetryTask(XcuteRetryTaskLater):
+    """
+    Dedicated exception for XcuteRetryTaskLater that have expired.
+    """
+
+    pass
+
+
 class OutdatedMessage(RejectMessage):
     """
     Exception raised by workers for a task requeued for too long.

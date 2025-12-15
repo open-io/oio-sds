@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
+from copy import deepcopy
 
 from oio.event.evob import Event
 from oio.event.filters.base import Filter
@@ -34,7 +36,28 @@ class XcuteFilter(Filter):
     def process(self, env, cb):
         event = Event(env)
 
-        self.worker.process(event.data)
+        tasks_retry_later, delay, delayed_topic = self.worker.process(
+            event.data, event.env.get("expired")
+        )
+
+        # If tasks need to be retried, send them in a new event.
+        if tasks_retry_later:
+            self.logger.debug(
+                "%d tasks to retry later for %s",
+                len(tasks_retry_later),
+                event.data["job_id"],
+            )
+
+            env_copy = deepcopy(env)
+            env_copy["data"]["tasks"] = tasks_retry_later
+
+            self.worker.send(
+                self.conf["topic"],
+                env_copy,
+                delay=delay,
+                do_not_expire=True,
+                delayed_topic=delayed_topic,
+            )
 
         return self.app(env, cb)
 

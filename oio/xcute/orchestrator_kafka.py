@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -524,7 +524,12 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     break
                 job_status, old_last_sent = res
                 sent = self.dispatch_tasks_batch(
-                    job_id, job_type, job_config, tasks, job
+                    job_id,
+                    job_type,
+                    job_config,
+                    tasks,
+                    job,
+                    reqid=reqid,
                 )
                 if not sent:
                     self.logger.warning(
@@ -589,7 +594,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 job_status, old_last_sent = res
                 if tasks:
                     sent = self.dispatch_tasks_batch(
-                        job_id, job_type, job_config, tasks, job
+                        job_id, job_type, job_config, tasks, job, reqid=reqid
                     )
                 else:
                     sent = True
@@ -632,7 +637,9 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
         if exc is not None:
             self.logger.warning("[job_id=%s] Job has not been freed: %s", job_id, exc)
 
-    def dispatch_tasks_batch(self, job_id, job_type, job_config, tasks, job):
+    def dispatch_tasks_batch(
+        self, job_id, job_type, job_config, tasks, job, reqid=None
+    ):
         """
         Try sending a task until it's ok
         """
@@ -641,7 +648,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 self.kafka_endpoints, self.logger, app_conf=self.conf
             )
 
-        payload = self.make_payload(job_id, job_type, job_config, tasks)
+        payload = self.make_payload(job_id, job_type, job_config, tasks, reqid=reqid)
 
         if len(payload) > self.MAX_PAYLOAD_SIZE:
             raise ValueError(
@@ -660,18 +667,20 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             return False
         return True
 
-    def make_payload(self, job_id, job_type, job_config, tasks):
-        return json.dumps(
-            {
-                "event": self.event_type,
-                "data": {
-                    "job_id": job_id,
-                    "job_type": job_type,
-                    "job_config": job_config,
-                    "tasks": tasks,
-                },
-            }
-        )
+    def make_payload(self, job_id, job_type, job_config, tasks, reqid=None):
+        payload = {
+            "event": self.event_type,
+            "data": {
+                "job_id": job_id,
+                "job_type": job_type,
+                "job_config": job_config,
+                "tasks": tasks,
+            },
+            "when": int(time.time() * 1000000),  # use time in micro seconds
+        }
+        if reqid:
+            payload["request_id"] = reqid
+        return json.dumps(payload)
 
     def safe_compute_total_tasks(self, job_id, job_type, job_info, job, reqid):
         """

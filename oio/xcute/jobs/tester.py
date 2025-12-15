@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,6 +40,7 @@ class TesterTask(XcuteTask):
         )
 
         self.error_percentage = job_params["error_percentage"]
+        self.retry_percentage = job_params["retry_percentage"]
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         msg = task_payload["msg"]
@@ -50,7 +51,10 @@ class TesterTask(XcuteTask):
             exc_class = random.choice(EXCEPTIONS)
             raise exc_class()
 
-        return {"counter": len(msg)}
+        if self.retry_percentage and random.randrange(100) < self.retry_percentage:
+            raise exc.XcuteRetryTaskLater(delay=1, extra=f"foobar-{task_id}")
+
+        return {"counter": 1}
 
 
 class TesterJob(XcuteJob):
@@ -60,6 +64,7 @@ class TesterJob(XcuteJob):
     DEFAULT_START = 0
     DEFAULT_END = 5
     DEFAULT_ERROR_PERCENTAGE = 0
+    DEFAULT_RETRY_PERCENTAGE = 0
     DEFAULT_LOCK = "tester_lock"
 
     @classmethod
@@ -74,6 +79,9 @@ class TesterJob(XcuteJob):
 
         sanitized_job_params["error_percentage"] = int_value(
             job_params.get("error_percentage"), cls.DEFAULT_ERROR_PERCENTAGE
+        )
+        sanitized_job_params["retry_percentage"] = int_value(
+            job_params.get("retry_percentage"), cls.DEFAULT_RETRY_PERCENTAGE
         )
 
         return sanitized_job_params, job_params.get("lock", cls.DEFAULT_LOCK)

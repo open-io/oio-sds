@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -45,6 +45,7 @@ DEFAULT_DELAYED_TOPIC = "oio-delayed"
 DEFAULT_DELETE_TOPIC_PREFIX = "oio-delete-"
 DEFAULT_REBUILD_TOPIC = "oio-rebuild"
 DEFAULT_DEADLETTER_TOPIC = "oio-deadletter"
+DEFAULT_XCUTE_DELAYED_TOPIC = "oio-xcute-delayed"
 DEFAULT_XCUTE_JOB_TOPIC = "oio-xcute-job"
 DEFAULT_XCUTE_JOB_REPLY_TOPIC = DEFAULT_XCUTE_JOB_TOPIC + "-reply"
 DEFAULT_DELAY_GRANULARITY = 60

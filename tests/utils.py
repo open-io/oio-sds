@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -893,6 +893,7 @@ class BaseTestCase(CommonTestCase):
     def wait_for_event(
         self,
         reqid=None,
+        prefix_reqid=None,  # the request id of the event should starts with that
         svcid=None,
         types=None,
         fields=None,
@@ -900,6 +901,7 @@ class BaseTestCase(CommonTestCase):
         data_fields=None,
         timeout=30.0,
         kafka_consumer=None,
+        delayed=False,
     ):
         """
         Wait for an event to pass through event agents.
@@ -916,11 +918,21 @@ class BaseTestCase(CommonTestCase):
         used_events = self._used_events.setdefault(kafka_consumer, set())
 
         def match_event(key, event):
+            if delayed:
+                if event.event_type == "delayed":
+                    # Decapsulate the event for later checks
+                    event = Event(event.data["source_event"])
+                else:
+                    self.logger.info("ignore event %s (delayed mismatch)", event)
+                    return False
             if types and event.event_type not in types:
                 self.logger.debug("ignore event %s (event mismatch)", event)
                 return False
             if reqid and event.reqid != reqid:
                 self.logger.info("ignore event %s (request_id mismatch)", event)
+                return False
+            if prefix_reqid and not event.reqid.startswith(prefix_reqid):
+                self.logger.info("ignore event %s (prefix_reqid mismatch)", event)
                 return False
             if svcid and event.svcid != svcid:
                 self.logger.info("ignore event %s (service_id mismatch)", event)

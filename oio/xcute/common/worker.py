@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2025 OVH SAS
+# Copyright (C) 2020-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,9 +17,10 @@
 from collections import Counter
 
 from oio.common.constants import STRLEN_REQID
-from oio.common.exceptions import RetryLater
+from oio.common.exceptions import XcuteExpiredRetryTask, XcuteRetryTaskLater
 from oio.common.json import json
 from oio.common.kafka import (
+    DEFAULT_XCUTE_DELAYED_TOPIC,
     DEFAULT_XCUTE_JOB_REPLY_TOPIC,
     KafkaSender,
 )
@@ -44,7 +45,13 @@ class XcuteWorker(object):
             "xcute_job_reply_topic", DEFAULT_XCUTE_JOB_REPLY_TOPIC
         )
 
-    def process(self, job):
+    def process(self, job, event_expired):
+        """
+        Returns
+        tasks_retry_later: dict of the new payload of tasks to retry
+        retry_delay: delay to use if the event should be retried
+        delayed_topic: topic to use if the event should be retried
+        """
         job_id = job["job_id"]
         job_config = job["job_config"]
         job_params = job_config["params"]
@@ -70,6 +77,11 @@ class XcuteWorker(object):
         task_errors = Counter()
         task_results = Counter()
 
+        task_ids_completed = list(tasks.keys())
+        tasks_retry_later = {}
+        retry_delay = 0
+        delayed_topic = None
+
         if init_error:
             task_errors[type(init_error).__name__] += len(tasks)
         else:
@@ -77,23 +89,54 @@ class XcuteWorker(object):
             for task_id, task_payload in tasks.items():
                 tasks_run_time = ratelimit(tasks_run_time, tasks_per_second)
 
+                # Trick to build request id with a larger prefix than allowed.
                 reqid = job_id + request_id(f"-{job_type[:10]}-")
                 reqid = reqid[:STRLEN_REQID]
+                error = None
                 try:
                     task_result = task.process(
                         task_id, task_payload, reqid=reqid, job_id=job_id
                     )
                     task_results.update(task_result)
-                except RetryLater as exc:
-                    self.logger.warning(
-                        "[job_id=%s reqid=%s] Retry later task %s: (delay=%s)",
-                        job_id,
-                        reqid,
-                        task_id,
-                        exc.delay,
-                    )
-                    raise
+                except XcuteRetryTaskLater as exc:
+                    if event_expired:
+                        # Event expiration date reached, do not retry anymore
+                        if type(exc) is XcuteRetryTaskLater:
+                            # Only convert the exception if its type is the default one
+                            # (jobs may already raise a more specific exception).
+                            error = XcuteExpiredRetryTask(exc)
+                        else:
+                            error = exc
+                    else:
+                        self.logger.debug(
+                            "[job_id=%s reqid=%s] Retry later task %s: (delay=%s)",
+                            job_id,
+                            reqid,
+                            task_id,
+                            exc.delay,
+                        )
+                        if exc.extra:
+                            task_payload["extra"] = exc.extra
+                        tasks_retry_later[task_id] = task_payload
+                        task_ids_completed.remove(task_id)
+                        if exc.delay and exc.delay > retry_delay:
+                            retry_delay = exc.delay
+                        if exc.topic:
+                            if not delayed_topic:
+                                delayed_topic = exc.topic
+                            elif exc.topic != delayed_topic:
+                                self.logger.warning(
+                                    "Conflicting delayed topics: %s vs %s. "
+                                    "All tasks should use the same delayed topic, "
+                                    "%s will be used",
+                                    exc.topic,
+                                    delayed_topic,
+                                    delayed_topic,
+                                )
                 except Exception as exc:
+                    error = exc
+
+                if error:
                     self.logger.warning(
                         "[job_id=%s reqid=%s %s] Failed to process task %s: (%s) %s",
                         job_id,
@@ -102,21 +145,23 @@ class XcuteWorker(object):
                             f"{key}={value}" for key, value in task_payload.items()
                         ),
                         task_id,
-                        exc.__class__.__name__,
-                        exc,
+                        error.__class__.__name__,
+                        error,
                     )
-                    task_errors[type(exc).__name__] += 1
+                    task_errors[type(error).__name__] += 1
 
-        reply_payload = json.dumps(
-            {
-                "job_id": job_id,
-                "task_ids": list(tasks.keys()),
-                "task_results": task_results,
-                "task_errors": task_errors,
-            }
-        )
-        self._connect()
-        self.producer.send(self.kafka_reply_topic, reply_payload, flush=True)
+        # Only send xcute responses if there is any task completed
+        if len(task_ids_completed) > 0:
+            reply_payload = json.dumps(
+                {
+                    "job_id": job_id,
+                    "task_ids": task_ids_completed,
+                    "task_results": task_results,
+                    "task_errors": task_errors,
+                }
+            )
+            self.send(self.kafka_reply_topic, reply_payload)
+        return tasks_retry_later, retry_delay, delayed_topic
 
     def _connect(self):
         if not self.producer:
@@ -128,3 +173,23 @@ class XcuteWorker(object):
                     "acks": "all",
                 },
             )
+
+    def send(
+        self,
+        topic,
+        payload,
+        delay=0,
+        do_not_expire=False,
+        delayed_topic=None,
+    ):
+        if delay > 0 and not delayed_topic:
+            delayed_topic = DEFAULT_XCUTE_DELAYED_TOPIC
+        self._connect()
+        self.producer.send(
+            topic,
+            payload,
+            flush=True,
+            delay=delay,
+            do_not_expire=do_not_expire,
+            delayed_topic=delayed_topic,
+        )

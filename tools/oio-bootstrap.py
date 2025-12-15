@@ -1760,6 +1760,29 @@ use = egg:oio#logger
 log_format=topic:%(topic)s    event:%(event)s
 """
 
+template_xcute_event_agent_delay_handlers = """
+[handler:delayed]
+pipeline = delay ${PRESERVE}
+
+[filter:delay]
+use = egg:oio#delay
+topic = oio-xcute-delayed
+# Very small duration for testing purposes
+events_time_to_live = 2
+
+[filter:log]
+use = egg:oio#logger
+log_format=topic:%(topic)s    event:%(event)s
+
+[filter:preserve]
+# Preserve all events in the oio-preserved topic. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+topic = oio-preserved
+broker_endpoint = ${QUEUE_URL}
+"""
+
 template_event_agent_replication_delay_handlers = """
 [handler:delayed]
 pipeline = delay
@@ -3628,6 +3651,23 @@ def generate(options):
 
         # We need only one service
         break
+
+    # Configure a special oio-event-agent dedicated to xcute delayed events
+    # -------------------------------------------------------------------------
+    for num, url, event_agent_bin in get_event_agent_details():
+        add_event_agent_conf(
+            num,
+            "oio-xcute-delayed",
+            url,
+            workers="1",
+            srv_type="xcute-event-agent-delay",
+            group_id="xcute-event-agent-delay",
+            template_handler=template_xcute_event_agent_delay_handlers,
+        )
+
+        # We need only one service
+        break
+
     if options.get("replication_events"):
         # Configure oio-event-agent dedicated to delayed events from replicator
         # -----------------------------------------------------------------------
@@ -4067,6 +4107,7 @@ def generate(options):
         ("oio-replication", None),
         ("oio-tests-in", None),
         ("oio-tests-out", None),
+        ("oio-xcute-delayed", None),
         ("oio-xcute-job", None),
         ("oio-xcute-job-reply", None),
         ("oio-xcute-customer-job", None),
