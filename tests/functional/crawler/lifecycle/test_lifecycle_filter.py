@@ -1958,6 +1958,53 @@ class TestLifecycleCrawler(BaseTestCase):
         self._create_objects_for_rule(None, objects=objects, versions=1)
         self._run_scenario(configuration, callback)
 
+    def test_non_current_last_version_is_delete_marker_tags(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Tag": [{"Key": "foo", "Value": "bar"}]},
+                    "NoncurrentVersionExpiration": {
+                        "0": {"NoncurrentDays": 1},
+                        "__time_type": "NoncurrentDays",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": ["0-0"],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            "rule-1", prefix="bar/", tags={"foo": "bar"}, count=10
+        )
+        # Create delete marker
+        self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        objects = self._create_objects_for_rule(
+            None, prefix="baz/", tags={"foo": "baz"}, count=10
+        )
+        # Create delete marker
+        self._delete_objects_for_rule(None, [(o, None) for o, _ in objects])
+        self._wait_n_days(3)
+        self._run_scenario(configuration, callback)
+
     def test_expiration_non_current_since(self):
         self._enable_versioning()
 
@@ -3627,6 +3674,17 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_expiration_versioned()
+
+    def test_non_current_last_version_is_delete_marker_tags(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 4,
+                "total_events": 10,
+                "total_delete": 10,
+            },
+        )
+        super().test_non_current_last_version_is_delete_marker_tags()
 
     def test_non_current_expiration_versioned(self):
         self.metrics_by_passes_with_sharding = (

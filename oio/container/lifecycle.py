@@ -178,7 +178,7 @@ class ContainerLifecycle(object):
 
     def _processed_sql_condition(self):
         return (
-            f"( al.alias||al.version||{LIFECYCLE_SPECIAL_KEY_TAG} "
+            f"(al.alias||al.version||{LIFECYCLE_SPECIAL_KEY_TAG} "
             "NOT IN (SELECT alias||version||key FROM properties))"
         )
 
@@ -296,64 +296,26 @@ class ContainerLifecycle(object):
 
         return _query
 
-    def create_noncurrent_view(self, rule_filter):
+    def create_noncurrent_view(self):
         # Create forced on meta2 side
-        _query = (
-            "VIEW noncurrent_view AS SELECT *, m_ct.policy, "
-            "LAG(al.mtime, 1, -1) OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
-            " AS non_current_since, "
-            "ROW_NUMBER() OVER (PARTITION BY al.alias ORDER BY al.version DESC)"
-            " AS row_id "
-            "FROM aliases AS al LEFT JOIN contents m_ct ON al.content = m_ct.id"
+        return (
+            "VIEW noncurrent_view AS"
+            "  SELECT"
+            "    al.alias, al.version, al.content, al.deleted,"
+            "    al.mtime, m_ct.policy, m_ct.size,"
+            "    pr.value as slo_size,"
+            "    LAG(al.mtime, 1, -1) OVER ("
+            "      PARTITION BY al.alias ORDER BY al.version DESC"
+            "    ) AS non_current_since, "
+            "    ROW_NUMBER() OVER ("
+            "      PARTITION BY al.alias ORDER BY al.version DESC"
+            "    ) AS row_id"
+            "  FROM aliases AS al"
+            "  LEFT JOIN contents m_ct ON al.content = m_ct.id"
+            "  LEFT JOIN properties pr ON al.alias=pr.alias"
+            "    AND al.version=pr.version"
+            "    AND pr.key='x-object-sysmeta-slo-size'"
         )
-
-        _slo_cond = (
-            " LEFT JOIN properties pr ON al.alias=pr.alias AND"
-            " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
-            " INNER JOIN contents ct ON al.content = ct.id "
-        )
-
-        _lesser = ""
-        # bypass size when dealing with delete marker
-        if rule_filter.lesser is not None:
-            _lesser = (
-                f" AND "
-                f"((ct.size <{rule_filter.lesser} AND pr.value IS NULL) OR "
-                f"pr.value < {rule_filter.lesser})"
-            )
-
-        _greater = ""
-        # bypass size when dealing with delete marker
-        if rule_filter.greater is not None:
-            _greater = (
-                f" AND "
-                f"((ct.size >{rule_filter.greater} AND pr.value IS NULL) OR "
-                f"pr.value > {rule_filter.greater}) "
-            )
-
-        if len(rule_filter.tags) > 0:
-            _base_tag = (
-                " INNER JOIN properties pr2 ON al.alias="
-                "pr2.alias AND al.version=pr2.version "
-            )
-
-            _tags = f" AND pr2.key='{TAGGING_KEY}'"
-            for el in rule_filter.tags:
-                ((k, v),) = el.items()
-                _tag_key_cond = (
-                    " AND CAST(pr2.value as nvarchar(10000))"
-                    f" LIKE '%<Tag><Key>{k}</Key>"
-                )
-                _tag_val_cond = f"<Value>{v}</Value></Tag>%'"
-                _tags = f"{_tags}{_tag_key_cond}{_tag_val_cond}"
-
-            if _tags:
-                _query = f"{_query}{_base_tag}{_tags}"
-
-        if _lesser or _greater:
-            _query = f"{_query}{_slo_cond} {_lesser} {_greater}"
-
-        return _query
 
     def create_common_views(
         self, view_name, formated_time=None, date=None, deleted=None
@@ -394,48 +356,56 @@ class ContainerLifecycle(object):
         """
         Deal with non current versions
         """
-
         if noncurrent_versions is None:
             noncurrent_versions = 0
+
         # SELECT is forced on meta2 side
         query = "FROM noncurrent_view AS al "
-
-        if is_transition:
-            _slo_cond = (
-                " LEFT JOIN properties pr ON al.alias=pr.alias AND"
-                " al.version=pr.version AND pr.key='x-object-sysmeta-slo-size'"
-                " INNER JOIN contents ct ON al.content = ct.id "
-            )
-
-            # bypass size when dealing with delete marker
-            if rule_filter.greater is None and rule_filter.lesser is None:
-                size_cond = (
-                    f" AND ((ct.size > {LIFECYCLE_OBJECT_SIZE}"
-                    " AND pr.value IS NULL) "
-                    f" OR pr.value > {LIFECYCLE_OBJECT_SIZE})"
-                )
-                query = f"{query} {_slo_cond} {size_cond}"
-
-        where_clause = (
-            f"WHERE ( (row_id > {1 + noncurrent_versions}) "
-            f"AND {self._processed_sql_condition()} "
-        )
-
-        query = f"{query} {where_clause} "
+        conditions = [
+            f"row_id > {1 + noncurrent_versions}",
+            self._processed_sql_condition(),
+        ]
         if formated_time is not None:
-            _time_cond = (
-                f" AND ((al.non_current_since + {formated_time}) < "
-                f"CAST(strftime('%s', 'now') AS INTEGER)) "
+            conditions.append(
+                f"(non_current_since + {formated_time}) < "
+                "CAST(strftime('%s', 'now') AS INTEGER)"
             )
-            query = f"{query}{_time_cond}"
         if rule_filter.prefix:
-            query = f"{query} AND (al.alias LIKE ?||'%')"
+            conditions.append("(alias LIKE ?||'%')")
+
+        minimal_size = rule_filter.greater
+        if is_transition and rule_filter.greater is None and rule_filter.lesser is None:
+            minimal_size = LIFECYCLE_OBJECT_SIZE
+
+        if rule_filter.lesser is not None:
+            conditions.append(
+                f"((size < {rule_filter.lesser} AND slo_size IS NULL) OR "
+                f"slo_size < {rule_filter.lesser})"
+            )
+
+        if minimal_size is not None:
+            conditions.append(
+                f"((size > {minimal_size} AND slo_size IS NULL) OR "
+                f"slo_size > {minimal_size})"
+            )
+
+        if rule_filter.tags:
+            tag_conditions = [
+                "al.alias=pr.alias",
+                "al.version=pr.version",
+                f"pr.key='{TAGGING_KEY}'",
+            ]
+            for k, v in rule_filter.tags.items():
+                tag_conditions.append(
+                    "CAST(pr.value as nvarchar(10000)) LIKE "
+                    f"'%<Tag><Key>{k}</Key><Value>{v}</Value></Tag>%'"
+                )
+            query += f" INNER JOIN properties pr ON {' AND '.join(tag_conditions)}"
 
         if is_transition:
-            query = f"{query} AND (_is_allowed_transition(:ht_policies, pol, :order))"
+            conditions.append("_is_allowed_transition(:ht_policies, pol, :order)")
 
-        query = f"{query} )"
-        return query
+        return f"{query} WHERE ({' AND '.join(conditions)})"
 
     def markers_query(self, rule_filter):
         """

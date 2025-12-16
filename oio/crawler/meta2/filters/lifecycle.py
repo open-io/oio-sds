@@ -499,12 +499,12 @@ class Lifecycle(Meta2Filter):
         self.successes += 1
         return self.app(env, cb)
 
-    def _gen_views_non_current_action(self, lc, rule_filter, non_current_days_in_sec):
+    def _gen_views_non_current_action(self, lc, non_current_days_in_sec):
         """Generate views for NoncurrentExpiration/NoncurrentTransition.
 
         noncurrent_view depends on current_view.
         """
-        noncurrent_view = lc.create_noncurrent_view(rule_filter)
+        noncurrent_view = lc.create_noncurrent_view()
         current_view = lc.create_common_views(
             "current_view", formated_time=non_current_days_in_sec
         )
@@ -607,7 +607,7 @@ class Lifecycle(Meta2Filter):
                 newer_non_current_versions = action.get("NewerNoncurrentVersions")
                 # Create views
                 view_queries = self._gen_views_non_current_action(
-                    lc_instance, rule_filter, self._get_days(action)
+                    lc_instance, self._get_days(action)
                 )
                 query = lc_instance.noncurrent_query(
                     rule_filter,
