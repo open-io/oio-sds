@@ -777,6 +777,10 @@ class ShowBucket(ShowOne):
             if "ctime" in data:
                 data["ctime"] = convert_timestamp(data.get("ctime", 0.0))
             data["mtime"] = convert_timestamp(data.get("mtime", 0.0))
+            if data.get("features-details"):
+                for history in data.get("features-details").values():
+                    for elem in history:
+                        elem["mtime"] = convert_timestamp(elem.get("mtime", 0.0))
         return zip(*sorted(data.items()))
 
 
