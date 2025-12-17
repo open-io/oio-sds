@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,7 +27,7 @@ from tests.functional.xcute.test_xcute import XcuteTest
 from tests.utils import random_str
 
 
-class TestBucketLister(XcuteTest):
+class BucketListerHelper(XcuteTest):
     def setUp(self):
         super().setUp()
         # Override xcute client with customer one
@@ -37,7 +37,8 @@ class TestBucketLister(XcuteTest):
         )
         self._cleanup_jobs()
         self.internal_bucket = "test-bucket-lister-internal"
-        # Override account to not have anything else than letters/numbers
+        # Override account to not have anything else than letters/numbers (because
+        # it will be used in the role of replication conf).
         self.account = "testaccount"
         self.storage.container_create(self.account, self.internal_bucket)
         self.clean_later(self.internal_bucket)
@@ -112,29 +113,6 @@ class TestBucketLister(XcuteTest):
                 reqid=reqid,
             )
 
-    def test_xcute_bucket_lister_bucket_does_not_exist(self):
-        bucket = "xcute-bucket-lister-not-exist"
-        job_params = {
-            # Account comes from the common parser
-            "account": self.account,
-            "bucket": bucket,
-            "technical_account": self.account,
-            "technical_bucket": self.internal_bucket,
-            "replication_configuration": self._get_conf_repli(bucket),
-            "policy_manifest": "SINGLE",
-        }
-
-        job = self.xcute_client.job_create(
-            BucketListerJob.JOB_TYPE,
-            job_config={"params": job_params},
-        )
-        job_status = self._wait_for_job_status(job["job"]["id"], "FAILED")
-        self.assertEqual(f"{self.account}/{bucket}", job_status["job"]["lock"])
-        # Bucket does not exist, no tasks sent, no manifest created
-        internal_listing = self.storage.object_list(self.account, self.internal_bucket)
-        self.assertEqual(0, job_status["tasks"]["sent"])
-        self.assertEqual(0, len(internal_listing["objects"]))
-
     def _test_xcute_bucket_lister(self, bucket, obj_prefix, nb_obj, nb_shards=1):
         # nb_shards=1 means only the root container
 
@@ -201,6 +179,33 @@ class TestBucketLister(XcuteTest):
                     f"{obj_prefix}-{int(i + shard_index * (nb_obj / nb_shards)):0>5}",
                     event.url["path"],
                 )
+
+        return job
+
+
+class TestBucketLister(BucketListerHelper):
+    def test_xcute_bucket_lister_bucket_does_not_exist(self):
+        bucket = "xcute-bucket-lister-not-exist"
+        job_params = {
+            # Account comes from the common parser
+            "account": self.account,
+            "bucket": bucket,
+            "technical_account": self.account,
+            "technical_bucket": self.internal_bucket,
+            "replication_configuration": self._get_conf_repli(bucket),
+            "policy_manifest": "SINGLE",
+        }
+
+        job = self.xcute_client.job_create(
+            BucketListerJob.JOB_TYPE,
+            job_config={"params": job_params},
+        )
+        job_status = self._wait_for_job_status(job["job"]["id"], "FAILED")
+        self.assertEqual(f"{self.account}/{bucket}", job_status["job"]["lock"])
+        # Bucket does not exist, no tasks sent, no manifest created
+        internal_listing = self.storage.object_list(self.account, self.internal_bucket)
+        self.assertEqual(0, job_status["tasks"]["sent"])
+        self.assertEqual(0, len(internal_listing["objects"]))
 
     def test_xcute_bucket_lister(self):
         bucket = "xcute-bucket-lister"

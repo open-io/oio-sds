@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -98,14 +98,6 @@ class BatchReplicatorCreator(BucketFilter):
         if self.conf.get("kafka_min_available_space"):
             job_params["kafka_min_available_space"] = self.conf.get(
                 "kafka_min_available_space"
-            )
-        if self.conf.get("kafka_sleep_between_health_check"):
-            job_params["kafka_sleep_between_health_check"] = self.conf.get(
-                "kafka_sleep_between_health_check"
-            )
-        if self.conf.get("check_replication_status_timeout"):
-            job_params["check_replication_status_timeout"] = self.conf.get(
-                "check_replication_status_timeout"
             )
         if self.conf.get("delay_retry_later"):
             job_params["delay_retry_later"] = self.conf.get("delay_retry_later")

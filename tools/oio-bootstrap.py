@@ -3,7 +3,7 @@
 # oio-bootstrap.py
 # Copyright (C) 2015 Conrad Kleinespel
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -528,6 +528,8 @@ boto_profile = keystone
 # boto_region = ${REGION}
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
 tasks_per_second = 100
+# In seconds
+delay_retry_later = 2
 
 [filter:batch_replicator_tracker]
 use = egg:oio#batch_replicator_tracker
@@ -2054,6 +2056,7 @@ pipeline = xcute_customer
 use = egg:oio#xcute_customer
 #cache_size = 50
 xcute_job_reply_topic = oio-xcute-customer-job-reply
+xcute_delayed_topic = oio-xcute-delayed
 """
 
 template_billing_account_agent_service = """

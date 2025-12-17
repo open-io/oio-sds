@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,9 +14,7 @@
 # License along with this library.
 
 import json
-import random
 from collections import Counter
-from time import sleep
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import (
@@ -32,8 +30,9 @@ from oio.common.exceptions import (
     NoSuchObject,
     OioNetworkException,
     OioUnhealthyKafkaClusterError,
-    RetryLater,
+    ReplicationNotFinished,
     ServiceBusy,
+    XcuteRetryTaskLater,
 )
 from oio.common.kafka import (
     DEFAULT_REPLICATION_DELAYED_TOPIC,
@@ -41,18 +40,12 @@ from oio.common.kafka import (
     KafkaSender,
 )
 from oio.common.kafka_http import KafkaClusterHealth
-from oio.common.utils import depaginate, monotonic_time
+from oio.common.utils import depaginate
 from oio.event.evob import Event, get_account_from_event, get_root_container_from_event
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
-DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT = 60 * 60 * 24 * 2  # 48 hours
-
 
 class KafkaError(Exception):
-    pass
-
-
-class ReplicationStuck(Exception):
     pass
 
 
@@ -65,9 +58,6 @@ class BatchReplicatorTask(XcuteTask):
         self.technical_account = job_params["technical_account"]
         self.technical_bucket = job_params["technical_bucket"]
         self.replication_topic = job_params["replication_topic"]
-        self.check_replication_status_timeout = job_params[
-            "check_replication_status_timeout"
-        ]
         self.delay_retry_later = job_params["delay_retry_later"]
         self.kafka_conf = {
             **self.conf,
@@ -79,12 +69,12 @@ class BatchReplicatorTask(XcuteTask):
             raise ConfigurationException("Missing kafka broker_endpoint in conf")
         self.kafka_producer = None
 
-    def _is_delete_marker(self, event: Event):
+    def _is_delete_marker(self, event: Event) -> bool:
         for metadata in event.env["data"]:
             if metadata.get("type") == "aliases":
                 return metadata.get("deleted", False)
 
-    def _set_status_to_pending(self, event: Event, reqid):
+    def _set_status_to_pending(self, event: Event, reqid) -> Event:
         obj = event.url.get("path")
         version = event.url.get("version")
 
@@ -122,7 +112,7 @@ class BatchReplicatorTask(XcuteTask):
 
         return event
 
-    def _send_event(self, event: Event):
+    def _send_event(self, event: Event) -> None:
         if self.kafka_producer is None:
             self.kafka_producer = KafkaSender(
                 self.kafka_endpoint, self.logger, self.kafka_conf
@@ -134,48 +124,30 @@ class BatchReplicatorTask(XcuteTask):
             self.logger.error("Fail to send replication event %s: %s", event, exc)
             raise KafkaError from exc
 
-    def _wait_for_replication(self, event: Event, reqid: str):
+    def _is_object_replicated(self, event: Event, reqid: str) -> str:
         """
-        Wait for the object to be in "COMPLETED" / "FAILED" status
+        Wait for the object to be in "COMPLETED" / "FAILED" status.
+        Returns the status if replication finished, None otherwise.
         """
-        min_wait = 10  # Minimum value of the exponential backoff
-        max_wait = 60  # Maximal value of the exponential backoff
+        props = self.api.object_get_properties(
+            account=get_account_from_event(event),
+            container=get_root_container_from_event(event),
+            obj=event.url.get("path"),
+            version=event.url.get("version"),
+            reqid=reqid,
+        )
+        replication_status = props.get("properties", {}).get(REPLICATION_STATUS_KEY)
+        if replication_status in (
+            OBJECT_REPLICATION_FAILED,
+            OBJECT_REPLICATION_COMPLETED,
+        ):
+            return replication_status
 
-        start_time = monotonic_time()
-        wait_time = min_wait
-        while True:
-            props = self.api.object_get_properties(
-                account=get_account_from_event(event),
-                container=get_root_container_from_event(event),
-                obj=event.url.get("path"),
-                version=event.url.get("version"),
-                reqid=reqid,
-            )
-            replication_status = props.get("properties", {}).get(REPLICATION_STATUS_KEY)
-            if replication_status in (
-                OBJECT_REPLICATION_FAILED,
-                OBJECT_REPLICATION_COMPLETED,
-            ):
-                return replication_status
-
-            # Check if timeout reached
-            elapsed = monotonic_time() - start_time
-            if elapsed >= self.check_replication_status_timeout:
-                msg = "Timeout reached, consider replication stuck"
-                self.logger.error(msg)
-                raise ReplicationStuck(msg)
-
-            self.logger.debug(
-                "Replication of obj=%s still in progress, waiting %ds ...",
-                event.url.get("path"),
-                wait_time,
-            )
-            sleep(wait_time)
-
-            # Exponential backoff with max (with a randomization to prevent all first
-            # events to be restarted simultaneously).
-            wait_time = min(wait_time * 2, max_wait)
-            wait_time = int(wait_time * random.uniform(0.5, 1.5))
+        self.logger.debug(
+            "Replication of obj=%s still in progress",
+            event.url.get("path"),
+        )
+        return None
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         """
@@ -186,16 +158,29 @@ class BatchReplicatorTask(XcuteTask):
         resp = Counter()
         event = Event(task_payload)
         is_delete_marker = self._is_delete_marker(event)
+        replication_event_already_sent = (
+            task_payload.get("extra") == "replication_event_already_sent"
+        )
+        status = None
         try:
-            if not is_delete_marker:
-                event = self._set_status_to_pending(event, reqid)
+            if is_delete_marker:
+                # Delete marker cannot (yet) have as replication status
+                self._send_event(event)
+                # Consider status as COMPLETED
+                status = "COMPLETED"
+            else:
+                if not replication_event_already_sent:
+                    event = self._set_status_to_pending(event, reqid)
 
-            # Can raise KafkaError
-            self._send_event(event)
+                    # Can raise KafkaError
+                    self._send_event(event)
 
-            if not is_delete_marker:
-                # Can raise ReplicationStuck
-                status = self._wait_for_replication(event, reqid)
+                    raise ReplicationNotFinished(
+                        delay=self.delay_retry_later,
+                        extra="replication_event_already_sent",
+                    )
+                else:
+                    status = self._is_object_replicated(event, reqid)
         except NoSuchContainer:
             self.logger.info("Container does not exist anymore")
             resp["object_skipped_container_deleted"] += 1
@@ -204,13 +189,12 @@ class BatchReplicatorTask(XcuteTask):
             self.logger.info("Source object does not exist anymore")
             resp["object_skipped_deleted"] += 1
             return resp
-        except ReplicationStuck:
-            resp["object_replication_stuck"] += 1
-            return resp
         except (OioNetworkException, ServiceBusy):
             # Something went wrong, retry later
-            raise RetryLater(delay=self.delay_retry_later)
+            raise XcuteRetryTaskLater(delay=self.delay_retry_later)
 
+        if not status:
+            raise ReplicationNotFinished(delay=self.delay_retry_later)
         self.logger.debug(
             "Replication of obj=%s finished with status %s",
             event.url.get("path"),
@@ -243,7 +227,6 @@ class BatchReplicatorJob(XcuteJob):
     TASK_CLASS = BatchReplicatorTask
 
     DEFAULT_TASKS_PER_SECOND = 200
-    MAX_TASKS_BATCH_SIZE = 1
 
     DEFAULT_KAFKA_MAX_LAGS = 1000000
     DEFAULT_KAFKA_MIN_AVAILABLE_SPACE = 40  # in percent
@@ -273,12 +256,6 @@ class BatchReplicatorJob(XcuteJob):
         sanitized_job_params["kafka_min_available_space"] = float_value(
             job_params.get("kafka_min_available_space"),
             cls.DEFAULT_KAFKA_MIN_AVAILABLE_SPACE,
-        )
-        sanitized_job_params["check_replication_status_timeout"] = float(
-            job_params.get(
-                "check_replication_status_timeout",
-                DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
-            )
         )
         sanitized_job_params["delay_retry_later"] = int_value(
             job_params.get("delay_retry_later"), cls.DEFAULT_DELAY_RETRY_LATER

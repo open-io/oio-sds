@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 
 from oio.cli.admin.xcute import CustomerCommand, XcuteJobStartCommand
 from oio.xcute.jobs.batch_replicator import (
-    DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
     BatchReplicatorJob,
 )
 from oio.xcute.jobs.bucket_lister import BucketListerJob
@@ -113,15 +112,6 @@ class BatchReplicator(CustomerCommand, XcuteJobStartCommand):
             default=DEFAULT_TECHNICAL_BUCKET,
         )
         parser.add_argument(
-            "--check-replication-status-timeout",
-            dest="repli_status_timeout",
-            help=(
-                f"Timeout to wait for the object to be replicated "
-                f"(default: {DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT})"
-            ),
-            default=DEFAULT_CHECK_REPLICATION_STATUS_TIMEOUT,
-        )
-        parser.add_argument(
             "--kafka-max-lags",
             dest="kafka_max_lags",
             help="Prevent to send more tasks if topic lags exceed threshold",
@@ -142,7 +132,6 @@ class BatchReplicator(CustomerCommand, XcuteJobStartCommand):
             "technical_manifest_prefix": parsed_args.technical_manifest_prefix,
             "technical_account": parsed_args.technical_account,
             "technical_bucket": parsed_args.technical_bucket,
-            "check_replication_status_timeout": parsed_args.repli_status_timeout,
         }
         if parsed_args.kafka_max_lags is not None:
             job_params["kafka_max_lags"] = parsed_args.kafka_max_lags
