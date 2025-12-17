@@ -399,7 +399,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 					other_master++;
 					break;
 				case CODE_CONCURRENT:
-					if (g_strrstr(err->message, "local is 1 version ahead")) {
+					if (g_strrstr(e->message, "local is 1 version ahead")) {
 						slave_ahead_one++;
 					}
 				// FALLTHROUGH
