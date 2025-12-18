@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@ class BucketWorker(PipelineWorker):
     """
 
     SERVICE_TYPE = "bucket"
+    INCLUDED_PREFIX = ("on_hold/", "in_progress/")
 
     def __init__(self, conf, volume_path, logger=None, api=None, **kwargs):
         """
@@ -39,6 +40,25 @@ class BucketWorker(PipelineWorker):
         super(BucketWorker, self).__init__(
             conf, volume_path, logger=logger, api=api, **kwargs
         )
+
+        if self.excluded_dirs:
+            raise ConfigurationException(
+                "bucket-crawler is not compatible with excluded_dirs"
+            )
+        if self.conf.get("included_prefix"):
+            self.included_prefix = self.conf.get("included_prefix")
+            # format include prefix to tuple
+            try:
+                self.included_prefix = tuple(
+                    d.strip() for d in self.included_prefix.split(",") if d.strip()
+                )
+            except Exception as exc:
+                raise ConfigurationException(
+                    f"Error in included prefix definition: {exc}"
+                ) from exc
+        else:
+            # Already a tuple (no parsing needed)
+            self.included_prefix = self.INCLUDED_PREFIX
 
     def cb(self, status, msg):
         if is_http_success(status):
@@ -70,28 +90,33 @@ class BucketWorker(PipelineWorker):
 
         if account:
             last_scan_time = 0
-            resp_list = depaginate(
-                api.object_list,
-                account=account,
-                container=self.volume_path,
-                listing_key=lambda x: x["objects"],
-                marker_key=lambda x: x["next_marker"],
-                truncated_key=lambda x: x["truncated"],
-            )
-            for obj in resp_list:
+            for prefix in self.included_prefix:
+                resp_list = depaginate(
+                    api.object_list,
+                    account=account,
+                    container=self.volume_path,
+                    listing_key=lambda x: x["objects"],
+                    marker_key=lambda x: x["next_marker"],
+                    truncated_key=lambda x: x["truncated"],
+                    prefix=prefix,
+                )
+                for obj in resp_list:
+                    if not self.running:
+                        break
+
+                    if not self.process_entry(obj):
+                        continue
+
+                    last_scan_time = ratelimit(
+                        run_time=last_scan_time,
+                        max_rate=self.max_scanned_per_second,
+                        increment=1,
+                    )
+                    self.report("running")
+
                 if not self.running:
                     self.logger.info("stop crawling %s", self.volume_path)
                     break
-
-                if not self.process_entry(obj):
-                    continue
-
-                last_scan_time = ratelimit(
-                    run_time=last_scan_time,
-                    max_rate=self.max_scanned_per_second,
-                    increment=1,
-                )
-                self.report("running")
 
         self.report("ended", force=True)
         # reset stats for each filter
