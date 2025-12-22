@@ -74,6 +74,7 @@ class ObjectStorageApi(object):
     """
 
     EXTRA_KEYWORDS = (
+        "check_ec_metadata",
         "chunk_checksum_algo",
         "autocreate",
         "chunk_buffer_min",

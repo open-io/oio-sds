@@ -144,6 +144,7 @@ class ECChunkDownloadHandler(object):
         meta_start,
         meta_end,
         headers,
+        check_ec_metadata=False,
         connection_timeout=None,
         read_timeout=None,
         reqid=None,
@@ -163,6 +164,7 @@ class ECChunkDownloadHandler(object):
         # (the amount of actual data stored into the meta chunk)
         self.meta_length = self.chunks[0]["size"]
         self.headers = headers
+        self.check_ec_metadata = check_ec_metadata
         self.connection_timeout = connection_timeout
         self.read_timeout = read_timeout
         self.reqid = reqid
@@ -304,6 +306,7 @@ class ECChunkDownloadHandler(object):
                 range_infos,
                 self.meta_length,
                 fragment_length,
+                check_ec_metadata=self.check_ec_metadata,
                 reqid=self.reqid,
                 perfdata=self.perfdata,
                 logger=self.logger,
@@ -332,6 +335,7 @@ class ECStream(object):
         range_infos,
         meta_length,
         fragment_length,
+        check_ec_metadata=False,
         reqid=None,
         perfdata=None,
         logger=None,
@@ -342,6 +346,7 @@ class ECStream(object):
         self.meta_length = meta_length
         self.fragment_length = fragment_length
         self._iter = None
+        self.check_ec_metadata = check_ec_metadata
         self.reqid = reqid
         self.perfdata = perfdata
         self.logger = logger or LOGGER
@@ -468,10 +473,12 @@ class ECStream(object):
                 if self.perfdata is not None:
                     ec_start = monotonic_time()
                 try:
-                    # Note: force_metadata_checks is a no-op unless
-                    # we set chksum_type=something in ECDriver constructor
+                    # Note: force_metadata_checks checks:
+                    # - fragment checksums (if enabled in ECDriver),
+                    # - liberasurecode backend version numbers.
                     segment = self.storage_method.driver.decode(
-                        data, force_metadata_checks=True
+                        data,
+                        force_metadata_checks=self.check_ec_metadata,
                     )
                 except ECDriverError as exc:
                     # something terrible happened

@@ -1030,13 +1030,18 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         Prove that the EC lib with checksum configuration
         recovers from corrupt input data.
         """
-        # FIXME(FVE): fix the EC code so it can recover from data corruption
-        self.assertRaises(
-            exc.ObjectUnavailable,
-            self._test_object_fetch_range_recover,
-            action="corrupt_read",
-            policy="ECC",
-        )
+        old_value = self.api._global_kwargs.pop("check_ec_metadata", False)
+        try:
+            self.api._global_kwargs["check_ec_metadata"] = True
+            # FIXME(FVE): fix the EC code so it can recover from data corruption
+            self.assertRaises(
+                exc.ObjectUnavailable,
+                self._test_object_fetch_range_recover,
+                action="corrupt_read",
+                policy="ECC",
+            )
+        finally:
+            self.api._global_kwargs["check_ec_metadata"] = old_value
 
     def test_object_fetch_range_recover_short_read(self):
         """
