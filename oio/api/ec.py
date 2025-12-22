@@ -470,8 +470,11 @@ class ECStream(object):
                 try:
                     # Note: force_metadata_checks is a no-op unless
                     # we set chksum_type=something in ECDriver constructor
+                    # FIXME(adu): force_metadata_checks always requires
+                    # that the fragment version is not higher than the libEC version ;
+                    # This option can be enabled when using a newer version of libEC.
                     segment = self.storage_method.driver.decode(
-                        data, force_metadata_checks=True
+                        data, force_metadata_checks=False
                     )
                 except ECDriverError as exc:
                     # something terrible happened

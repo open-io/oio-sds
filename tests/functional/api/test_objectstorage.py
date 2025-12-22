@@ -1030,6 +1030,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         Prove that the EC lib with checksum configuration
         recovers from corrupt input data.
         """
+        # FIXME(adu): To be removed when force_metadata_checks is enabled
+        self.skipTest("force_metadata_checks is disabled")
         # FIXME(FVE): fix the EC code so it can recover from data corruption
         self.assertRaises(
             exc.ObjectUnavailable,
