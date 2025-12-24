@@ -35,7 +35,7 @@ class AutomaticVacuum(Meta2Filter):
     DEFAULT_MIN_WAITING_TIME_AFTER_LAST_MODIFICATION = 30
     DEFAULT_SOFT_MAX_UNUSED_PAGES_RATIO = 0.1
     DEFAULT_HARD_MAX_UNUSED_PAGES_RATIO = 0.2
-    DEFAULT_VACUUM_TIMEOUT = 30.0
+    DEFAULT_VACUUM_TIMEOUT = 60.0
 
     def init(self):
         self.min_waiting_time_after_last_modification = int_value(

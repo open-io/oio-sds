@@ -348,6 +348,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_CREATE_SHARD_TIMEOUT = 120
     DEFAULT_SAVE_WRITES_TIMEOUT = 120
     DEFAULT_REPLICATED_CLEAN_TIMEOUT = 30.0
+    DEFAULT_VACUUM_TIMEOUT = 60
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -383,6 +384,9 @@ class ContainerSharding(ProxyClient):
         )
         self.save_writes_timeout = int_value(
             kwargs.get("save_writes_timeout"), self.DEFAULT_SAVE_WRITES_TIMEOUT
+        )
+        self.vacuum_timeout = int_value(
+            kwargs.get("vacuum_timeout"), self.DEFAULT_VACUUM_TIMEOUT
         )
 
     def _make_params(self, account=None, reference=None, path=None, cid=None, **kwargs):
@@ -852,20 +856,45 @@ class ContainerSharding(ProxyClient):
         # the CID will be used to attempt to delete this new shard.
         shard["cid"] = cid_from_name(shard_account, shard_container)
 
+        create_timeout = self.create_shard_timeout
         deadline = monotonic_time() + self.create_shard_timeout
         params = self._make_params(
             account=shard_account, reference=shard_container, **kwargs
         )
-        resp, body = self._request(
-            "POST",
-            "/create_shard",
-            params=params,
-            json=shard_info,
-            timeout=self.create_shard_timeout,
-            **kwargs,
-        )
-        if resp.status != 204:
-            raise exceptions.from_response(resp, body)
+        while True:
+            try:
+                resp, body = self._request(
+                    "POST",
+                    "/create_shard",
+                    params=params,
+                    json=shard_info,
+                    timeout=create_timeout,
+                    **kwargs,
+                )
+                if resp.status != 204:
+                    raise exceptions.from_response(resp, body)
+                break
+            except ServiceBusy as exc:
+                now = monotonic_time()
+                if (
+                    self.preclean_new_shards
+                    and "DB busy" in str(exc)
+                    and now < deadline - 1
+                ):
+                    # This attempt failed to open the database.
+                    # Previous cleaning and vacuum operations may have taken
+                    # too long.
+                    # We can try again by adjusting the request timeout.
+                    self.logger.warning(
+                        "Creating the shard did not open the database, "
+                        "probably due to the ongoing pre-cleaning process "
+                        "in the background, let's try again (CID=%s): %s",
+                        shard["cid"],
+                        exc,
+                    )
+                    create_timeout = deadline - now
+                    continue
+                raise
 
         # Wait until all peers of the new shard are up to date
         while True:
@@ -1036,7 +1065,7 @@ class ContainerSharding(ProxyClient):
             timeout = timeout if timeout else self.replicated_clean_timeout
             global_deadline = None
             # Although a long timeout can be used, the operation will not lock
-            # the database for more than 1 second
+            # the database for more than few seconds
             request_kwargs["timeout"] = urllib3.Timeout(
                 connect=CONNECTION_TIMEOUT,
                 read=timeout,
@@ -1100,7 +1129,7 @@ class ContainerSharding(ProxyClient):
             # The following requests should not disturb the client requests
             params.pop("urgent", None)
 
-    def _safe_vacuum(self, shard, parent_shard=None, **kwargs):
+    def _safe_vacuum(self, shard, parent_shard=None, timeout=None, **kwargs):
         """
         Try to trigger a VACUUM to reduce database size.
 
@@ -1123,6 +1152,13 @@ class ContainerSharding(ProxyClient):
             params["local"] = 1
         else:
             cid = shard["cid"]
+        # Update timeout
+        if timeout is None:
+            timeout = self.vacuum_timeout
+        timeout = urllib3.Timeout(
+            connect=CONNECTION_TIMEOUT,
+            read=timeout,
+        )
         try:
             self.admin.vacuum_base(
                 "meta2",
@@ -1130,6 +1166,7 @@ class ContainerSharding(ProxyClient):
                 suffix=suffix,
                 service_id=service_id,
                 params=params,
+                timeout=timeout,
                 **kwargs,
             )
         except Exception as exc:
@@ -1159,7 +1196,7 @@ class ContainerSharding(ProxyClient):
         if vacuum:
             self._safe_vacuum(fake_shard, **kwargs)
 
-    def _safe_clean(self, shard, attempts=3, vacuum=False, **kwargs):
+    def _safe_clean(self, shard, parent_shard=None, attempts=3, vacuum=False, **kwargs):
         """
         Clean up any out-of-range entries in the shard and (optionally) vacuum
         to reduce the database size.
@@ -1171,17 +1208,33 @@ class ContainerSharding(ProxyClient):
             can do it afterwards (taking care not to disturb the client too much).
         """
         try:
-            self._clean(shard, attempts=attempts, **kwargs)
+            self._clean(shard, parent_shard=parent_shard, attempts=attempts, **kwargs)
         except Exception as exc:
+            shard_cid = shard.get("cid")
+            if not shard_cid and parent_shard:
+                shard_cid = (
+                    parent_shard["cid"]
+                    + "."
+                    + "-".join(
+                        (
+                            "sharding",
+                            str(parent_shard["sharding"]["timestamp"]),
+                            str(shard["index"]),
+                        )
+                    )
+                )
             self.logger.warning(
                 "Failed to clean the container (CID=%s): %s",
-                shard.get("cid", "copy"),
+                shard_cid,
                 exc,
             )
-            # Trigger a vacuum only if cleaning has worked once
+            # Trigger a vacuum only if cleaning has worked once.
+            # A timeout on a long local cleanup may indicate a large database.
+            # Therefore, attempting to clean up the database could significantly
+            # delay the sharding.
             vacuum = vacuum and hasattr(exc, "successes") and exc.successes > 0
         if vacuum:
-            self._safe_vacuum(shard, **kwargs)
+            self._safe_vacuum(shard, parent_shard=parent_shard, **kwargs)
 
     def _show_shards(
         self,

@@ -92,6 +92,9 @@ class AutomaticSharding(Meta2Filter):
         kwargs["save_writes_timeout"] = self.sharding_strategy_params.pop(
             "save_writes_timeout", None
         )
+        kwargs["vacuum_timeout"] = self.sharding_strategy_params.pop(
+            "vacuum_timeout", None
+        )
         self.step_timeout = int_value(
             self.sharding_strategy_params.pop("step_timeout", None),
             self.DEFAULT_STEP_TIMEOUT,

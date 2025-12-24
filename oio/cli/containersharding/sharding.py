@@ -552,6 +552,16 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             """
             % ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT,
         )
+        parser.add_argument(
+            "--vacuum-timeout",
+            default=ContainerSharding.DEFAULT_VACUUM_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to vacuum new shard (default: %f).
+            """
+            % ContainerSharding.DEFAULT_VACUUM_TIMEOUT,
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -571,6 +581,7 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             preclean_timeout=parsed_args.preclean_timeout,
             create_shard_timeout=parsed_args.create_shard_timeout,
             save_writes_timeout=parsed_args.save_writes_timeout,
+            vacuum_timeout=parsed_args.vacuum_timeout,
             logger=self.app.client_manager.logger,
         )
         new_shards = container_sharding.format_shards(new_shards, are_new=True)
@@ -660,6 +671,16 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             """
             % ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT,
         )
+        parser.add_argument(
+            "--vacuum-timeout",
+            default=ContainerSharding.DEFAULT_VACUUM_TIMEOUT,
+            type=float,
+            help="""
+            Maximum amount of time the sharding process is allowed
+            to vacuum new shard (default: %f).
+            """
+            % ContainerSharding.DEFAULT_VACUUM_TIMEOUT,
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -675,6 +696,7 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             preclean_timeout=parsed_args.preclean_timeout,
             create_shard_timeout=parsed_args.create_shard_timeout,
             save_writes_timeout=parsed_args.save_writes_timeout,
+            vacuum_timeout=parsed_args.vacuum_timeout,
             logger=self.app.client_manager.logger,
         )
         if parsed_args.all:

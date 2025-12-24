@@ -389,6 +389,7 @@ class TestSharding(BaseTestCase):
                 service_id=None,
                 params={},
                 headers=ANY,
+                timeout=ANY,
                 reqid=ANY,
             )
         ]
@@ -401,6 +402,7 @@ class TestSharding(BaseTestCase):
                     service_id=ANY,
                     params={"local": 1},
                     headers=ANY,
+                    timeout=ANY,
                     reqid=ANY,
                 )
             )
