@@ -1345,7 +1345,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 					if (!lp.flag_nodeleted || !ALIASES_get_deleted(alias)) {
 						added = _load_header_and_send(alias);
 					} else {
-						/* The latest version of the alias is a deletion marker,
+						/* The latest version of the alias is a delete marker,
 						 * so do not list any version of this alias. */
 					}
 				}
@@ -2510,8 +2510,10 @@ suspended:
 		err = _manage_alias(args->sq3, latest, TRUE, _bean_list_cb, &inplace);
 		if (!err) { /* remove the alias, header, content, chunk */
 			GSList *deleted = NULL;
-			err = _real_delete (args->sq3, inplace, &deleted);
-			if (cb_deleted) {
+			err = _real_delete(args->sq3, inplace, &deleted);
+			/* If the latest version is a delete marker,
+			 * the list of deleted beans will be empty. */
+			if (cb_deleted && deleted) {
 				GSList *deleted_beans = NULL;
 				for (GSList *l = deleted; l; l = l->next)
 					deleted_beans = g_slist_prepend(deleted_beans,

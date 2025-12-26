@@ -839,3 +839,61 @@ class TestContentVersioning(BaseTestCase):
                 continue
         else:
             self.fail("Failed to trigger truncated listing")
+
+    def test_suspended_versioning_with_a_deletion_marker_as_the_latest_version(self):
+        # Enable versioning on the container
+        self.storage.container_set_properties(
+            self.account,
+            self.container,
+            system={M2_PROP_VERSIONING_POLICY: "-1"},
+        )
+        # Create an object
+        _, _, _, obj_meta1 = self.storage.object_create_ext(
+            self.account,
+            self.container,
+            obj_name="test",
+            data=b"",
+            policy="SINGLE",
+        )
+        # Create a delete marker for the same object name
+        self.storage.object_delete(self.account, self.container, "test")
+        # List 1 delete marker and 1 "data" version
+        listing = self.api.object_list(self.account, self.container, versions=True)
+        objects = listing["objects"]
+        self.assertListEqual(
+            [
+                ("test", int(obj_meta1["version"]) + 1, True, True),
+                ("test", int(obj_meta1["version"]), False, False),
+            ],
+            [
+                (obj["name"], obj["version"], obj["deleted"], obj["is_latest"])
+                for obj in objects
+            ],
+        )
+        # Suspend versioning on the container
+        self.storage.container_set_properties(
+            self.account,
+            self.container,
+            system={M2_PROP_VERSIONING_POLICY: "1"},
+        )
+        # Create an object for the same object name
+        _, _, _, obj_meta2 = self.storage.object_create_ext(
+            self.account,
+            self.container,
+            obj_name="test",
+            data=b"",
+            policy="SINGLE",
+        )
+        # List 2 "data" versions, the delete marker has been removed
+        listing = self.api.object_list(self.account, self.container, versions=True)
+        objects = listing["objects"]
+        self.assertListEqual(
+            [
+                ("test", int(obj_meta2["version"]), False, True),
+                ("test", int(obj_meta1["version"]), False, False),
+            ],
+            [
+                (obj["name"], obj["version"], obj["deleted"], obj["is_latest"])
+                for obj in objects
+            ],
+        )
