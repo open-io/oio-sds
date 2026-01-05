@@ -338,7 +338,9 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
                         "try to abort before cleaning."
                         proceed_clean = False
                     else:  # sharding state is NEW_SHARD_STATE_APPLYING_SAVED_WRITES
-                        if self.sharding_blocked(cs, raw_meta, parsed_args.grace_delay):
+                        if not self.sharding_blocked(
+                            cs, raw_meta, parsed_args.grace_delay
+                        ):
                             logger.warning(
                                 "Container %s is applying saved writes, to "
                                 "proceed with the clean operation anyway, set "
