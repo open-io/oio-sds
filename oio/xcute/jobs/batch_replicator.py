@@ -15,6 +15,7 @@
 
 import json
 from collections import Counter
+from time import sleep
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import (
@@ -32,6 +33,7 @@ from oio.common.exceptions import (
     OioUnhealthyKafkaClusterError,
     ReplicationNotFinished,
     ServiceBusy,
+    ServiceUnavailable,
     XcuteRetryTaskLater,
 )
 from oio.common.kafka import (
@@ -189,7 +191,7 @@ class BatchReplicatorTask(XcuteTask):
             self.logger.info("Source object does not exist anymore")
             resp["object_skipped_deleted"] += 1
             return resp
-        except (OioNetworkException, ServiceBusy):
+        except (ServiceUnavailable, OioNetworkException, ServiceBusy):
             # Something went wrong, retry later
             raise XcuteRetryTaskLater(delay=self.delay_retry_later)
 
@@ -274,7 +276,10 @@ class BatchReplicatorJob(XcuteJob):
             pool_manager=self.api.container.pool_manager,
         )
 
-    def get_tasks(self, job_params, marker=None, reqid=None):
+    def _unsafe_get_tasks(self, job_params, marker=None, reqid=None):
+        """
+        _unsafe_get_tasks is not safe because timeouts can happens easily on manifests.
+        """
         manifest_marker = None
         line_marker = 0
         if marker:
@@ -316,6 +321,47 @@ class BatchReplicatorJob(XcuteJob):
             if not manifest_iters:
                 break
             manifest_name_finished = []
+
+    def get_tasks(self, job_params, marker=None, reqid=None):
+        """Call _unsafe_get_tasks and retry on known errors."""
+        max_retries = 3  # arbitrary value, we only want to stop if error persists
+        current_marker = marker
+        retries = 0
+
+        while True:
+            try:
+                for task_id, task_payload in self._unsafe_get_tasks(
+                    job_params=job_params,
+                    marker=current_marker,
+                    reqid=reqid,
+                ):
+                    current_marker = task_id
+                    # Reset retry counter if there is something to yield.
+                    # For a huge bucket with MPU, we might have several timeouts on
+                    # manifest but we don't want the job to fail.
+                    retries = 0
+                    yield task_id, task_payload
+
+                return
+
+            except (ServiceUnavailable, OioNetworkException, ServiceBusy) as err:
+                self.logger.error(
+                    "[job_id=%s] Error while reading manifests: %s (retries=%d)",
+                    self.job_id,
+                    err,
+                    retries,
+                )
+                retries += 1
+                if retries > max_retries:
+                    raise
+
+                # On very first retry, we want to retry immediately. This way, there
+                # is no loss of time because of a potential timeout on manifests.
+                if retries > 1:
+                    sleep(job_params["delay_retry_later"])
+
+                # Resume from last known marker
+                continue
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         manifests = self.get_manifests(
