@@ -3,6 +3,6 @@ export FDB_VERSION="6.3.23"
 export GO_PACKAGE="go-1.23.4-ovh1645"
 export PYPI_SNAPSHOT="20250625-21h42m01s"
 # Please make sure PYTHON_PACKAGE from obsto-zookeeper is in sync
-export PYTHON_PACKAGE="python-3.10.16-ovh213"
+export PYTHON_PACKAGE="python-3.10.19-ovh224"
 export RUST_VERSION="1.80"
-export ZOOKEEPER_PACKAGE="obsto-zookeeper-3.8.4-ovh1863"
+export ZOOKEEPER_PACKAGE="obsto-zookeeper-3.8.5-ovh1885"

@@ -11,8 +11,8 @@ Build-Depends:
   ca-certificates,
   cargo-1.80,
   go-1.23.4-ovh1645,
-  obsto-zookeeper-3.8.4-ovh1863,
-  python-3.10.16-ovh213,
+  obsto-zookeeper-3.8.5-ovh1885,
+  python-3.10.19-ovh224,
   flex,
   bison,
   gcc,
@@ -37,7 +37,7 @@ Package: ${PACKAGE}
 Architecture: any
 Depends:
   ${misc:Depends},
-  python-3.10.16-ovh213,
+  python-3.10.19-ovh224,
   libcurl4,
   zlib1g,
   libglib2.0-0,
