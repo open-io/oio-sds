@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@ import hashlib
 from copy import deepcopy
 
 from oio.common.exceptions import ClientException, Conflict, NotFound
-from oio.common.kafka import KafkaSender, KafkaSendException, get_retry_delay
+from oio.common.kafka import KafkaSender, KafkaSendException
 from oio.common.statsd import get_statsd
 from oio.container.client import ContainerClient
 from oio.container.sharding import ContainerSharding
@@ -62,7 +62,6 @@ class CheckpointCreatorFilter(Filter):
     _DEFAULT_CHECKPOINT_SUFFIX = "Lifecycle"
 
     def __init__(self, *args, endpoint=None, **kwargs):
-        self._retry_delay = None
         self._checkpoint_suffix = None
         self._endpoint = endpoint
         self._producer = None
@@ -73,7 +72,6 @@ class CheckpointCreatorFilter(Filter):
         super().__init__(*args, **kwargs)
 
     def init(self):
-        self._retry_delay = get_retry_delay(self.conf)
         self._checkpoint_suffix = self.conf.get(
             "checkpoint_suffix", self._DEFAULT_CHECKPOINT_SUFFIX
         )

@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,6 @@
 
 from oio.blob.operator import ChunkOperator
 from oio.common.exceptions import OioException, OrphanChunk, SpareChunkException
-from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
@@ -24,14 +23,12 @@ class BlobRebuilderFilter(Filter):
     """Filter that rebuilds broken chunks on rebuild events"""
 
     def __init__(self, *args, **kwargs):
-        self._retry_delay = None
         super().__init__(*args, **kwargs)
 
     def init(self):
         self.chunk_operator = ChunkOperator(
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
         )
-        self._retry_delay = get_retry_delay(self.conf)
 
     def _process_item(self, item):
         try:

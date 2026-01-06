@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@ from oio.common.exceptions import (
     ServiceBusy,
     VolumeException,
 )
-from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventError, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
@@ -41,7 +40,6 @@ class VolumeIndexFilter(Filter):
         self.rdir = self.app_env["rdir_client"]
 
     def init(self):
-        self._retry_delay = get_retry_delay(self.conf)
         self._serious_issue_delay = self._retry_delay * int_value(
             self.conf.get("serious_issue_factor"), 5
         )

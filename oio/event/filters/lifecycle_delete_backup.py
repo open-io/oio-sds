@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,6 @@ import os
 from datetime import datetime
 from uuid import uuid4
 
-from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
 
@@ -33,7 +32,6 @@ class LifecycleDeleteBackupFilter(Filter):
         self._backup_bucket = None
         self._prefix = None
         self._directory = None
-        self._retry_delay = None
         self._api = None
 
         super().__init__(app, conf)
@@ -61,7 +59,6 @@ class LifecycleDeleteBackupFilter(Filter):
         os.makedirs(self._directory, exist_ok=True)
 
         self._prefix = self.conf.get("prefix", self.DEFAULT_PREFIX)
-        self._retry_delay = get_retry_delay(self.conf)
         self._policy = self.conf.get("policy", None)
 
     def _send_to_bucket(self, event):

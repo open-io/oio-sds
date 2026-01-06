@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,6 @@ from oio.common.exceptions import OioTimeout
 from oio.common.kafka import (
     KafkaSender,
     KafkaSendException,
-    get_retry_delay,
 )
 from oio.event.evob import Event, RetryableEventError
 from oio.event.filters.base import Filter
@@ -35,7 +34,6 @@ class BaseNotifyFilter(Filter):
     def __init__(self, *args, endpoint=None, **kwargs):
         self.producer = None
         self.endpoint = endpoint
-        self._retry_delay = None
         self.destination = None
         self.rules = {}
         self.strip_fields = []
@@ -44,7 +42,6 @@ class BaseNotifyFilter(Filter):
 
     def init(self):
         self.destination = self.conf.get("topic", self.DEFAULT_TOPIC)
-        self._retry_delay = get_retry_delay(self.conf)
         self.strip_fields = [
             f for f in self.conf.get("strip_fields", "").split(",") if f
         ]

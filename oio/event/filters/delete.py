@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,7 +21,6 @@ from oio.common.kafka import (
     GetTopicMixin,
     KafkaSender,
     KafkaSendException,
-    get_retry_delay,
 )
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
@@ -36,7 +35,6 @@ class DeleteFilter(Filter, GetTopicMixin):
         self.endpoint = endpoint
         self._topic_prefix = None
         self._producer = None
-        self._retry_delay = None
         Filter.__init__(self, *args, **kwargs)
         GetTopicMixin.__init__(
             self,
@@ -47,7 +45,6 @@ class DeleteFilter(Filter, GetTopicMixin):
 
     def init(self):
         self._topic_prefix = self.conf.get("topic_prefix", DEFAULT_DELETE_TOPIC_PREFIX)
-        self._retry_delay = get_retry_delay(self.conf)
 
     def _send_event(self, topic, event):
         if not self._producer:

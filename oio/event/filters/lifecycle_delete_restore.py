@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,6 @@
 # License along with this library.
 
 from oio.common.exceptions import OioNetworkException
-from oio.common.kafka import get_retry_delay
 from oio.event.evob import Event, RetryableEventError, get_account_from_event
 from oio.event.filters.base import Filter
 
@@ -22,13 +21,11 @@ from oio.event.filters.base import Filter
 class LifecycleDeleteRestoreFilter(Filter):
     def __init__(self, app, conf):
         self._api = None
-        self._retry_delay = None
 
         super().__init__(app, conf)
 
     def init(self):
         self._api = self.app_env["api"]
-        self._retry_delay = get_retry_delay(self.conf)
 
     def process(self, env, cb):
         event = Event(env)

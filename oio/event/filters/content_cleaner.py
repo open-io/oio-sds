@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,6 @@ from oio.common.http_urllib3 import (
     resp_is_io_error,
     urllib3,
 )
-from oio.common.kafka import get_retry_delay
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventTypes, RetryableEventError
 from oio.event.filters.base import Filter
@@ -32,7 +31,6 @@ class ContentReaperFilter(Filter):
     """Filter that deletes chunks on content deletion events"""
 
     def __init__(self, *args, **kwargs):
-        self._retry_delay = None
         super().__init__(*args, **kwargs)
 
     def init(self):
@@ -40,7 +38,6 @@ class ContentReaperFilter(Filter):
         self.blob_client = BlobClient(
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"], **kwargs
         )
-        self._retry_delay = get_retry_delay(self.conf)
         self._serious_issue_delay = self._retry_delay * int_value(
             self.conf.get("serious_issue_factor"), 60
         )

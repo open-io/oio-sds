@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,9 +17,22 @@ from contextvars import ContextVar
 from dataclasses import asdict, dataclass
 from uuid import uuid4
 
-from oio.common.exceptions import OioException
+from oio.common.exceptions import (
+    DeadlineReached,
+    OioException,
+    OioNetworkException,
+    OioTimeout,
+    ServiceBusy,
+)
+from oio.common.kafka import get_retry_delay
 from oio.common.logger import LTSVFormatter, get_logger
-from oio.event.evob import Event, EventTypes, add_pipeline_to_resume, is_pausable
+from oio.event.evob import (
+    Event,
+    EventTypes,
+    RetryableEventError,
+    add_pipeline_to_resume,
+    is_pausable,
+)
 from oio.event.utils import MsgContext, log_context_from_msg
 
 # from oio.common.statsd import StatsdTiming
@@ -97,6 +110,7 @@ class Filter(object):
 
         self._pipelines_on_hold = []
         self._pause_allowed = False
+        self._retry_delay = get_retry_delay(self.conf)
 
         self.init()
 
@@ -116,6 +130,19 @@ class Filter(object):
             raise PausePipeline()
         return
 
+    def __safe_process(self, env, cb):
+        """Call process with error handling"""
+        try:
+            return self.process(env, cb)
+        except (ServiceBusy, OioNetworkException, OioTimeout, DeadlineReached) as exc:
+            event = Event(env)
+            resp = RetryableEventError(
+                event=event,
+                body=f"Retryable error: {exc}",
+                delay=self._retry_delay,
+            )
+            return resp(env, cb)
+
     def process(self, env, cb):
         return self.app(env, cb)
 
@@ -130,7 +157,7 @@ class Filter(object):
         context = self.log_context_from_env(env)
         ctx_filter.set(context)
         cb.update_handlers(context.filter_name)
-        return self.process(env, cb)
+        return self.__safe_process(env, cb)
 
     def __attach_pipelines_to_event(self, env):
         if self._pipelines_on_hold:

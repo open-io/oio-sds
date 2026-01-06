@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,6 @@ from oio.common.exceptions import (
     OioTimeout,
     ServiceBusy,
 )
-from oio.common.kafka import get_retry_delay
 from oio.common.storage_method import ECDriverError
 from oio.common.utils import request_id
 from oio.event.evob import (
@@ -38,12 +37,10 @@ class Transition(Filter):
     """Filter to transition an object from a policy to another"""
 
     def __init__(self, *args, **kwargs):
-        self._retry_delay = None
         self._api = None
         super().__init__(*args, **kwargs)
 
     def init(self):
-        self._retry_delay = get_retry_delay(self.conf)
         self._api = self.app_env["api"]
 
     def process(self, env, cb):
