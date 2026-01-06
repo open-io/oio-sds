@@ -17,7 +17,7 @@
 import random
 
 import oio.common.exceptions as exc
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
 EXCEPTIONS = [
@@ -41,9 +41,12 @@ class TesterTask(XcuteTask):
 
         self.error_percentage = job_params["error_percentage"]
         self.retry_percentage = job_params["retry_percentage"]
+        self.big_payload = job_params["big_payload"]
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         msg = task_payload["msg"]
+        if self.big_payload:
+            msg = f"{msg[:5]} .. truncated"
 
         self.logger.info("[reqid=%s] Hello: %s", reqid, msg)
 
@@ -84,6 +87,10 @@ class TesterJob(XcuteJob):
             job_params.get("retry_percentage"), cls.DEFAULT_RETRY_PERCENTAGE
         )
 
+        sanitized_job_params["big_payload"] = boolean_value(
+            job_params.get("big_payload")
+        )
+
         return sanitized_job_params, job_params.get("lock", cls.DEFAULT_LOCK)
 
     def get_tasks(self, job_params, marker=None, reqid=None):
@@ -95,7 +102,10 @@ class TesterJob(XcuteJob):
 
         for i in range(start, end):
             task_id = str(i)
-            task_payload = {"msg": "World %d" % i}
+            if not job_params["big_payload"]:
+                task_payload = {"msg": f"World {i}"}
+            else:
+                task_payload = {"msg": str(i) * 2**14}
 
             yield (task_id, task_payload)
 

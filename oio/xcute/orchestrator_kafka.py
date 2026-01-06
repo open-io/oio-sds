@@ -174,7 +174,10 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             )
             return
         if orchestrator_jobs:
-            self.logger.info("Resume %d jobs currently running for this orchestrator")
+            self.logger.info(
+                "Resume %d jobs currently running for this orchestrator",
+                len(orchestrator_jobs),
+            )
             for job_info in orchestrator_jobs:
                 if not self.running:
                     return
@@ -648,39 +651,86 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 self.kafka_endpoints, self.logger, app_conf=self.conf
             )
 
-        payload = self.make_payload(job_id, job_type, job_config, tasks, reqid=reqid)
+        payloads = self.make_payloads(job_id, job_type, job_config, tasks, reqid=reqid)
 
-        if len(payload) > self.MAX_PAYLOAD_SIZE:
-            raise ValueError(
-                "Task payload is too big"
-                f"(length={len(payload)}, max={self.MAX_PAYLOAD_SIZE})"
-            )
         try:
             topic = self.kafka_jobs_topic
             # If topic name suffix set
             if job.topic_suffix:
                 # Send task to dedicated topic
                 topic = f"{topic}-{job.topic_suffix}"
-            self.kafka_producer.send(topic, payload, flush=True)
+            for payload in payloads:
+                self.kafka_producer.send(topic, payload, flush=True)
         except Exception as exc:
             self.logger.warning("[job_id=%s] Fail to send job: %s", job_id, exc)
             return False
         return True
 
-    def make_payload(self, job_id, job_type, job_config, tasks, reqid=None):
-        payload = {
-            "event": self.event_type,
-            "data": {
-                "job_id": job_id,
-                "job_type": job_type,
-                "job_config": job_config,
-                "tasks": tasks,
-            },
-            "when": int(time.time() * 1000000),  # use time in micro seconds
-        }
-        if reqid:
-            payload["request_id"] = reqid
-        return json.dumps(payload)
+    def make_payloads(self, job_id, job_type, job_config, tasks, reqid=None):
+        payloads = []
+
+        def make_base_payload():
+            payload = {
+                "event": self.event_type,
+                "data": {
+                    "job_id": job_id,
+                    "job_type": job_type,
+                    "job_config": job_config,
+                    "tasks": {},
+                },
+                "when": int(time.time() * 1000000),  # use time in micro seconds
+            }
+            if reqid:
+                payload["request_id"] = reqid
+            return payload
+
+        def to_json_with_size(payload):
+            payload_json = json.dumps(payload, separators=(",", ":"))
+            return payload_json, len(payload_json)
+
+        def raise_single_task_too_big(size):
+            raise ValueError(
+                "Task payload is too big for a single task "
+                f"(length={size}, max={self.MAX_PAYLOAD_SIZE})"
+            )
+
+        # Fast construction: all tasks fit in a single payload
+        current_payload = make_base_payload()
+        current_payload["data"]["tasks"] = tasks
+
+        payload_json, size = to_json_with_size(current_payload)
+        if size <= self.MAX_PAYLOAD_SIZE:
+            return [payload_json]
+
+        # Slow construction: split tasks in smaller batches: add each tasks one by one
+        # until the size batch is reached.
+        current_payload = make_base_payload()
+        for key, value in tasks.items():
+            current_payload["data"]["tasks"][key] = value
+            payload_json, size = to_json_with_size(current_payload)
+
+            if size > self.MAX_PAYLOAD_SIZE:
+                # Remove the task that caused overflow
+                del current_payload["data"]["tasks"][key]
+
+                # Finalize the current batch
+                if not current_payload["data"]["tasks"]:
+                    raise_single_task_too_big(size)
+                payloads.append(json.dumps(current_payload))
+
+                # Start a new batch (and check its size)
+                current_payload = make_base_payload()
+                current_payload["data"]["tasks"][key] = value
+
+                payload_json, size = to_json_with_size(current_payload)
+                if size > self.MAX_PAYLOAD_SIZE:
+                    raise_single_task_too_big(size)
+
+        # Append the last batch
+        if current_payload["data"]["tasks"]:
+            payloads.append(json.dumps(current_payload, separators=(",", ":")))
+
+        return payloads
 
     def safe_compute_total_tasks(self, job_id, job_type, job_info, job, reqid):
         """

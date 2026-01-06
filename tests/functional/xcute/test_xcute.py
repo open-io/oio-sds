@@ -272,3 +272,24 @@ class TestXcuteJobs(XcuteTest):
         # Extra data (added via the XcuteExpiredRetryTask exception) is present
         for task in event.data["source_event"]["data"]["tasks"].items():
             self.assertEqual(f"foobar-{task[0]}", task[1]["extra"])
+
+    def test_big_payload(self):
+        """
+        Generate a job where batch of tasks will be too big, it will require to be cut
+        in multiple smaller batches.
+        """
+        nb_task = 64
+        job = self.xcute_client.job_create(
+            "tester",
+            job_config={
+                "params": {
+                    "lock": "lock",
+                    "service_id": "0",
+                    "end": nb_task,
+                    "big_payload": True,
+                }
+            },
+        )
+        job_show = self._wait_for_job_status(job["job"]["id"], "FINISHED")
+        self.assertEqual(job_show["results"]["counter"], nb_task)
+        self.assertEqual(job_show["errors"]["total"], 0)
