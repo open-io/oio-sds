@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2025 OVH SAS
+Copyright (C) 2020-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -395,7 +395,8 @@ gchar *
 service_info_key (const struct service_info_s *si)
 {
 	gchar addr[STRLEN_ADDRINFO];
-	const char *explicit = service_info_get_tag_value(si, "tag.service_id", NULL);
+	const char *explicit = service_info_get_tag_value(si,
+			NAME_TAGNAME_SERVICE_ID, NULL);
 	if (explicit)
 		return oio_make_service_key(si->ns_name, si->type, explicit);
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));

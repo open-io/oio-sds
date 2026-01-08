@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2024 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,6 +17,8 @@
 """Test the load balancer through the proxy"""
 
 from __future__ import print_function
+
+import random
 
 from tests.utils import (
     CODE_POLICY_NOT_SATISFIABLE,
@@ -39,6 +41,7 @@ class BaseLbTest(BaseTestCase):
                 lowport=lowport + num,
                 highport=lowport + num,
             )
+            srvin["score"] = random.randint(1, 100)
             self._lock_srv(srvin)
 
     def fill_sameport(self, count=1):
@@ -46,6 +49,7 @@ class BaseLbTest(BaseTestCase):
             srvin = self._srv(
                 "echo", lowport=7000, highport=7000, ip="127.0.0.%d" % (2 + num)
             )
+            srvin["score"] = random.randint(1, 100)
             self._lock_srv(srvin)
 
 

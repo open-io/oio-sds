@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2025 OVH SAS
+Copyright (C) 2020-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -874,7 +874,7 @@ static gchar*
 _srv_serviceid(struct service_info_s *si)
 {
 	gchar service_id[LIMIT_LENGTH_SRVID] = "";
-	struct service_tag_s *tag = service_info_get_tag (si->tags, "tag.service_id");
+	struct service_tag_s *tag = service_info_get_tag (si->tags, NAME_TAGNAME_SERVICE_ID);
 	if (!tag || !service_tag_get_value_string (tag, service_id, sizeof(service_id), NULL))
 		return NULL;
 

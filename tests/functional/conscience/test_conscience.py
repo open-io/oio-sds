@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2025 OVH SAS
+# Copyright (C) 2020-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ import logging
 import random
 import re
 import time
+from copy import deepcopy
 
 import pytest
 
@@ -476,7 +477,6 @@ class TestConscienceFunctional(BaseTestCase):
 
         def check(isFound):
             srv_list = self.conscience.all_services("echo")
-            print(srv_list)
             if isFound:
                 self.assertNotEqual(srv_list, [])
             else:
@@ -851,3 +851,112 @@ class TestConscienceFunctional(BaseTestCase):
                 watch_conf["stats"].remove(static_conf)
                 self.save_watch_conf(svc, watch_conf)
             raise
+
+    def _test_address_change(self, lock_old_srv=False, lock_new_srv=False):
+        def _register(ip, service_id):
+            srv = self._srv(
+                "echo",
+                ip=ip,
+                service_id=service_id,
+                extra_tags={
+                    "stat.space": random.randint(80, 100),
+                    "stat.cpu": random.randint(80, 100),
+                    "stat.io": random.randint(80, 100),
+                    "stat.unknown_stat": random.randint(80, 100),
+                },
+            )
+            self._register_srv(srv)
+            return srv
+
+        def _lock(srv):
+            srv = deepcopy(srv)
+            srv["score"] = 0
+            resp = self.request("POST", self._url_cs("lock"), json.dumps(srv))
+            self.assertIn(resp.status, (200, 204))
+
+        def _unlock(srv):
+            resp = self.request("POST", self._url_cs("unlock"), json.dumps(srv))
+            self.assertIn(resp.status, (200, 204))
+            self._register_srv(srv)
+
+        def _get_read_service(srv, is_locked=False):
+            if is_locked:
+                score = 0
+            else:
+                score = -1
+            read_service = {
+                "addr": srv["addr"],
+                "score": score,
+                "scores": {"score.put": score, "score.get": score},
+                "tags": {
+                    "tag.vol": srv["tags"]["tag.vol"],
+                    "tag.up": True,
+                    "tag.lock": is_locked,
+                    "tag.putlock": is_locked,
+                    "tag.getlock": is_locked,
+                },
+            }
+            service_id = srv["tags"].get("tag.service_id")
+            if service_id is not None:
+                read_service["tags"]["tag.service_id"] = service_id
+            return read_service
+
+        def _check_services(expected):
+            expected = sorted(expected, key=lambda x: x["addr"])
+            for _ in range(4):
+                current = self._assert_list_echo()
+                current.sort(key=lambda x: x["addr"])
+                for srv in current:
+                    if not srv["tags"]["tag.lock"]:
+                        self.assertGreater(srv["score"], 0)
+                        srv["score"] = -1
+                    if not srv["tags"]["tag.putlock"]:
+                        self.assertGreater(srv["scores"]["score.put"], 0)
+                        srv["scores"]["score.put"] = -1
+                    if not srv["tags"]["tag.getlock"]:
+                        self.assertGreater(srv["scores"]["score.get"], 0)
+                        srv["scores"]["score.get"] = -1
+                if expected == current:
+                    break
+                time.sleep(1.0)
+            else:
+                self.fail(f"Current={str(current)} Expected={str(expected)}")
+
+        # Add a first service with a service ID
+        old_srv = _register(ip="127.0.0.1", service_id="test-address-change")
+        if lock_old_srv:
+            _lock(old_srv)
+        else:
+            _unlock(old_srv)
+        _check_services([_get_read_service(old_srv, is_locked=lock_old_srv)])
+        # Add a second service without service ID
+        new_srv = _register(ip="127.0.0.2", service_id=None)
+        if lock_new_srv:
+            _lock(new_srv)
+        else:
+            _unlock(new_srv)
+        _check_services(
+            [
+                _get_read_service(old_srv, is_locked=lock_old_srv),
+                _get_read_service(new_srv, is_locked=lock_new_srv),
+            ]
+        )
+        # Update the second service with the same service ID
+        new_srv["tags"]["tag.service_id"] = "test-address-change"
+        self._register_srv(new_srv)
+        _check_services([_get_read_service(new_srv, is_locked=lock_old_srv)])
+        # Add a third service that registers directly with the ID service
+        new_new_srv = _register(ip="127.0.0.3", service_id="test-address-change")
+        _check_services([_get_read_service(new_new_srv, is_locked=lock_old_srv)])
+
+    def test_address_change(self):
+        self._test_address_change(lock_old_srv=False, lock_new_srv=False)
+
+    def test_address_change_with_lock_on_old_srv(self):
+        self._test_address_change(lock_old_srv=True, lock_new_srv=False)
+
+    def test_address_change_with_lock_on_new_srv(self):
+        self._test_address_change(lock_old_srv=False, lock_new_srv=True)
+
+    def test_address_change_with_lock_on_old_and_new_srv(self):
+        self._test_address_change(lock_old_srv=True, lock_new_srv=True)

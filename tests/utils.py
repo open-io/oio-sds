@@ -678,21 +678,29 @@ class CommonTestCase(unittest.TestCase):
         return ip + ":" + str(random.randint(low, high))
 
     def _srv(
-        self, srvtype, extra_tags={}, lowport=7000, highport=65535, ip="127.0.0.2"
+        self,
+        srvtype,
+        extra_tags={},
+        lowport=7000,
+        highport=65535,
+        ip="127.0.0.2",
+        service_id="",
     ):
         netloc = self._addr(low=lowport, high=highport, ip=ip)
+        if service_id == "":
+            service_id = netloc
         outd = {
             "ns": self.ns,
             "type": str(srvtype),
             "addr": netloc,
-            "score": random.randint(1, 100),
             "tags": {
                 "stat.cpu": 1,
                 "tag.vol": "test",
                 "tag.up": True,
-                "tag.service_id": netloc,
             },
         }
+        if service_id is not None:
+            outd["tags"]["tag.service_id"] = service_id
         if extra_tags:
             outd["tags"].update(extra_tags)
         return outd

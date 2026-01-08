@@ -2,7 +2,7 @@
 OpenIO SDS conscience central server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -501,9 +501,9 @@ conscience_srvtype_destroy(struct conscience_srvtype_s *srvtype)
 
 static gboolean
 conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
-		const addr_info_t *srvid, time_t mtime)
+		const addr_info_t *srvaddr, time_t mtime)
 {
-	struct conscience_srv_s *srv = g_hash_table_lookup(srvtype->services_ht, srvid);
+	struct conscience_srv_s *srv = g_hash_table_lookup(srvtype->services_ht, srvaddr);
 	if (srv) {
 		if (mtime) {
 			if (srv->lock_mtime > mtime || srv->tags_mtime > mtime) {
@@ -512,7 +512,7 @@ conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 			}
 		}
 
-		g_hash_table_remove(srvtype->services_ht, srvid);
+		g_hash_table_remove(srvtype->services_ht, srvaddr);
 		conscience_srv_destroy(srv);
 		return TRUE;
 	}
@@ -521,13 +521,13 @@ conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 
 static struct conscience_srv_s *
 conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
-		const addr_info_t *srvid)
+		const addr_info_t *srvaddr)
 {
 	EXTRA_ASSERT(srvtype != NULL);
-	EXTRA_ASSERT(srvid != NULL);
+	EXTRA_ASSERT(srvaddr != NULL);
 
 	struct conscience_srv_s *service = g_malloc0(sizeof(struct conscience_srv_s));
-	memcpy(&(service->addr), srvid, sizeof(addr_info_t));
+	memcpy(&(service->addr), srvaddr, sizeof(addr_info_t));
 	service->tags_mtime = 0;
 	service->tags = g_ptr_array_new();
 	service->lock_mtime = 0;
@@ -682,13 +682,61 @@ conscience_update_srv(gboolean first, time_t now, gint32 si_score,
 	}
 }
 
+static gboolean
+_get_service_id_from_tags(struct service_info_s *si, gchar *dst, gsize dst_size)
+{
+	EXTRA_ASSERT(si != NULL);
+	EXTRA_ASSERT(dst != NULL);
+
+	/* Retrieve service ID if present */
+	if (si->tags) {
+		const guint max = si->tags->len;
+		for (guint i = 0; i < max; i++) {
+			struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
+			if (g_strcmp0(tag->name, NAME_TAGNAME_SERVICE_ID) == 0) {
+				service_tag_to_string(tag, dst, dst_size);
+				return dst[0] != '\0';
+			}
+		}
+	}
+	return FALSE;
+}
+
+static struct conscience_srv_s *
+_resolve_service_id(struct conscience_srvtype_s *srvtype, gchar *service_id)
+{
+	EXTRA_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(service_id != NULL);
+
+	if (!service_id[0]) {
+		// Empty service ID
+		return NULL;
+	}
+
+	const struct conscience_srv_s *beacon = &(srvtype->services_ring);
+	for (struct conscience_srv_s *srv = beacon->next;
+			srv && srv != beacon;
+			srv = srv->next) {
+		if (strncmp(service_id, srv->service_id, LIMIT_LENGTH_SERVICE_ID) == 0) {
+			return srv;
+		}
+	}
+	return NULL;
+}
+
 static struct conscience_srv_s *
 conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_info_s *si)
 {
 	EXTRA_ASSERT (NULL != si);
 
+	struct conscience_srv_s *p_resolved_srv = NULL;
 	struct service_tag_s *tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_FIRST);
 	gboolean really_first = FALSE;
+
+	// Retrieve service ID if present
+	gchar service_id[LIMIT_LENGTH_SERVICE_ID];
+	gboolean has_service_id = _get_service_id_from_tags(si, service_id,
+			LIMIT_LENGTH_SERVICE_ID);
 
 	/* register the service if necessary, excepted if unlocking */
 	struct conscience_srv_s *p_srv = g_hash_table_lookup(srvtype->services_ht, &si->addr);
@@ -696,26 +744,45 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 		if (si->put_score.value == SCORE_UNLOCK && si->get_score.value == SCORE_UNLOCK) {
 			return NULL;
 		} else {
+			if (has_service_id) {
+				// Resolve and check if the service ID already exists
+				p_resolved_srv = _resolve_service_id(srvtype, service_id);
+			}
+
 			p_srv = conscience_srvtype_register_srv(srvtype, &si->addr);
-			g_assert_nonnull (p_srv);
+			g_assert_nonnull(p_srv);
 			really_first = tag_first && tag_first->type == STVT_BOOL && tag_first->value.b;
 
-			/* retrieve Service ID if present */
-			if (si->tags) {
-				const guint max = si->tags->len;
-				for (guint i = 0; i < max; i++) {
-					struct service_tag_s *tag = g_ptr_array_index(si->tags, i);
-					if (tag == tag_first) continue;
-
-					if (g_strcmp0(tag->name, "tag.service_id")) {
-						continue;
-					}
-
-					service_tag_to_string(tag, p_srv->service_id, LIMIT_LENGTH_SERVICE_ID);
-					GRID_TRACE("associate %s to %s", p_srv->description, p_srv->service_id);
-				}
+			if (has_service_id) {
+				GRID_TRACE("Associate the service %s to the service ID %s",
+						p_srv->description, service_id);
+				g_strlcpy(p_srv->service_id, service_id, LIMIT_LENGTH_SERVICE_ID);
 			}
 		}
+	} else if (has_service_id && strncmp(service_id, p_srv->service_id,
+			LIMIT_LENGTH_SERVICE_ID) != 0) {
+		// Resolve and check if the new service ID already exists
+		p_resolved_srv = _resolve_service_id(srvtype, service_id);
+		GRID_INFO("The service %s changes service ID: %s -> %s", p_srv->description,
+				p_srv->service_id, service_id);
+		g_strlcpy(p_srv->service_id, service_id, LIMIT_LENGTH_SERVICE_ID);
+	}
+	if (p_resolved_srv) {  // also "service_id" is necessarily defined
+		/* Copy the lock options from the old service
+		 * to maintain the same behavior on the service ID. */
+		really_first = FALSE;
+		p_srv->lock_mtime = p_resolved_srv->lock_mtime;
+		p_srv->put_locked = p_resolved_srv->put_locked;
+		if (p_resolved_srv->put_locked) {
+			p_srv->put_score = p_resolved_srv->put_score;
+		}
+		p_srv->get_locked = p_resolved_srv->get_locked;
+		if (p_resolved_srv->get_locked) {
+			p_srv->get_score = p_resolved_srv->get_score;
+		}
+		GRID_INFO("Remove the old service %s associated with the service ID %s",
+				p_resolved_srv->description, service_id);
+		conscience_srvtype_remove_srv(srvtype, &p_resolved_srv->addr, 0);
 	}
 
 	time_t now = oio_ext_real_time();
@@ -953,29 +1020,53 @@ conscience_srvtype_refresh_dated(
 		struct conscience_srvtype_s *srvtype,
 		struct service_info_dated_s *sid)
 {
+	struct conscience_srv_s *p_resolved_srv = NULL;
+
+	// Retrieve service ID if present
+	gchar service_id[LIMIT_LENGTH_SERVICE_ID];
+	gboolean has_service_id = _get_service_id_from_tags(sid->si, service_id,
+			LIMIT_LENGTH_SERVICE_ID);
+
 	/* register the service if necessary */
 	struct conscience_srv_s *p_srv = g_hash_table_lookup(
 			srvtype->services_ht, &sid->si->addr);
 	if (!p_srv) {
+		if (has_service_id) {
+			// Resolve and check if the service ID already exists
+			p_resolved_srv = _resolve_service_id(srvtype, service_id);
+		}
+
 		p_srv = conscience_srvtype_register_srv(srvtype, &sid->si->addr);
 		g_assert_nonnull(p_srv);
 
-		/* retrieve Service ID if present */
-		if (sid->si->tags) {
-			const guint max = sid->si->tags->len;
-			for (guint i = 0; i < max; i++) {
-				struct service_tag_s *tag = g_ptr_array_index(
-						sid->si->tags, i);
-				if (g_strcmp0(tag->name, "tag.service_id")) {
-					continue;
-				}
-
-				service_tag_to_string(tag, p_srv->service_id,
-						LIMIT_LENGTH_SERVICE_ID);
-				GRID_TRACE("associate %s to %s", p_srv->description,
-						p_srv->service_id);
-			}
+		if (has_service_id) {
+			GRID_TRACE("Associate the service %s to the service ID %s",
+					p_srv->description, service_id);
+			g_strlcpy(p_srv->service_id, service_id, LIMIT_LENGTH_SERVICE_ID);
 		}
+	} else if (has_service_id && strncmp(service_id, p_srv->service_id,
+			LIMIT_LENGTH_SERVICE_ID) != 0) {
+		// Resolve and check if the new service ID already exists
+		p_resolved_srv = _resolve_service_id(srvtype, service_id);
+		GRID_INFO("The service %s changes service ID: %s -> %s", p_srv->description,
+				p_srv->service_id, service_id);
+		g_strlcpy(p_srv->service_id, service_id, LIMIT_LENGTH_SERVICE_ID);
+	}
+	if (p_resolved_srv) {  // also "service_id" is necessarily defined
+		/* Copy the lock options from the old service
+		 * to maintain the same behavior on the service ID. */
+		p_srv->lock_mtime = p_resolved_srv->lock_mtime;
+		p_srv->put_locked = p_resolved_srv->put_locked;
+		if (p_resolved_srv->put_locked) {
+			p_srv->put_score = p_resolved_srv->put_score;
+		}
+		p_srv->get_locked = p_resolved_srv->get_locked;
+		if (p_resolved_srv->get_locked) {
+			p_srv->get_score = p_resolved_srv->get_score;
+		}
+		GRID_INFO("Remove the old service %s associated with the service ID %s",
+				p_resolved_srv->description, service_id);
+		conscience_srvtype_remove_srv(srvtype, &p_resolved_srv->addr, 0);
 	}
 
 	/* Refresh the lock */

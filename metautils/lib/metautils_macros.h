@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -33,6 +33,7 @@ License along with this library.
 
 /* Some well known service tags macro names */
 
+# define NAME_TAGNAME_SERVICE_ID "tag.service_id"
 # define NAME_TAGNAME_VOL "tag.vol"
 # define NAME_TAGNAME_UP "tag.up"
 # define NAME_TAGNAME_FIRST "tag.1"
