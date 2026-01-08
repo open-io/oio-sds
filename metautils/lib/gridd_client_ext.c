@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -97,7 +97,7 @@ gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
 		clients[i] = client;
 	}
 	if (i < max) { /* something went wrong, rolling back */
-		for (; i >= 0; i--) {
+		while (--i >= 0) {  // Last element is NULL, need to decrement first
 			gridd_client_free(clients[i]);
 			clients[i] = NULL;
 		}
@@ -252,18 +252,19 @@ retry:
 	return NULL;
 }
 
+static struct gridd_client_s **
+_lookup_client(int fd, struct gridd_client_s **ppc) {
+	struct gridd_client_s *c;
+	for (; (c = *ppc); ppc++) {
+		if (gridd_client_fd(c) == fd)
+			return ppc;
+	}
+	return ppc;
+}
+
 GError *
 gridd_clients_step(struct gridd_client_s **clients)
 {
-	struct gridd_client_s ** _lookup_client(int fd, struct gridd_client_s **ppc) {
-		struct gridd_client_s *c;
-		for (; (c = *ppc) ;ppc++) {
-			if (gridd_client_fd(c) == fd)
-				return ppc;
-		}
-		return ppc;
-	}
-
 	guint i, j;
 	int rc;
 	struct gridd_client_s *last, **plast;

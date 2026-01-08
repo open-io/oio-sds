@@ -2,6 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -27,6 +28,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 
+#include "glib.h"
 #include "test_addr.h"
 
 static GByteArray *
@@ -63,6 +65,23 @@ test_bad_addresses(void)
 
 	test(NULL);
 	test_on_urlv(bad_urls, test);
+}
+
+static void
+_test_create_many_bad_address(const gchar *bad_addr)
+{
+	const gchar *bad_targets[] = {"127.0.0.1:6000", bad_addr, "127.0.0.2:6001", NULL};
+	GByteArray *req = _generate_request();
+	struct gridd_client_s **clients = gridd_client_create_many(
+		(gchar**)bad_targets, req, NULL, NULL);
+	// All URLs are bad, no client should be created
+	g_assert_null(clients);
+}
+
+static void
+test_create_many_bad_address()
+{
+	test_on_urlv(bad_urls, _test_create_many_bad_address);
 }
 
 static void
@@ -269,6 +288,8 @@ main(int argc, char **argv)
 			test_down_peer);
 	g_test_add_func("/metautils/gridd_client/bad_address",
 			test_bad_addresses);
+	g_test_add_func("/metautils/gridd_client/create_many_bad_address",
+			test_create_many_bad_address);
 	g_test_add_func("/metautils/gridd_client/good_address",
 			test_good_addresses);
 	g_test_add_func("/metautils/gridd_client/ignored_connect_fail_start",
