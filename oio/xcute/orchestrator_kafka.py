@@ -324,7 +324,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
             now = time.time()
             job_mtime = job_info["job"]["mtime"]
-            max_tasks_per_second = job_info["config"]["tasks_per_second"]
+            target_tasks_per_second = job_info["config"]["tasks_per_second"]
             max_tasks_batch_size = job_info["config"]["tasks_batch_size"]
             tasks_processed = job_info["tasks"]["processed"]
             pending_tasks = job_info["tasks"]["sent"] - tasks_processed
@@ -340,7 +340,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     # This would slow down the speed of the job,
                     # while the job can restart normally.
                     last_check["mtime"] = now
-                elif pending_tasks / max_tasks_per_second >= period:
+                elif pending_tasks / target_tasks_per_second >= period:
                     waiting_time = period
                     self.logger.error(
                         "[job_id=%s] Too many pending tasks "
@@ -349,7 +349,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                         job_id,
                         period,
                         pending_tasks,
-                        max_tasks_per_second,
+                        target_tasks_per_second,
                         waiting_time,
                     )
                     continue
@@ -428,12 +428,12 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             if diff_tasks_per_second < -0.5:  # Too fast to process tasks
                 # The queues need to have a few tasks in advance.
                 # Continue at this speed to allow the queues to empty.
-                if actual_tasks_per_second > max_tasks_per_second:
+                if actual_tasks_per_second > target_tasks_per_second:
                     self.logger.warning(
                         "[job_id=%s] Speeding: %f tasks/second (max: %d)",
                         job_id,
                         actual_tasks_per_second,
-                        max_tasks_per_second,
+                        target_tasks_per_second,
                     )
                 else:
                     self.logger.info(
@@ -443,7 +443,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                         current_tasks_per_second,
                     )
             elif diff_tasks_per_second <= 0.5:  # Good speed to process tasks
-                if current_tasks_per_second < max_tasks_per_second:
+                if current_tasks_per_second < target_tasks_per_second:
                     new_tasks_per_second = current_tasks_per_second + 1
                     self.logger.info(
                         "[job_id=%s] Slowly climb up to maximum speed", job_id
