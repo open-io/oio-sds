@@ -144,9 +144,12 @@ class CommonTestCase(unittest.TestCase):
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
 
-    def get_service_url(self, srvtype, i=0):
+    def get_service_url(self, srvtype, i: str | int = 0):
         allsrv = self.conf["services"][srvtype]
-        srv = allsrv[i]
+        if i == "random":
+            srv = random.choice(allsrv)
+        else:
+            srv = allsrv[i]
         return srv["num"], srv["path"], srv["addr"], srv.get("uuid")
 
     def get_service(self, srvtype, i=0):
