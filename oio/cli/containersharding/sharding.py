@@ -208,14 +208,18 @@ class AbortSharding(ContainerShardingCommandMixin, ShowOne):
         has_previous_range = shard.get("upper.previous") or shard.get("lower.previous")
         next_step_msg = None
         if is_orphan:
-            next_step_msg = "Container %s is an orphan, need to removed "
-            "try 'container-sharding is-orphan --autoremove'"
+            next_step_msg = (
+                "Container %s is an orphan, need to removed "
+                "try 'container-sharding is-orphan --autoremove'"
+            )
         else:
             if has_previous_range:  # "upper.previous" and "lower.previous" are present
                 if healthy:
-                    next_step_msg = "Shard %s is saved in the root container "
-                    "and the range is correct but some entries may need to be "
-                    "cleaned, try 'container-sharding clean'"
+                    next_step_msg = (
+                        "Shard %s is saved in the root container "
+                        "and the range is correct but some entries may need to be "
+                        "cleaned, try 'container-sharding clean'"
+                    )
                     proceed_abort = False
 
             else:  # "upper.previous" and "lower.previous" are missing
@@ -223,9 +227,11 @@ class AbortSharding(ContainerShardingCommandMixin, ShowOne):
                     raw_meta["system"].get(M2_PROP_SHARDING_STATE), 0
                 )
                 if sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
-                    next_step_msg = "Shard %s is saved in the root container "
-                    "and the range is correct but some entries may need to be "
-                    "cleaned, try 'container-sharding clean'"
+                    next_step_msg = (
+                        "Shard %s is saved in the root container "
+                        "and the range is correct but some entries may need to be "
+                        "cleaned, try 'container-sharding clean'"
+                    )
                     proceed_abort = False
 
         if proceed_abort or forced_op:
@@ -318,8 +324,10 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
         has_previous_range = shard.get("upper.previous") or shard.get("lower.previous")
         next_step_msg = None
         if is_orphan:
-            next_step_msg = "Container %s is an orphan and need to be removed "
-            "try 'container-sharding is-orphan --autoremove'"
+            next_step_msg = (
+                "Container %s is an orphan and need to be removed "
+                "try 'container-sharding is-orphan --autoremove'"
+            )
         else:
             if cs.sharding_in_progress(raw_meta):
                 if (
@@ -334,8 +342,10 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
 
                 else:  # "upper.previous" and "lower.previous" are missing
                     if sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
-                        next_step_msg = "The container %s is in an unfinished state"
-                        "try to abort before cleaning."
+                        next_step_msg = (
+                            "The container %s is in an unfinished state "
+                            "try to abort before cleaning."
+                        )
                         proceed_clean = False
                     else:  # sharding state is NEW_SHARD_STATE_APPLYING_SAVED_WRITES
                         if not self.sharding_blocked(
