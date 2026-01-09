@@ -22,6 +22,8 @@ from oio.cli import Lister, ShowOne
 from oio.common.constants import (
     FINISHED_SHARDING_STATE_NAME,
     M2_PROP_OBJECTS,
+    M2_PROP_SHARDING_PREVIOUS_LOWER,
+    M2_PROP_SHARDING_PREVIOUS_UPPER,
     M2_PROP_SHARDING_QUEUE,
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TIMESTAMP,
@@ -125,6 +127,15 @@ class ContainerShardingCommandMixin(object):
                 raise
         return raw_meta, shard, healthy, is_orphan
 
+    def previous_lower_upper_present(self, raw_meta):
+        """
+        Return True if both previous lower and upper bounds are present
+        in the container metadata.
+        """
+        previous_lower = raw_meta["system"].get(M2_PROP_SHARDING_PREVIOUS_LOWER)
+        previous_upper = raw_meta["system"].get(M2_PROP_SHARDING_PREVIOUS_UPPER)
+        return previous_lower is not None and previous_upper is not None
+
     def sharding_blocked(self, cs, raw_meta, delay=960):
         """
         Return True if sharding is in an unfinished state
@@ -205,7 +216,7 @@ class AbortSharding(ContainerShardingCommandMixin, ShowOne):
             )
             return self.columns, (acct, cont, aborted, drained)
         proceed_abort = True
-        has_previous_range = shard.get("upper.previous") or shard.get("lower.previous")
+        has_previous_range = self.previous_lower_upper_present(raw_meta)
         next_step_msg = None
         if is_orphan:
             next_step_msg = (
@@ -321,7 +332,7 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
             )
             return ("Status",), [("Ok",)]
         proceed_clean = True
-        has_previous_range = shard.get("upper.previous") or shard.get("lower.previous")
+        has_previous_range = self.previous_lower_upper_present(raw_meta)
         next_step_msg = None
         if is_orphan:
             next_step_msg = (
