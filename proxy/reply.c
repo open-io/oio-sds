@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2025 OVH SAS
+Copyright (C) 2020-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -114,7 +114,10 @@ _reply_json_error(struct req_args_s *args, int code, const char *msg,
 			);
 		}
 	}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
 	g_string_free(service_id, FALSE);
+#pragma GCC diagnostic pop
 	return _reply_json(args, code, msg, gstr);
 }
 
