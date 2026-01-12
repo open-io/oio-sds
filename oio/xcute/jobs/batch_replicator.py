@@ -15,7 +15,7 @@
 
 import json
 from collections import Counter
-from time import sleep
+from time import sleep, time
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import (
@@ -119,6 +119,10 @@ class BatchReplicatorTask(XcuteTask):
             self.kafka_producer = KafkaSender(
                 self.kafka_endpoint, self.logger, self.kafka_conf
             )
+
+        # Overwrite the when. The field is populated by default during the listing,
+        # but the delay filters rely on it.
+        event.when = int(time() * 1000000)  # use time in micro seconds
 
         try:
             self.kafka_producer.send(self.replication_topic, event.env, flush=True)
