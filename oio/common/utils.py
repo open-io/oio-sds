@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -242,6 +242,22 @@ class CacheDict(OrderedDict):
     def _check_size(self):
         while len(self) > self.size:
             self.popitem(last=False)
+
+
+class ClosingCacheDict(CacheDict):
+    """
+    CacheDict calling close method on popped elements (when a element is removed).
+    """
+
+    def _check_size(self):
+        while len(self) > self.size:
+            _key, task = self.popitem(last=False)
+            task.close()
+
+    def empty(self):
+        while len(self) > 0:
+            _key, task = self.popitem(last=False)
+            task.close()
 
 
 class RingBuffer(list):

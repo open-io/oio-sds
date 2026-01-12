@@ -25,7 +25,7 @@ from oio.common.kafka import (
     KafkaSender,
 )
 from oio.common.logger import get_logger
-from oio.common.utils import CacheDict, ratelimit, request_id
+from oio.common.utils import ClosingCacheDict, ratelimit, request_id
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -36,7 +36,7 @@ class XcuteWorker(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.watchdog = watchdog
-        self.tasks = CacheDict(
+        self.tasks = ClosingCacheDict(
             size=self.conf.get("cache_size", self.DEFAULT_CACHE_SIZE)
         )
         self.producer = None
@@ -193,3 +193,11 @@ class XcuteWorker(object):
             do_not_expire=do_not_expire,
             delayed_topic=delayed_topic,
         )
+
+    def stop(self):
+        # Delete all tasks (close will be called if useful).
+        self.tasks.empty()
+
+        if self.producer is not None:
+            self.producer.close()
+            self.producer = None

@@ -901,3 +901,6 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             self.running = False
         else:
             self.logger.info("Already exiting gracefully")
+        if self.kafka_producer is not None:
+            self.kafka_producer.close()
+            self.kafka_producer = None

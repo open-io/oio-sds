@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,7 +30,6 @@ class GroupFilter(Filter):
 
     def __init__(self, app, conf, endpoint=None, **kwargs):
         self._endpoint = endpoint
-        self._producer = None
         self._topic = None
         self._group_size = None
         self._group = []

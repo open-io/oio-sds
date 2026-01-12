@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -300,11 +300,6 @@ class ReplicationCatchUp(Command):
     def _clean_exit(self, account, bucket, *_args):
         """Exit the tool"""
         if self.kafka_producer is not None:
-            nb_msg = self.kafka_producer.flush(1.0)
-            if nb_msg > 0:
-                self.log.warning(
-                    "All events are not flushed. %d are still in queue", nb_msg
-                )
             # Close the producer
             self.kafka_producer.close()
             self.kafka_producer = None

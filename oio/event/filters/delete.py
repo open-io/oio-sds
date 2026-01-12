@@ -34,7 +34,6 @@ class DeleteFilter(Filter, GetTopicMixin):
     def __init__(self, *args, endpoint=None, **kwargs):
         self.endpoint = endpoint
         self._topic_prefix = None
-        self._producer = None
         Filter.__init__(self, *args, **kwargs)
         GetTopicMixin.__init__(
             self,

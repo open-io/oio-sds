@@ -64,7 +64,6 @@ class CheckpointCreatorFilter(Filter):
     def __init__(self, *args, endpoint=None, **kwargs):
         self._checkpoint_suffix = None
         self._endpoint = endpoint
-        self._producer = None
         self._topic = None
         self._metrics = None
         self._statsd = None
@@ -277,7 +276,7 @@ class CheckpointCreatorFilter(Filter):
                             # Failed to emit sub events
                             return err(env, cb)
                         if cid_to_process == cid:
-                            # The missing container is still registerd as one handling
+                            # The missing container is still registered as one handling
                             # the range. This case should not happen. We raise an
                             # exception to let the event end in the dead-letter topic
                             # to conduct further investigations

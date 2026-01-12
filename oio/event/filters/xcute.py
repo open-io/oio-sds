@@ -61,6 +61,10 @@ class XcuteFilter(Filter):
 
         return self.app(env, cb)
 
+    def close(self):
+        self.worker.stop()
+        super().close()
+
 
 def filter_factory(global_conf, **local_conf):
     conf = global_conf.copy()

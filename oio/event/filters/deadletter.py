@@ -32,7 +32,6 @@ class DeadletterFilter(Filter):
 
     def __init__(self, *args, endpoint=None, **kwargs):
         self.endpoint = endpoint
-        self._producer = None
         super().__init__(*args, **kwargs)
 
     def init(self):

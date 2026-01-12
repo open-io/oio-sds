@@ -25,7 +25,6 @@ from oio.event.filters.base import Filter
 
 class LifecycleDelete(Filter):
     def __init__(self, *args, endpoint=None, **kwargs):
-        self._producer = None
         self._destination = None
         self._endpoint = endpoint
         super().__init__(*args, **kwargs)

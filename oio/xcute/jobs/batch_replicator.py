@@ -209,6 +209,11 @@ class BatchReplicatorTask(XcuteTask):
         resp[f"object_replication_{status}"] += 1
         return resp
 
+    def close(self):
+        if self.kafka_producer is not None:
+            self.kafka_producer.close()
+            self.kafka_producer = None
+
 
 def iter_lines_from_stream(stream, marker=0):
     buffer = b""

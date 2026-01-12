@@ -35,7 +35,6 @@ class DelayFilter(Filter):
 
     def __init__(self, *args, endpoint=None, **kwargs):
         self.endpoint = endpoint
-        self._producer = None
         self._events_time_to_live = None
         self.topic = None
         super().__init__(*args, **kwargs)

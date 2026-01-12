@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -43,6 +43,9 @@ class XcuteTask(object):
 
     def process(self, task_id, task_payload, reqid, job_id):
         raise NotImplementedError()
+
+    def close(self):
+        pass
 
 
 class XcuteJob(object):

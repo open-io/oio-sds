@@ -273,7 +273,7 @@ class KafkaSender(KafkaClient):
             self._client.produce(topic, data, key=key, callback=self._produce_callback)
 
             if flush:
-                nb_msg = self._client.flush(1.0)
+                nb_msg = self.flush(1.0)
                 if nb_msg > 0:
                     self._logger.warning(
                         "All events are not flushed. %d are still in queue", nb_msg
@@ -360,14 +360,14 @@ class KafkaSender(KafkaClient):
         self._send(topic, data, key=key, flush=flush)
 
     def flush(self, timeout):
-        return self._client.flush(timeout)
+        remaining = self._client.flush(timeout)
+        self._logger.debug("Still %d events remaining after flush")
+        return remaining
 
     def _close(self):
-        remaining = self._client.flush(FLUSH_TIMEOUT)
+        remaining = self.flush(FLUSH_TIMEOUT)
         if remaining > 0:
-            self._logger.error(
-                "Some produced events may not be acknowledged (%d)", remaining
-            )
+            self._logger.error("Some produced events may be lost (%d)", remaining)
 
     def _get_conf(self):
         _, producer_conf = self._kafka_options_from_conf()

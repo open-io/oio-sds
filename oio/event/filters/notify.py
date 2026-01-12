@@ -32,7 +32,6 @@ class BaseNotifyFilter(Filter):
     DEFAULT_TOPIC = "notif"
 
     def __init__(self, *args, endpoint=None, **kwargs):
-        self.producer = None
         self.endpoint = endpoint
         self.destination = None
         self.rules = {}
@@ -54,14 +53,13 @@ class BaseNotifyFilter(Filter):
         Initialize the message producer (if not already initialized).
         Will also check if the configured destination topics exist.
         """
-        if self.producer is not None:
+        if self._producer is not None:
             return
 
-        producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
+        self._producer = KafkaSender(self.endpoint, self.logger, app_conf=self.conf)
         topics = [self.destination]
         topics.extend([r["destination"] for r in self.rules.values()])
-        producer.ensure_topics_exist(topics)
-        self.producer = producer
+        self._producer.ensure_topics_exist(topics)
 
     def _get_used_topics(self):
         return [self.destination]
@@ -93,7 +91,7 @@ class BaseNotifyFilter(Filter):
                         topic = rule["destination"]
                         break
         try:
-            self.producer.send(topic, payload, flush=True)
+            self._producer.send(topic, payload, flush=True)
         except KafkaSendException as err:
             delay = None
             if err.retriable:

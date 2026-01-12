@@ -1,4 +1,4 @@
-# Copyright (C) 2023-2025 OVH SAS
+# Copyright (C) 2023-2026 OVH SAS
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
@@ -518,9 +518,10 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
             yield hold
 
     def run(self):
-        # Prevent the workers from being stopped by Ctrl+C.
+        # Prevent the workers from being stopped by SIGINT or SIGTERM.
         # Let the main process stop the workers.
         signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
         self.pre_run()
         while True:
@@ -534,8 +535,6 @@ class KafkaConsumerWorker(Process, AcknowledgeMessageMixin):
                 self._consume()
             except Exception:
                 self.logger.exception("Error, reconnecting")
-            finally:
-                self.close()
 
     def stop(self):
         """
@@ -751,8 +750,15 @@ class KafkaBatchFeeder(
                     break
 
     def run(self):
+        # Prevent the workers from being stopped by SIGINT or SIGTERM.
+        # Let the main process stop the workers.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+
         try:
             while True:
+                if self._stop_requested.is_set():
+                    break
                 try:
                     # Reset batch
                     self.reset_offsets()
@@ -780,6 +786,7 @@ class KafkaBatchFeeder(
             self.logger.exception("Failed to process batch, reason: %s", exc)
         # Try to commit even a partial batch
         self._commit_batch()
+        self._close()
 
     def _connect(self):
         if not self._consumer:
@@ -950,37 +957,38 @@ class KafkaConsumerPool:
     def run(self):
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
-        try:
-            worker_factories = {"feeder": self._start_feeder}
+        signal.signal(signal.SIGINT, lambda _sig, _stack: self.stop())
 
-            self._workers = {w: None for w in range(self.processes)}
-            self._workers["feeder"] = None
+        worker_factories = {"feeder": self._start_feeder}
 
-            while self.running:
-                if self._max_processed_events_reached():
-                    self.logger.info(
-                        f"Max processed events"
-                        f" reached {self._max_events_to_process}, "
-                        "Stopping all workers."
-                    )
-                    self.stop()
-                for worker_id, instance in self._workers.items():
-                    if instance is None or not instance.is_alive():
-                        if instance:
-                            self.logger.info(
-                                "Joining dead worker %s (exitcode=%s)",
-                                worker_id,
-                                instance.exitcode,
-                            )
-                            instance.join()
-                        factory = worker_factories.get(worker_id, self._start_worker)
-                        factory(worker_id)
-                time.sleep(1)
-        except KeyboardInterrupt:  # Catches CTRL+C or SIGINT
-            self.stop()
+        self._workers = {w: None for w in range(self.processes)}
+        self._workers["feeder"] = None
+
+        while self.running:
+            if self._max_processed_events_reached():
+                self.logger.info(
+                    f"Max processed events"
+                    f" reached {self._max_events_to_process}, "
+                    "Stopping all workers."
+                )
+                self.stop()
+            for worker_id, instance in self._workers.items():
+                if instance is None or not instance.is_alive():
+                    if instance:
+                        self.logger.info(
+                            "Joining dead worker %s (exitcode=%s)",
+                            worker_id,
+                            instance.exitcode,
+                        )
+                        instance.join()
+                    factory = worker_factories.get(worker_id, self._start_worker)
+                    factory(worker_id)
+            time.sleep(1)
+
         for worker_id, worker in self._workers.items():
             self.logger.info("Stopping worker %s", worker_id)
             worker.stop()
-        for worker in self._workers.values():
+        for worker_id, worker in self._workers.items():
             worker.join()
+            self.logger.info("Worker %s joined successfully", worker_id)
         self.logger.info("All workers stopped")

@@ -56,7 +56,7 @@ class FilterContext(MsgContext):
 ctx_filter = ContextVar("filter", default=FilterContext())
 
 
-class FilterLTSVFormater(LTSVFormatter):
+class FilterLTSVFormatter(LTSVFormatter):
     def get_extras(self):
         ctx = ctx_filter.get()
         return asdict(ctx)
@@ -101,7 +101,7 @@ class Filter(object):
         # however since the configuration is shared by several classes there will
         # be unknown fields most of the time. It has been chosen to set them to "-"
         # by default in the LTSVFormatter class.
-        formatter = FilterLTSVFormater(fmt=log_format)
+        formatter = FilterLTSVFormatter(fmt=log_format)
         self.logger = get_logger(
             conf,
             name=self.__class__.__name__,
@@ -111,6 +111,7 @@ class Filter(object):
         self._pipelines_on_hold = []
         self._pause_allowed = False
         self._retry_delay = get_retry_delay(self.conf)
+        self._producer = None
 
         self.init()
 
@@ -193,3 +194,10 @@ class Filter(object):
             raise OioException(
                 f"Unexpected return value when filter {name} processed an event: {res}"
             )
+
+    def close(self):
+        if self._producer is not None:
+            # Call the close method of KafkaClient. Producer should be a KafkaSender,
+            # a flush of remaining events in queue will be called.
+            self._producer.close()
+            self._producer = None
