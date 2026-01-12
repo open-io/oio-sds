@@ -278,6 +278,7 @@ class KafkaSender(KafkaClient):
                     self._logger.warning(
                         "All events are not flushed. %d are still in queue", nb_msg
                     )
+                return nb_msg
             else:
                 self._client.poll(POLL_TIMEOUT)
 
@@ -298,6 +299,7 @@ class KafkaSender(KafkaClient):
             raise KafkaSendException(
                 "Failed to send event to topic %s: producer closed", retriable=True
             ) from aerr
+        return None
 
     def _generate_delayed_event(
         self, topic, event, delay, key=None, do_not_expire=False
@@ -342,6 +344,14 @@ class KafkaSender(KafkaClient):
         delayed_topic=None,
         do_not_expire=False,
     ):
+        """
+        Send data to a topic.
+        Data can be encapsulated in a "delay event" if needed.
+        Flush can be explicitly called.
+
+        :return int or None: if flush is True: how many remaining events in queue.
+            None, otherwise.
+        """
         # Strip any _internal field
         if isinstance(data, dict) and "_internal" in data:
             data = {
@@ -357,7 +367,7 @@ class KafkaSender(KafkaClient):
             topic = delayed_topic if delayed_topic is not None else self._delayed_topic
             key = None
 
-        self._send(topic, data, key=key, flush=flush)
+        return self._send(topic, data, key=key, flush=flush)
 
     def flush(self, timeout):
         remaining = self._client.flush(timeout)

@@ -125,7 +125,17 @@ class BatchReplicatorTask(XcuteTask):
         event.when = int(time() * 1000000)  # use time in micro seconds
 
         try:
-            self.kafka_producer.send(self.replication_topic, event.env, flush=True)
+            res = self.kafka_producer.send(
+                self.replication_topic, event.env, flush=True
+            )
+            if res > 0:
+                # If the event is not acknowledged, we will retry later.
+                # We want to be sure that the replication event is sent before
+                # committing the task.
+                raise XcuteRetryTaskLater(delay=self.delay_retry_later)
+        except XcuteRetryTaskLater:
+            self.logger.error("Replication event not flushed, send to retry later")
+            raise
         except Exception as exc:
             self.logger.error("Fail to send replication event %s: %s", event, exc)
             raise KafkaError from exc
