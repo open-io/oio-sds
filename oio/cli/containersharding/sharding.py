@@ -307,7 +307,9 @@ class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
             reqid, acct, cont, cs, cid
         )
         sharding_state = int_value(raw_meta["system"].get(M2_PROP_SHARDING_STATE), 0)
-        if not self.sharding_blocked(cs, raw_meta, parsed_args.grace_delay):
+        if cs.sharding_in_progress(raw_meta) and not self.sharding_blocked(
+            cs, raw_meta, parsed_args.grace_delay
+        ):
             logger.warning(
                 "Container %s is not blocked, to proceed with the clean "
                 "operation anyway, set the grace delay to 0.",
