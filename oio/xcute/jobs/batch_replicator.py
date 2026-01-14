@@ -247,7 +247,8 @@ class BatchReplicatorJob(XcuteJob):
     JOB_TYPE = "batch-replicator"
     TASK_CLASS = BatchReplicatorTask
 
-    DEFAULT_TASKS_PER_SECOND = 200
+    DEFAULT_TASKS_PER_SECOND = 200  # aka nb of tasks per shard
+    DEFAULT_MAX_TASKS_PER_SECOND = 1000  # aka nb of tasks per bucket if enough shards
 
     DEFAULT_KAFKA_MAX_LAGS = 1000000
     DEFAULT_KAFKA_MIN_AVAILABLE_SPACE = 40  # in percent
@@ -420,3 +421,35 @@ class BatchReplicatorJob(XcuteJob):
             self.logger.debug("Unhealthy kafka cluster, waiting..")
             return False
         return True
+
+    def get_target_task_per_second(self, job_info) -> int:
+        """
+        The goal here is to have a dynamic target.
+        At the beginning, consider that the bucket has no shards: we don't want more
+        than DEFAULT_TASKS_PER_SECOND tasks per second.
+        With time, we will reach enough objects in the bucket to trigger some sharding.
+        Then, the target can be increased to dispatch DEFAULT_TASKS_PER_SECOND across
+        shards (with a maximum DEFAULT_MAX_TASKS_PER_SECOND).
+
+        The number of objects per shard is purely arbitrary, most of the time, sharding
+        will be triggered before. But this is a safety value, we don't want to increase
+        the target if there is still no shards.
+
+        Plus, the destination bucket may be on another region, we don't want to make
+        calls to the bucket DB to know how many containers the bucket has (and we don't
+        know if containers are shards or +segments).
+        """
+        NB_OBJECTS_PER_SHARD = 600000  # arbitrary "worst case" scenario
+        nb_objects_replicated = job_info["tasks"]["processed"]
+
+        tasks_per_shard = job_info["config"]["tasks_per_second"]
+        tasks_per_bucket = job_info["config"]["max_tasks_per_second"]
+
+        computed_nb_shards = min(1, int(nb_objects_replicated / NB_OBJECTS_PER_SHARD))
+        target = min(computed_nb_shards * tasks_per_shard, tasks_per_bucket)
+        self.logger.debug(
+            "New computed target: %d (with %d processed tasks)",
+            target,
+            nb_objects_replicated,
+        )
+        return target

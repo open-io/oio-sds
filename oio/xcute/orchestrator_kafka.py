@@ -40,7 +40,7 @@ from oio.common.utils import ratelimit, request_id
 from oio.event.evob import EventTypes, get_kafka_metadata_from_event
 from oio.event.kafka_consumer import KafkaOffsetHelperMixin, KafkaRejectorMixin
 from oio.xcute.common.backend import XcuteBackend
-from oio.xcute.common.job import XcuteJobStatus
+from oio.xcute.common.job import XcuteJob, XcuteJobStatus
 from oio.xcute.jobs import CUSTOMER_JOB_TYPES, INTERNAL_JOB_TYPES
 
 
@@ -287,7 +287,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
         self.logger.debug("[job_id=%s] Exited thread to dispatch tasks", job_id)
 
-    def adapt_speed(self, job_id, job, job_config, last_check, period=300):
+    def adapt_speed(self, job_id, job: XcuteJob, job_config, last_check, period=300):
         """
         Pause and/or reduce the rate of creation of new tasks in case
         the number of pending tasks is too high.
@@ -324,7 +324,17 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
 
             now = time.time()
             job_mtime = job_info["job"]["mtime"]
-            target_tasks_per_second = job_info["config"]["tasks_per_second"]
+            # target_tasks_per_second is the current speed we want to be (this value
+            # can change over time).
+            target_tasks_per_second = job.get_target_task_per_second(job_info)
+            # max_tasks_per_second is the max target (target should not be bigger).
+            max_tasks_per_second = job_info["config"].get("max_tasks_per_second")
+            if not max_tasks_per_second:
+                max_tasks_per_second = target_tasks_per_second
+            if target_tasks_per_second > max_tasks_per_second:
+                target_tasks_per_second = max_tasks_per_second
+            # current_tasks_per_second is the current speed over time
+            current_tasks_per_second = job_config["tasks_per_second"]
             max_tasks_batch_size = job_info["config"]["tasks_batch_size"]
             tasks_processed = job_info["tasks"]["processed"]
             pending_tasks = job_info["tasks"]["sent"] - tasks_processed
@@ -403,6 +413,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     waiting_time,
                 )
                 continue
+            # actual_tasks_per_second is the current speed on the last period
             actual_tasks_per_second = tasks_processed_in_period / float(elapsed)
             if pending_tasks / actual_tasks_per_second >= period:
                 last_check["last"] = now
@@ -421,8 +432,17 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 )
                 continue
 
-            current_tasks_per_second = job_config["tasks_per_second"]
             current_tasks_batch_size = job_config["tasks_batch_size"]
+            if current_tasks_batch_size > target_tasks_per_second:
+                self.logger.info(
+                    "[job_id=%s] Current speed too high: %f tasks/second (target: %d) "
+                    "(probably reduced target)",
+                    job_id,
+                    current_tasks_per_second,
+                    target_tasks_per_second,
+                )
+                current_tasks_batch_size = target_tasks_per_second
+
             diff_tasks_per_second = current_tasks_per_second - actual_tasks_per_second
             new_tasks_per_second = None
             if diff_tasks_per_second < -0.5:  # Too fast to process tasks
@@ -430,7 +450,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 # Continue at this speed to allow the queues to empty.
                 if actual_tasks_per_second > target_tasks_per_second:
                     self.logger.warning(
-                        "[job_id=%s] Speeding: %f tasks/second (max: %d)",
+                        "[job_id=%s] Speeding: %f tasks/second (target: %d)",
                         job_id,
                         actual_tasks_per_second,
                         target_tasks_per_second,
@@ -446,18 +466,33 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                 if current_tasks_per_second < target_tasks_per_second:
                     new_tasks_per_second = current_tasks_per_second + 1
                     self.logger.info(
-                        "[job_id=%s] Slowly climb up to maximum speed", job_id
+                        "[job_id=%s] Increasing up to target speed", job_id
+                    )
+                elif current_tasks_per_second > target_tasks_per_second:
+                    new_tasks_per_second = target_tasks_per_second
+                    self.logger.info(
+                        "[job_id=%s] Decreasing up to target speed", job_id
                     )
                 # else:
-                #    Tout marche bien navette !
+                #   Tout marche bien navette !
             else:  # Too slow to process tasks
-                new_tasks_per_second = int(math.floor(actual_tasks_per_second))
-                self.logger.warning(
-                    "[job_id=%s] The task processing speed is too slow: "
-                    "%f tasks/second",
-                    job_id,
-                    actual_tasks_per_second,
-                )
+                actual_tasks_per_second_floor = math.floor(actual_tasks_per_second)
+                if actual_tasks_per_second_floor > target_tasks_per_second:
+                    new_tasks_per_second = target_tasks_per_second
+                    self.logger.warning(
+                        "[job_id=%s] The task processing speed is too slow: "
+                        "%f tasks/second (adapted to target directly)",
+                        job_id,
+                        actual_tasks_per_second,
+                    )
+                else:
+                    new_tasks_per_second = actual_tasks_per_second_floor
+                    self.logger.warning(
+                        "[job_id=%s] The task processing speed is too slow: "
+                        "%f tasks/second",
+                        job_id,
+                        actual_tasks_per_second,
+                    )
 
             last_check["last"] = now
             last_check["mtime"] = job_mtime

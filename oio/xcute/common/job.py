@@ -53,6 +53,7 @@ class XcuteJob(object):
     TASK_CLASS = None
 
     DEFAULT_TASKS_PER_SECOND = 32
+    DEFAULT_MAX_TASKS_PER_SECOND = 32
     MAX_TASKS_BATCH_SIZE = 32
 
     def __init__(self, conf, job_id=None, logger=None, **kwargs):
@@ -76,6 +77,11 @@ class XcuteJob(object):
             job_config.get("tasks_per_second"), cls.DEFAULT_TASKS_PER_SECOND
         )
         sanitized_job_config["tasks_per_second"] = tasks_per_second
+
+        max_tasks_per_second = int_value(
+            job_config.get("max_tasks_per_second"), cls.DEFAULT_MAX_TASKS_PER_SECOND
+        )
+        sanitized_job_config["max_tasks_per_second"] = max_tasks_per_second
 
         tasks_batch_size = int_value(job_config.get("tasks_batch_size"), None)
         if tasks_batch_size is None:
@@ -175,3 +181,15 @@ class XcuteJob(object):
         :rtype: bool
         """
         return True
+
+    def get_target_task_per_second(self, job_info) -> int:
+        """
+        By default, return the max speed (not dynamic).
+        :return the target tasks per second speed
+        :rtype: int
+        """
+
+        max_tasks_per_second = job_info["config"].get("max_tasks_per_second")
+        if not max_tasks_per_second:
+            max_tasks_per_second = job_info["config"]["tasks_per_second"]
+        return max_tasks_per_second

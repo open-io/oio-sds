@@ -70,6 +70,9 @@ class TesterJob(XcuteJob):
     DEFAULT_RETRY_PERCENTAGE = 0
     DEFAULT_LOCK = "tester_lock"
 
+    DEFAULT_TASKS_PER_SECOND = 24
+    DEFAULT_MAX_TASKS_PER_SECOND = 32
+
     @classmethod
     def sanitize_params(cls, job_params):
         sanitized_job_params, _ = super(TesterJob, cls).sanitize_params(job_params)
