@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -343,6 +343,10 @@ meta2_backend_get_nsinfo (struct meta2_backend_s *m2)
 
 	return out;
 }
+
+#define NSINFO_COPY_OR_ERROR(BACKEND, NSINFO) \
+	if (unlikely(!(NSINFO = meta2_backend_get_nsinfo(BACKEND)))) \
+		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready")
 
 gboolean
 meta2_backend_initiated(struct meta2_backend_s *m2)
@@ -1838,11 +1842,11 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
+meta2_backend_request_policy_transition(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, const gchar* new_policy,
 		gboolean skip_data_move, gboolean internal_transition)
 {
-	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(new_policy != NULL);
 
@@ -1851,20 +1855,22 @@ meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
 	struct sqlx_repctx_s *repctx = NULL;
 	gboolean should_update = FALSE;
 	gboolean emit_event = FALSE;
+	struct namespace_info_s *nsinfo = NULL;
+	NSINFO_COPY_OR_ERROR(m2b, nsinfo);
 
-	err = m2b_open_for_object(m2, url, M2V2_OPEN_MASTERONLY | M2V2_OPEN_ENABLED,
+	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY | M2V2_OPEN_ENABLED,
 			&sq3);
 
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			err = m2db_transition_policy(
-				sq3, url, m2->nsinfo, &should_update, &emit_event, new_policy, internal_transition);
+				sq3, url, nsinfo, &should_update, &emit_event, new_policy, internal_transition);
 		}
 		err = sqlx_transaction_end(repctx, err);
 		if (!err) {
 			if (should_update) {
-				m2b_add_modified_container(m2, sq3);
+				m2b_add_modified_container(m2b, sq3);
 			}
 
 			if (emit_event && !skip_data_move) {
@@ -1874,13 +1880,14 @@ meta2_backend_request_policy_transition(struct meta2_backend_s *m2,
 				g_string_append(event, ",\"data\":{");
 				oio_str_gstring_append_json_pair(event, "target_policy", new_policy);
 				g_string_append(event, "}}");
-				oio_events_queue__send(m2->notifier_content_transitioned, NULL,
+				oio_events_queue__send(m2b->notifier_content_transitioned, NULL,
 						g_string_free (event, FALSE));
 			}
 		}
-		m2b_close(m2, sq3, url);
+		m2b_close(m2b, sq3, url);
 	}
 
+	namespace_info_free(nsinfo);
 	return err;
 }
 
@@ -2090,9 +2097,7 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 
 	m2v2_shorten_chunk_ids(beans);
 
-	if (!(nsinfo = meta2_backend_get_nsinfo (m2b))) {
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
-	}
+	NSINFO_COPY_OR_ERROR(m2b, nsinfo);
 
 	gint flags = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED;
 	if (frozen)
@@ -2298,8 +2303,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(url != NULL);
 	if (!beans)
 		return NEWERROR(CODE_BAD_REQUEST, "No bean");
-	if (!(nsinfo = meta2_backend_get_nsinfo (m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+	NSINFO_COPY_OR_ERROR(m2b, nsinfo);
 
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
@@ -2661,8 +2665,7 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	GError *err = NULL, *err2 = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct namespace_info_s *nsinfo = NULL;
-	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+	NSINFO_COPY_OR_ERROR(m2b, nsinfo);
 
 	struct m2v2_sorted_content_s *sorted = NULL;
 	m2v2_sort_content(*beans, &sorted);
@@ -2725,8 +2728,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(cb != NULL);
 
-	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+	NSINFO_COPY_OR_ERROR(m2b, nsinfo);
 
 	/* Get the data needed for the beans preparation.
 	 * This call may return an open database. */
