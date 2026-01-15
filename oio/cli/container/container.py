@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -946,7 +946,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         if parsed_args.formatter == "table":
             db_size = convert_size(int(db_size), unit="iB")
         info["stats.db_size"] = db_size
-        wasted = info["stats.freelist_count"] / info["stats.page_count"]
+        wasted = info["stats.freelist_count"] / (info["stats.page_count"] or 1)
         wasted_bytes = info["stats.freelist_count"] * info["stats.page_size"]
         info["stats.space_wasted"] = "%5.2f%% (est. %s)" % (
             wasted * 100,
