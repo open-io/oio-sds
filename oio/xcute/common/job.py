@@ -54,6 +54,7 @@ class XcuteJob(object):
 
     DEFAULT_TASKS_PER_SECOND = 32
     DEFAULT_MAX_TASKS_PER_SECOND = 32
+    DEFAULT_TASKS_STEP = 1
     MAX_TASKS_BATCH_SIZE = 32
 
     def __init__(self, conf, job_id=None, logger=None, **kwargs):
@@ -82,6 +83,8 @@ class XcuteJob(object):
             job_config.get("max_tasks_per_second"), cls.DEFAULT_MAX_TASKS_PER_SECOND
         )
         sanitized_job_config["max_tasks_per_second"] = max_tasks_per_second
+        tasks_step = int_value(job_config.get("tasks_step"), cls.DEFAULT_TASKS_STEP)
+        sanitized_job_config["tasks_step"] = tasks_step
 
         tasks_batch_size = int_value(job_config.get("tasks_batch_size"), None)
         if tasks_batch_size is None:

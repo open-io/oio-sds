@@ -249,6 +249,7 @@ class BatchReplicatorJob(XcuteJob):
 
     DEFAULT_TASKS_PER_SECOND = 200  # aka nb of tasks per shard
     DEFAULT_MAX_TASKS_PER_SECOND = 1000  # aka nb of tasks per bucket if enough shards
+    DEFAULT_TASKS_STEP = 10
 
     DEFAULT_KAFKA_MAX_LAGS = 1000000
     DEFAULT_KAFKA_MIN_AVAILABLE_SPACE = 40  # in percent

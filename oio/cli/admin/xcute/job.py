@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -328,10 +328,16 @@ class JobUpdate(XcuteCommand, ShowOne):
             "job_id", metavar="<job_id>", help="ID of the job to update."
         )
         parser.add_argument(
-            "--tasks-per-second", type=int, help="Max tasks per second."
+            "--tasks-per-second", type=int, help="Target tasks per second."
+        )
+        parser.add_argument(
+            "--max-tasks-per-second", type=int, help="Max tasks per second."
         )
         parser.add_argument(
             "--tasks-batch-size", type=int, help="Max tasks batch size."
+        )
+        parser.add_argument(
+            "--tasks-step", type=int, help="Tasks step (when increasing)."
         )
         parser.add_argument(
             "-p",
@@ -349,8 +355,12 @@ class JobUpdate(XcuteCommand, ShowOne):
         job_config = dict()
         if parsed_args.tasks_per_second is not None:
             job_config["tasks_per_second"] = parsed_args.tasks_per_second
+        if parsed_args.max_tasks_per_second is not None:
+            job_config["max_tasks_per_second"] = parsed_args.max_tasks_per_second
         if parsed_args.tasks_batch_size is not None:
             job_config["tasks_batch_size"] = parsed_args.tasks_batch_size
+        if parsed_args.tasks_step is not None:
+            job_config["tasks_step"] = parsed_args.tasks_step
         if parsed_args.params is not None:
             job_config["params"] = parsed_args.params
         new_job_config = self.xcute.job_update(parsed_args.job_id, job_config)

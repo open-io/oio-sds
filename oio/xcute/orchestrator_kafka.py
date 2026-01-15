@@ -338,6 +338,8 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             max_tasks_batch_size = job_info["config"]["tasks_batch_size"]
             tasks_processed = job_info["tasks"]["processed"]
             pending_tasks = job_info["tasks"]["sent"] - tasks_processed
+            # default value for existing jobs without this new parameter
+            tasks_step = job_info["config"].get("tasks_step", 1)
 
             if last_check is None:  # Initialize
                 last_check = {}
@@ -464,7 +466,7 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
                     )
             elif diff_tasks_per_second <= 0.5:  # Good speed to process tasks
                 if current_tasks_per_second < target_tasks_per_second:
-                    new_tasks_per_second = current_tasks_per_second + 1
+                    new_tasks_per_second = current_tasks_per_second + tasks_step
                     self.logger.info(
                         "[job_id=%s] Increasing up to target speed", job_id
                     )
