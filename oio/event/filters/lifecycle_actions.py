@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 from urllib3.util.request import make_headers
 
@@ -348,8 +348,9 @@ class LifecycleActions(Filter):
                     # Ignore this object (not a part of the MPU)
                     continue
             truncated = boolean_value(headers.get("x-oio-list-truncated"))
-            marker = headers.get("x-oio-list-marker")
-            if not truncated:
+            if truncated:
+                marker = unquote(headers.get("x-oio-list-marker"))
+            else:
                 break
 
     def _should_log(self, context: LifecycleActionContext):

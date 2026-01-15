@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -186,6 +186,48 @@ class TestFilterLifecycleActions(TestFilterLifecycleActionsCommon):
         self.object = "policy-transition/obj-mpu"
         reqid = request_id("lifecycle-actions-")
         _, parts = self._create_mpu(nb_parts=3, size=10)
+        event = self._create_event(
+            self.object,
+            reqid=reqid,
+        )
+
+        self.lifecycle_actions = LifecycleActions(app=self.app, conf=self.conf)
+        self.lifecycle_actions.process(event, None)
+
+        evt = self.wait_for_kafka_event(
+            reqid=reqid,
+            types=(EventTypes.CONTENT_TRANSITIONED),
+            fields={"path": self.object},
+            data_fields={"target_policy": "SINGLE"},
+        )
+        self.assertIsNotNone(evt)
+
+        props = self.storage.object_get_properties(
+            self.account, self.container, self.object, version=self.obj_meta["version"]
+        )
+        # policy changed from TWOCOPIES to SINGLE
+        self.assertIn("policy", props)
+        self.assertEqual("SINGLE", props["policy"])
+
+        for el in parts:
+            evt = self.wait_for_kafka_event(
+                reqid=reqid,
+                types=(EventTypes.CONTENT_TRANSITIONED),
+                fields={"path": el["name"]},
+                data_fields={"target_policy": "SINGLE"},
+            )
+            self.assertIsNotNone(evt)
+            props = self.storage.object_get_properties(
+                self.account, f"{self.container}{MULTIUPLOAD_SUFFIX}", el["name"]
+            )
+            # policy changed from TWOCOPIES to SINGLE
+            self.assertIn("policy", props)
+            self.assertEqual("SINGLE", props["policy"])
+
+    def test_transition_mpu_lots_of_parts(self):
+        self.object = "policy-transition/obj-mpu"
+        reqid = request_id("lifecycle-actions-")
+        _, parts = self._create_mpu(nb_parts=200, size=10)
         event = self._create_event(
             self.object,
             reqid=reqid,
