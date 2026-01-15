@@ -459,11 +459,13 @@ class LifecycleActions(Filter):
             elif context.action in ("Transition", "NoncurrentVersionTransition"):
                 action_type = LifecycleAction.TRANSITION
                 upload_id = metadata.get(UPLOAD_ID, None)
-                # transition object or manifest
-                self._process_transition(context, policy)
                 # Transition parts if manifest
+                # Parts are transitioned before manifest so that if there is an
+                # error the retry will be performed by another lifecycle pass.
                 if is_mpu:
                     self._process_transition_parts(context, upload_id)
+                # transition object or manifest
+                self._process_transition(context, policy)
 
             elif context.action == "AbortIncompleteMultipartUpload":
                 action_type = LifecycleAction.ABORT_MPU
