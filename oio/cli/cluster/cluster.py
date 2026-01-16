@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -104,6 +104,7 @@ class ClusterList(Lister):
         parser.add_argument(
             "--locked", action="store_true", help="Only display locked services."
         )
+        parser.add_argument("--conscience", help="Conscience address.")
         return parser
 
     def _list_services(self, parsed_args):
@@ -116,7 +117,7 @@ class ClusterList(Lister):
             reqid = self.app.request_id("CLI-list-")
             try:
                 data = self.app.client_manager.conscience.all_services(
-                    srv_type, parsed_args.stats, reqid=reqid
+                    srv_type, parsed_args.stats, cs=parsed_args.conscience, reqid=reqid
                 )
             except OioException as exc:
                 self.success = False
