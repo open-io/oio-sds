@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023-2024 OVH SAS
+Copyright (C) 2023-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -93,14 +93,42 @@ oio_cs_client__flush_services (struct oio_cs_client_s *self,
 	CS_CALL(self,flush_services)(self,in_type);
 }
 
+static GError *_unpack_registration (json_object *item,
+		struct oio_cs_registration_s *preg, int *p_put_score, int *p_get_score);
+
+static void _clean_registration(struct oio_cs_registration_s *preg);
+
 GError *
-oio_cs_client__list_services (struct oio_cs_client_s *self,
+oio_cs_client__list_services(struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *, int, int))
 {
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
-	CS_CALL(self,list_services)(self,in_type,full,on_reg);
+
+	GError *_service_item_cb(struct json_object *service_item) {
+		int put_score = 0;
+		int get_score = 0;
+		struct oio_cs_registration_s reg = {0};
+		GError *err = _unpack_registration(service_item, &reg, &put_score, &get_score);
+		if (!err && on_reg) {
+			(on_reg)(&reg, put_score, get_score);
+		}
+		_clean_registration(&reg);
+		return err;
+	}
+
+	CS_CALL(self,iterate_json_services)(self,in_type,full,_service_item_cb);
+}
+
+GError *
+oio_cs_client__iterate_json_services(struct oio_cs_client_s *self,
+		const char *in_type, gboolean full,
+		GError* (*service_item_cb) (struct json_object *))
+{
+	if (!in_type || !*in_type)
+		return BADREQ("Missing srvtype");
+	CS_CALL(self,iterate_json_services)(self,in_type,full,service_item_cb);
 }
 
 GError *
@@ -232,10 +260,9 @@ static GError * _cs_PROXY__flush_services (struct oio_cs_client_s *self,
 static GError * _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg);
 
-static GError * _cs_PROXY__list_services (struct oio_cs_client_s *self,
+static GError * _cs_PROXY__iterate_json_services(struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *reg, int put_score,
-			int get_score));
+		GError* (*service_item_cb) (struct json_object *));
 
 static GError * _cs_PROXY__list_types (struct oio_cs_client_s *self,
 		void (*on_type) (const char *srvtype));
@@ -248,7 +275,7 @@ static struct oio_cs_client_vtable_s vtable_PROXY =
 	_cs_PROXY__deregister_service,
 	_cs_PROXY__flush_services,
 	_cs_PROXY__unlock_service,
-	_cs_PROXY__list_services,
+	_cs_PROXY__iterate_json_services,
 	_cs_PROXY__list_types
 };
 
@@ -379,13 +406,14 @@ _cs_PROXY__unlock_service (struct oio_cs_client_s *self,
 }
 
 GError *
-_cs_PROXY__list_services (struct oio_cs_client_s *self,
+_cs_PROXY__iterate_json_services (struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
-		void (*on_reg) (const struct oio_cs_registration_s *, int, int))
+		GError* (*service_item_cb) (struct json_object *))
 {
 	EXTRA_ASSERT (self != NULL);
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
 	EXTRA_ASSERT (cs->vtable == &vtable_PROXY);
+	EXTRA_ASSERT(service_item_cb != NULL);
 
 	if (!in_type || !*in_type)
 		return BADREQ("Missing srvtype");
@@ -411,13 +439,7 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 			if (!json_object_is_type(item, json_type_object))
 				err = NEWERROR(CODE_PLATFORM_ERROR, "proxy:  unexpected item");
 			else {
-				int put_score = 0;
-				int get_score = 0;
-				struct oio_cs_registration_s reg = {0};
-				err = _unpack_registration (item, &reg, &put_score, &get_score);
-				if (!err && on_reg)
-					(on_reg)(&reg, put_score, get_score);
-				_clean_registration(&reg);
+				err = service_item_cb(item);
 			}
 		}
 		if (jbody) json_object_put (jbody);

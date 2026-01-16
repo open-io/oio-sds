@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023 OVH SAS
+Copyright (C) 2023-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,10 +45,9 @@ struct oio_cs_client_vtable_s
 	GError * (*unlock_service) (struct oio_cs_client_s *self,
 			const char *in_type, const struct oio_cs_registration_s *reg);
 
-	GError * (*list_services) (struct oio_cs_client_s *self,
+	GError * (*iterate_json_services) (struct oio_cs_client_s *self,
 			const char *in_type, gboolean full,
-			void (*on_reg) (const struct oio_cs_registration_s *reg,
-                int put_score, int get_score));
+			GError* (*service_item_cb) (struct json_object *));
 
 	GError * (*list_types) (struct oio_cs_client_s *self,
 			void (*on_type) (const char *srvtype));

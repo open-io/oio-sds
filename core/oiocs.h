@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2016 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2023-2024 OVH SAS
+Copyright (C) 2023-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__core__oiocs_h
 # define OIO_SDS__core__oiocs_h 1
 # include <glib.h>
+# include <json-c/json.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,10 +55,14 @@ GError * oio_cs_client__deregister_service (struct oio_cs_client_s *self,
 GError * oio_cs_client__flush_services (struct oio_cs_client_s *self,
 		const char *in_type);
 
-GError * oio_cs_client__list_services (struct oio_cs_client_s *self,
+GError * oio_cs_client__list_services(struct oio_cs_client_s *self,
 		const char *in_type, gboolean full,
 		void (*on_reg) (const struct oio_cs_registration_s *reg, int put_score,
             int get_score));
+
+GError * oio_cs_client__iterate_json_services(struct oio_cs_client_s *self,
+		const char *in_type, gboolean full,
+		GError* (*service_item_cb) (struct json_object *));
 
 GError * oio_cs_client__list_types (struct oio_cs_client_s *self,
 		void (*on_type) (const char *srvtype));

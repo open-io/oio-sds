@@ -969,36 +969,34 @@ template_conscience_service = """
 listen=${IP}:${PORT}
 
 [Plugin.conscience]
-param_namespace=${NS}
-
-# Multi-conscience
-param_hub.me=tcp://${IP}:${PORT_HUB}
-param_hub.group=${CS_ALL_HUB}
-# When a service is locked, but has not been updated for a while,
-# publish it on the inter-conscience hub.
-# Minimum 5 seconds, set to 0 to disable the feature.
-param_hub.publish_stale_delay=15
-# Number of seconds to wait before starting serving requests
-param_hub.startup_delay=1
-# Number of threads dealing with inter-conscience messages
-# (set to 0 to disable the thread pool)
-param_hub.threads=${CS_HUB_THREADS}
-
-flush_stats_on_refresh=True
-
-service_cache.enable=${CS_CACHE_SERVICES}
-service_cache.enable_full=${CS_CACHE_SERVICES}
-service_cache.interval=0.5
-
 # When starting, if an inter-conscience hub is configured,
 # try to load a full list of services from another conscience.
 synchronize_at_startup=true
-
-# Storage policies definitions
-param_storage_conf=${CFGDIR}/${NS}-policies.conf
-
+flush_stats_on_refresh=true
+param_namespace=${NS}
 # Service scoring and pools definitions
 param_service_conf=${CFGDIR}/${NS}-service-{pool,type}*.conf
+# Storage policies definitions
+param_storage_conf=${CFGDIR}/${NS}-policies.conf
+# Multi-conscience
+param_hub.me=tcp://${IP}:${PORT_HUB}
+param_hub.group=${CS_ALL_HUB}
+# Number of seconds to wait before starting serving requests
+param_hub.startup_delay=0
+service_cache.enable=${CS_CACHE_SERVICES}
+service_cache.enable_full=${CS_CACHE_SERVICES_FULL}
+service_cache.interval=1.0
+# Number of threads dealing with inter-conscience messages
+# (set to 0 to disable the thread pool)
+param_hub.threads=${CS_HUB_THREADS}
+# Statsd
+statsd.host=${STATSD_HOST}
+statsd.port=${STATSD_PORT}
+
+# When a service is locked, but has not been updated for a while,
+# publish it on the inter-conscience hub.
+# Minimum 5 seconds, set to 0 to disable the feature.
+#param_hub.publish_stale_delay=15
 """
 
 template_conscience_policies = """
@@ -1258,7 +1256,7 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/conscience.dat -O PersistencePeriod=15 -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
+ExecStart=${EXE}${EXTRA_OPTIONS} -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
@@ -2816,6 +2814,9 @@ def generate(options):
     nb_conscience = getint(options["conscience"].get(SVC_NB), defaults["NB_CS"])
     if nb_conscience:
         cache_service_lists = bool(options["conscience"].get("cache_service_lists"))
+        cache_service_lists_full = bool(
+            options["conscience"].get("cache_service_lists_full")
+        )
         hub_threads = getint(options["conscience"].get("hub_threads"), 0)
         cs = list()
         # This is to trigger "content.perfectible" events during tests
@@ -2843,6 +2844,7 @@ def generate(options):
                 ),
                 "CS_HUB_THREADS": str(hub_threads),
                 "CS_CACHE_SERVICES": str(cache_service_lists),
+                "CS_CACHE_SERVICES_FULL": str(cache_service_lists_full),
             }
         )
         # generate the conscience files
@@ -2857,6 +2859,14 @@ def generate(options):
                     "EXE": "oio-daemon",
                 }
             )
+            extra_options = ""
+            if len(cs) == 1:
+                extra_options = (
+                    " -O PersistencePath="
+                    f"{env['DATADIR']}/{env['NS']}-conscience-{env['SRVNUM']}/conscience.dat"
+                    " -O PersistencePeriod=15"
+                )
+            env["EXTRA_OPTIONS"] = extra_options
             register_service(
                 env, template_systemd_service_conscience, conscience_target
             )
@@ -3093,7 +3103,10 @@ def generate(options):
     )
 
     # oio-meta2-lifecycle-crawler
-    shorten_days_factor = options["lifecycle"]["shorten_days_dates_factor"] or defaults[LIFECYCLE_SHORTEN_DAYS_FACTOR]
+    shorten_days_factor = (
+        options["lifecycle"]["shorten_days_dates_factor"]
+        or defaults[LIFECYCLE_SHORTEN_DAYS_FACTOR]
+    )
     _tmp_env = subenv(
         {
             "IP": host,

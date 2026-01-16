@@ -23,6 +23,7 @@ from copy import deepcopy
 import pytest
 
 from oio.common.constants import TIMEOUT_HEADER
+from oio.common.green import eventlet
 from oio.common.json import json
 from tests.utils import CODE_SRVTYPE_NOTMANAGED, BaseTestCase
 
@@ -336,23 +337,52 @@ class TestConscienceFunctional(BaseTestCase):
         self.conscience.lock_score(one_rawx)
 
         # Stop conscience.
-        self._service("oio-conscience-1.service", "stop")
+        conscience_service = self.conf["services"]["conscience"][0]
+        self._service(conscience_service["unit"], "stop")
         # Ensure conscience is stopped.
         self.assertRaises(
-            Exception, self._service, "oio-conscience-1.service", "status"
+            Exception, self._service, conscience_service["unit"], "status"
         )
+
+        def _check_list_rawx(cs=None, request_attempts=1):
+            all_rawx = self.conscience.all_services(
+                "rawx",
+                cs=cs,
+                request_attempts=request_attempts,
+            )
+            for rawx_srv in all_rawx:
+                if rawx_srv["addr"] == one_rawx["addr"]:
+                    self.assertTrue(rawx_srv["tags"]["tag.putlock"])
+                    self.assertTrue(rawx_srv["tags"]["tag.getlock"])
+                    self.assertEqual(1, rawx_srv["score"])
+                    self.assertEqual(1, rawx_srv["scores"]["score.put"])
+                    self.assertEqual(2, rawx_srv["scores"]["score.get"])
+                else:
+                    self.assertFalse(rawx_srv["tags"]["tag.putlock"])
+                    self.assertFalse(rawx_srv["tags"]["tag.getlock"])
+                    self.assertGreater(rawx_srv["score"], 0)
+                    self.assertGreater(rawx_srv["scores"]["score.put"], 0)
+                    self.assertGreater(rawx_srv["scores"]["score.get"], 0)
+
         # Start it again.
-        self._service("oio-conscience-1.service", "start")
-        # Load all rawx services.
-        # Make several attempts in case conscience is slow to start.
-        all_rawx = self.conscience.all_services("rawx", request_attempts=4)
-        my_rawx = [x for x in all_rawx if x["addr"] == one_rawx["addr"]][0]
-        self.assertIn("tag.putlock", my_rawx["tags"])
-        self.assertTrue(my_rawx["tags"]["tag.putlock"])
-        self.assertTrue(my_rawx["tags"]["tag.getlock"])
-        self.assertEqual(1, my_rawx["score"])
-        self.assertEqual(1, my_rawx["scores"]["score.put"])
-        self.assertEqual(2, my_rawx["scores"]["score.get"])
+        thread = eventlet.spawn(self._service, conscience_service["unit"], "start")
+
+        # Load all rawx services during the restart on the conscience service
+        # which has restarted
+        restarted = False
+        while not restarted:
+            restarted = thread.dead
+            # Make several attempts in case conscience is slow to start.
+            _check_list_rawx(cs=conscience_service["addr"], request_attempts=8)
+        thread.wait()
+        # Load all rawx services on each other conscience service
+        for cs_srv in self.conf["services"]["conscience"]:
+            _check_list_rawx(cs=cs_srv["addr"])
+        # Load all rawx services on the oioproxy service cache
+        for _ in range(8):
+            self._flush_proxy()
+            self._reload_proxy()
+            _check_list_rawx()
         self.conscience.unlock_score(one_rawx)
 
     def test_lock_created_during_conscience_restart(self):
@@ -562,17 +592,45 @@ class TestConscienceFunctional(BaseTestCase):
             self.assertEqual(len(services), len(expected_services))
             expected_services.sort(key=lambda x: x["addr"])
 
-            self._service("oio-conscience-1.service", "stop")
-            self._service("oio-conscience-1.service", "start")
-            time.sleep(1)
+            conscience_service = self.conf["services"]["conscience"][0]
+            self._service(conscience_service["unit"], "stop")
+            # Ensure conscience is stopped.
+            self.assertRaises(
+                Exception, self._service, conscience_service["unit"], "status"
+            )
 
+            self.maxDiff = None
+
+            def _check_list_rawx(cs=None, request_attempts=1):
+                self.assertListEqual(
+                    expected_services,
+                    sorted(
+                        self._list_srvs(
+                            "rawx", cs_addr=cs, request_attempts=request_attempts
+                        ),
+                        key=lambda x: x["addr"],
+                    ),
+                )
+
+            # Start it again.
+            thread = eventlet.spawn(self._service, conscience_service["unit"], "start")
+
+            # Load all rawx services during the restart on the conscience service
+            # which has restarted
+            restarted = False
+            while not restarted:
+                restarted = thread.dead
+                # Make several attempts in case conscience is slow to start.
+                _check_list_rawx(cs=conscience_service["addr"], request_attempts=8)
+            thread.wait()
+            # Load all rawx services on each other conscience service
+            for cs_srv in self.conf["services"]["conscience"]:
+                _check_list_rawx(cs=cs_srv["addr"])
+            # Load all rawx services on the oioproxy service cache
             for _ in range(8):
                 self._flush_proxy()
                 self._reload_proxy()
-                self.assertListEqual(
-                    expected_services,
-                    sorted(self._list_srvs("rawx"), key=lambda x: x["addr"]),
-                )
+                _check_list_rawx()
         finally:
             try:
                 for service in services:

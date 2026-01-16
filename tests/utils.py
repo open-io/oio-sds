@@ -536,12 +536,16 @@ class CommonTestCase(unittest.TestCase):
         """
         self._ns_conf = set_namespace_options(self.ns, opts, remove=remove)
 
-    def _list_srvs(self, srvtype, cs_addr=None):
+    def _list_srvs(self, srvtype, cs_addr=None, request_attempts=1):
         params = {"type": srvtype}
         if cs_addr:
             params["cs"] = cs_addr
-        resp = self.request("GET", self._url_cs("list"), params=params)
-        self.assertEqual(resp.status, 200)
+        for _ in range(request_attempts):
+            resp = self.request("GET", self._url_cs("list"), params=params)
+            if resp.status == 200:
+                break
+        else:
+            self.assertEqual(resp.status, 200)
         return self.json_loads(resp.data)
 
     def _flush_cs(self, srvtype):

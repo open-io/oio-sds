@@ -125,6 +125,21 @@ conscience_get_services (const char *ns, const char *type, gboolean full,
 }
 
 GError *
+conscience_iterate_json_services(const char *ns, const char *type, gboolean full,
+		gint64 deadline UNUSED, GError* (*service_item_cb) (struct json_object *))
+{
+	g_assert(ns != NULL);
+	g_assert(type != NULL);
+	g_assert(service_item_cb != NULL);
+
+	struct oio_cs_client_s *cs = oio_cs_client__create_proxied(ns);
+	GError *err = oio_cs_client__iterate_json_services(cs, type, full,
+			service_item_cb);
+	oio_cs_client__destroy (cs);
+	return err;
+}
+
+GError *
 conscience_locate_meta0(const char *ns, gchar ***result, gint64 dl)
 {
 	GSList *out = NULL;

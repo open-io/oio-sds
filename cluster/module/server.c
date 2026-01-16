@@ -264,10 +264,15 @@ conscience_srv_compute_score(struct conscience_srv_s *service, enum score_type_e
 	{
 		EXTRA_ASSERT(pExpr != NULL);
 		gdouble d = 0.0;
-		if (expr_evaluate(&d, pExpr, getAcc))
+		if (expr_evaluate(&d, pExpr, getAcc)) {
+			GRID_WARN("Failed to evaluate the score expression for the service %s",
+					service->description);
+			/* FIXME(adu): We shouldn't keep the old score
+			 * pResult = SCORE_DOWN; */
 			return FALSE;
+		}
 
-		gint32 current = isnan(d) ? 0 : floor(d);
+		gint32 current = isnan(d) ? SCORE_DOWN : floor(d);
 
 		if (old_score >= 0) {
 			if (srvtype->score_variation_bound > 0) {
@@ -275,7 +280,7 @@ conscience_srv_compute_score(struct conscience_srv_s *service, enum score_type_e
 				current = MIN(current,max);
 			}
 		}
-		*pResult = CLAMP(current, 0, 100);
+		*pResult = CLAMP(current, SCORE_DOWN, SCORE_MAX);
 		return TRUE;
 	}
 
@@ -2180,20 +2185,20 @@ restart_end:
 static gboolean
 restart_srv_from_other_consciences(void)
 {
-	gboolean res = TRUE;
 	GError *err = NULL;
-	GSList *all_services = NULL;
+	guint count = 0;
 
-	err = conscience_get_services(
-			oio_server_namespace, "all", TRUE, &all_services, 0);
+	GError *_service_item_cb(struct json_object *service_item) {
+			struct service_info_s *si = NULL;
+			GError *_err = NULL;
 
-	if (!err) {
-		guint count = 0;
-		for (GSList *l = all_services; l; l = g_slist_next(l)) {
-			struct service_info_s *si = l->data;
+			_err = service_info_load_json_object(service_item, &si, TRUE);
+			if (_err) {
+				return _err;
+			}
 			if (!metautils_addr_valid_for_connect(&si->addr)
 					|| !oio_str_is_set(si->type)) {
-				continue;
+				return _err;
 			}
 			gboolean is_locked = FALSE;
 			struct service_tag_s *lock_tag = NULL;
@@ -2213,18 +2218,21 @@ restart_srv_from_other_consciences(void)
 			if (sid) {
 				service_info_dated_free(sid);
 			}
-			++count;
-		}
-		GRID_NOTICE("Loaded %u services from other consciences (reqid=%s)",
-				count, oio_ext_get_reqid());
-	} else {
-		res = FALSE;
-		GRID_WARN("Failed to load services from other consciences: (%d) %s",
+			count++;
+			return _err;
+	}
+
+	err = conscience_iterate_json_services(
+			oio_server_namespace, "all", TRUE, 0, _service_item_cb);
+	GRID_INFO("Loaded %u services from other consciences (reqid=%s)",
+			count, oio_ext_get_reqid());
+	if (err) {
+		GRID_WARN("Failed to load all services from other consciences: (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);
+		return FALSE;
 	}
-	g_slist_free_full(all_services, (GDestroyNotify) service_info_clean);
-	return res;
+	return TRUE;
 }
 
 /* Main -------------------------------------------------------------------- */

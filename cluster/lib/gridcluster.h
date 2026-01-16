@@ -2,6 +2,7 @@
 OpenIO SDS cluster
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -26,8 +27,11 @@ struct service_info_s;
 
 GError* conscience_get_namespace (const char *ns, struct namespace_info_s **out);
 
-GError* conscience_get_services (const char *ns, const char *type,
+GError* conscience_get_services(const char *ns, const char *type,
 		gboolean full, GSList **out, gint64 deadline);
+
+GError* conscience_iterate_json_services(const char *ns, const char *type, gboolean full,
+		gint64 deadline UNUSED, GError* (*service_item_cb) (struct json_object *));
 
 GError* conscience_get_types (const char *ns, GSList **out);
 
