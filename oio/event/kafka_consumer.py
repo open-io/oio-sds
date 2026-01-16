@@ -52,6 +52,11 @@ from oio.event.filters.base import PausePipeline
 
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_BATCH_INTERVAL = 1.0
+DEFAULT_MAX_RETRY_FLUSH = 30
+
+
+class KafkaFlushException(Exception):
+    pass
 
 
 class EventQueue:
@@ -606,6 +611,9 @@ class KafkaBatchFeeder(
         self._commit_interval = float_value(
             self._app_conf.get("batch_commit_interval"), DEFAULT_BATCH_INTERVAL
         )
+        self._max_retry_flush = float_value(
+            self._app_conf.get("max_retry_flush"), DEFAULT_MAX_RETRY_FLUSH
+        )
         self._statsd = get_statsd(conf=app_conf)
         self._consumer = None
         self._stop_requested = Event()
@@ -756,36 +764,42 @@ class KafkaBatchFeeder(
         signal.signal(signal.SIGTERM, signal.SIG_IGN)
 
         try:
-            while True:
-                if self._stop_requested.is_set():
-                    break
-                try:
-                    # Reset batch
-                    self.reset_offsets()
-                    self._cleanup_previous_batch()
-                    self._connect()
-                    # Retrieve events
-                    with StatsdTiming(
-                        self._statsd,
-                        f"openio.event.{self.topic}.fill_batch.{{code}}.duration",
-                    ):
-                        self._fill_batch()
-                    # Wait for events processing
-                    with StatsdTiming(
-                        self._statsd,
-                        f"openio.event.{self.topic}.wait_batch.{{code}}.duration",
-                    ):
-                        self._wait_batch_processed()
-                    self._commit_batch()
-                except KafkaFatalException:
-                    self._close()
+            try:
+                while True:
+                    if self._stop_requested.is_set():
+                        break
+                    try:
+                        # Reset batch
+                        self.reset_offsets()
+                        self._cleanup_previous_batch()
+                        self._connect()
+                        # Retrieve events
+                        with StatsdTiming(
+                            self._statsd,
+                            f"openio.event.{self.topic}.fill_batch.{{code}}.duration",
+                        ):
+                            self._fill_batch()
+                        # Wait for events processing
+                        with StatsdTiming(
+                            self._statsd,
+                            f"openio.event.{self.topic}.wait_batch.{{code}}.duration",
+                        ):
+                            self._wait_batch_processed()
+                        with StatsdTiming(
+                            self._statsd,
+                            f"openio.event.{self.topic}.commit_batch.{{code}}.duration",
+                        ):
+                            self._commit_batch()
+                    except KafkaFatalException:
+                        self._close()
 
-        except StopIteration:
-            ...
+            except StopIteration:
+                ...
         except Exception as exc:
             self.logger.exception("Failed to process batch, reason: %s", exc)
-        # Try to commit even a partial batch
-        self._commit_batch()
+        else:
+            # Try to commit even a partial batch
+            self._commit_batch()
         self._close()
 
     def _connect(self):
@@ -814,6 +828,23 @@ class KafkaBatchFeeder(
         self.close_producer()
 
     def _commit_batch(self):
+        if self._producer is not None:
+            nb_retries = 0
+            while True:
+                # The producer contains events sent to deadletter or delayed topics.
+                # In order not to loose events, it is mandatory to flush entirely the
+                # producer before committing the current batch.
+                if self._producer.flush(1.0) == 0:
+                    break
+                if self._stop_requested.is_set():
+                    # Stop asked, do not try to flush anymore.
+                    return
+                if nb_retries >= self._max_retry_flush:
+                    raise KafkaFlushException(
+                        f"Unable to flush within {self._max_retry_flush}"
+                    )
+                nb_retries += 1
+
         offsets, offsets_count = self.get_offsets_to_commit()
         self._statsd.gauge(f"openio.event.{self.topic}.committed", offsets_count)
         if offsets:
