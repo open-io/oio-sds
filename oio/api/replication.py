@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,6 +40,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         quorum=None,
         connection_timeout=None,
         read_timeout=None,
+        proxy_url=None,
         **kwargs,
     ):
         super(ReplicatedMetachunkWriter, self).__init__(
@@ -50,6 +51,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.logger = kwargs.get("logger", LOGGER)
+        self.proxy_url = proxy_url
 
     def stream(self, source, size):
         bytes_transferred = 0
@@ -203,6 +205,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     socket_timeout=self.read_timeout,
                     perfdata=perfdata_rawx,
                     perfdata_suffix=chunk["url"],
+                    proxy_url=self.proxy_url,
                 )
                 if self.use_tcp_cork:
                     conn.set_cork(True)

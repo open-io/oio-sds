@@ -770,6 +770,7 @@ class EcChunkWriter(object):
         read_timeout=None,
         watchdog=None,
         headers=None,
+        proxy_url=None,
         **kwargs,
     ):
         if not watchdog:
@@ -810,6 +811,7 @@ class EcChunkWriter(object):
                 socket_timeout=read_timeout,
                 perfdata=perfdata_rawx,
                 perfdata_suffix=chunk["url"],
+                proxy_url=proxy_url,
             )
             if use_tcp_cork:
                 conn.set_cork(True)
@@ -1348,6 +1350,7 @@ class ECRebuildHandler(object):
         watchdog=None,
         reqid=None,
         read_all_available_sources=False,
+        proxy_url=None,
         **_kwargs,
     ):
         self.meta_chunk = meta_chunk
@@ -1361,6 +1364,7 @@ class ECRebuildHandler(object):
         self.watchdog = watchdog
         if not watchdog:
             raise ValueError("watchdog is None")
+        self.proxy_url = proxy_url
 
     def _call_GET(self, chunk, headers):
         """
@@ -1385,6 +1389,7 @@ class ECRebuildHandler(object):
                     headers,
                     connect_timeout=self.connection_timeout,
                     socket_timeout=self.read_timeout,
+                    proxy_url=self.proxy_url,
                 )
 
             with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkReadTimeout):

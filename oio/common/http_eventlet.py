@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -140,6 +140,7 @@ def http_connect(
     socket_timeout=None,
     perfdata=None,
     perfdata_suffix=None,
+    proxy_url=PROXY_URL,
 ):
     """
     :keyword connect_timeout: The maximum amount of time (in seconds) to wait
@@ -149,12 +150,11 @@ def http_connect(
         between consecutive blocking operations to/from the server.
     :type socket_timeout: `int`
     """
-    global PROXY_URL
     proxy = None
-    if PROXY_URL is not None:
-        if "://" not in PROXY_URL:
-            PROXY_URL = "http://" + PROXY_URL
-        proxy = urlparse(PROXY_URL)
+    if proxy_url is not None:
+        if "://" not in proxy_url:
+            proxy_url = "http://" + proxy_url
+        proxy = urlparse(proxy_url)
 
     if not path.startswith("/"):
         path = "/" + path

@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -316,6 +316,7 @@ class ChunkReader(object):
         resp_by_chunk=None,
         watchdog=None,
         verify_checksum=False,
+        proxy_url=None,
         **_kwargs,
     ):
         """
@@ -358,6 +359,7 @@ class ChunkReader(object):
         self.logger = _kwargs.get("logger", LOGGER)
         self.verify_checksum = verify_checksum
         self.watchdog = watchdog or get_watchdog()
+        self.proxy_url = proxy_url
 
     @property
     def chunk_method(self):
@@ -440,6 +442,7 @@ class ChunkReader(object):
                     socket_timeout=self.read_timeout,
                     perfdata=perfdata_rawx,
                     perfdata_suffix=chunk["url"],
+                    proxy_url=self.proxy_url,
                 )
             with WatchdogTimeout(self.watchdog, self.read_timeout, green.OioTimeout):
                 if perfdata_rawx:

@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -111,6 +111,7 @@ def get_pool_manager(
     max_retries=DEFAULT_RETRIES,
     backoff_factor=DEFAULT_BACKOFF,
     block=False,
+    proxy_url=PROXY_URL,
     **kwargs,
 ):
     """
@@ -142,15 +143,16 @@ def get_pool_manager(
     kw = {k: v for k, v in kwargs.items() if k in URLLIB3_POOLMANAGER_KWARGS[5:]}
     pool_connections = int(pool_connections)
     pool_maxsize = int(pool_maxsize)
-    if PROXY_URL is not None:
-        proxy = urlparse(PROXY_URL)
+
+    if proxy_url is not None:
+        proxy = urlparse(proxy_url)
         proxy_headers = None
         if proxy.username is not None and proxy.password is not None:
             proxy_headers = make_headers(
                 proxy_basic_auth=f"{proxy.username}:{proxy.password}"
             )
         return SafeProxyManager(
-            proxy_url=PROXY_URL,
+            proxy_url=proxy_url,
             proxy_headers=proxy_headers,
             num_pools=pool_connections,
             maxsize=pool_maxsize,

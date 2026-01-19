@@ -311,6 +311,10 @@ class CommonTestCase(unittest.TestCase):
             partitions = self._wait_kafka_partition_assignment(kafka_consumer=consumer)
             self._set_kafka_offset(partitions, kafka_consumer=consumer)
 
+        proxy = os.getenv("OIO_PROXY_URL_API")
+        if proxy is not None:
+            self._storage_kwargs["proxy_url"] = proxy
+
     def _wait_kafka_partition_assignment(self, kafka_consumer=None):
         if not kafka_consumer:
             kafka_consumer = self._cls_kafka_consumer
