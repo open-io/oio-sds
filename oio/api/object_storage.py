@@ -163,6 +163,7 @@ class ObjectStorageApi(object):
         self._rdir_client = None
         self._admin_client = None
         self._xcute_client = None
+        self._xcute_customer_client = None
 
     @property
     def account(self):
@@ -362,16 +363,16 @@ class ObjectStorageApi(object):
 
         :rtype: `oio.xcute.client.XcuteClient`
         """
-        if self._xcute_client is None:
+        if self._xcute_customer_client is None:
             from oio.xcute.client import XcuteClient
 
-            self._xcute_client = XcuteClient(
+            self._xcute_customer_client = XcuteClient(
                 {"namespace": self.namespace},
                 logger=self.logger,
                 xcute_type="customer",
                 **self._xcute_kwargs,
             )
-        return self._xcute_client
+        return self._xcute_customer_client
 
     # FIXME(FVE): this method should not exist
     # This high-level API should use lower-level APIs,
