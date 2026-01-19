@@ -266,6 +266,7 @@ class ObjectStorageApi(object):
                 connection_pool=connection_pool,
                 perfdata=self.perfdata,
                 watchdog=self.watchdog,
+                conscience_client=self.conscience,
             )
         return self._blob_client
 

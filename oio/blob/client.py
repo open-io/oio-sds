@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -114,6 +114,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         logger=None,
         connection_pool=None,
         watchdog=None,
+        conscience_client=None,
         **kwargs,
     ):
         KafkaProducerMixin.__init__(self, logger=logger, conf=conf)
@@ -134,7 +135,7 @@ class BlobClient(GetTopicMixin, KafkaProducerMixin):
         # FIXME(FVE): we do not target the same set of services,
         # we should use a separate connection pool for rawx services.
         self.http_pool = connection_pool or get_pool_manager(**kwargs)
-        self.conscience_client = ConscienceClient(
+        self.conscience_client = conscience_client or ConscienceClient(
             conf, logger=self.logger, pool_manager=self.http_pool
         )
         GetTopicMixin.__init__(
