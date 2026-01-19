@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -49,6 +49,12 @@ class Handler(object):
         return dict()
 
     def reset_stats(self):
+        pass
+
+    def open_resources(self):
+        pass
+
+    def close_resources(self):
         pass
 
 
