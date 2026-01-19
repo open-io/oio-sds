@@ -521,6 +521,10 @@ class XcuteOrchestrator(KafkaOffsetHelperMixin):
             if not self.running:
                 break
 
+            if task_id is None and task_payload is None:
+                # Nothing returned now but not a StopIteration, so we continue
+                continue
+
             tasks[task_id] = task_payload
             if len(tasks) < tasks_batch_size:
                 continue

@@ -15,6 +15,7 @@
 
 import json
 from collections import Counter
+from math import ceil
 from time import sleep, time
 
 from oio.api.object_storage import ObjectStorageApi
@@ -48,6 +49,10 @@ from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
 class KafkaError(Exception):
+    pass
+
+
+class ManifestNotCurrentlyAvailable(Exception):
     pass
 
 
@@ -243,6 +248,79 @@ def iter_lines_from_stream(stream, marker=0):
             yield index, buffer.decode("utf-8")
 
 
+class ManifestIterator:
+    """
+    Handler to easily iterate on a manifest.
+    On temporary error, the manifest is reopened automatically.
+    """
+
+    def __init__(
+        self, api, job_params, manifest_name, start_line, reqid, job_id, logger=None
+    ):
+        self.api = api
+        self.job_params = job_params
+        self.name = manifest_name
+        self.reqid = reqid
+        self.logger = logger
+        self.job_id = job_id
+        # Initialize to start_line - 1 so that if we need to reopen before any
+        # successful yield, we start from start_line
+        self.current_line = start_line - 1 if start_line > 0 else 0
+        self.MAX_RETRIES = 3  # arbitrary value, we only want to stop if error persists
+        self.iterator = self._create_iterator(start_line)
+
+    def _create_iterator(self, start_line):
+        """Fetch the manifest and create an iterator starting from start_line."""
+        _, stream = self.api.object_fetch(
+            self.job_params["technical_account"],
+            self.job_params["technical_bucket"],
+            self.name,
+            reqid=self.reqid,
+        )
+        return iter_lines_from_stream(stream, start_line)
+
+    def _reopen(self, from_line):
+        """Reopen the manifest from a specific line."""
+        self.iterator = self._create_iterator(from_line)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        # Retry counter will be reset at each call.
+        # For a huge bucket with MPU, we might have several timeouts on
+        # manifest but we don't want the job to fail.
+        retries = 0
+        while True:
+            try:
+                if self.iterator is None:
+                    # Reopen the iterator from the last successful line + 1
+                    self.iterator = self._create_iterator(self.current_line + 1)
+                index, event = next(self.iterator)
+                self.current_line = index
+                return index, event
+            except (ServiceUnavailable, OioNetworkException, ServiceBusy) as err:
+                self.iterator = None
+                if self.logger:
+                    self.logger.error(
+                        "[job_id=%s] Error while reading manifest %s: %s (retries=%d)",
+                        self.job_id,
+                        self.name,
+                        err,
+                        retries,
+                    )
+                retries += 1
+                if retries > self.MAX_RETRIES:
+                    # Manifest is not available right now, we should wait before
+                    # retrying. Fatal errors are not caught.
+                    retries = 0
+                    raise ManifestNotCurrentlyAvailable from err
+
+                # On very first retry, we want to retry immediately
+                if retries > 1:
+                    sleep(self.job_params["delay_retry_later"])
+
+
 class BatchReplicatorJob(XcuteJob):
     JOB_TYPE = "batch-replicator"
     TASK_CLASS = BatchReplicatorTask
@@ -254,6 +332,7 @@ class BatchReplicatorJob(XcuteJob):
     DEFAULT_KAFKA_MAX_LAGS = 1000000
     DEFAULT_KAFKA_MIN_AVAILABLE_SPACE = 40  # in percent
     DEFAULT_DELAY_RETRY_LATER = 60  # in seconds
+    DEFAULT_BATCH_MANIFESTS_SIZE = 10  # read x manifests at the same time
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -283,6 +362,9 @@ class BatchReplicatorJob(XcuteJob):
         sanitized_job_params["delay_retry_later"] = int_value(
             job_params.get("delay_retry_later"), cls.DEFAULT_DELAY_RETRY_LATER
         )
+        sanitized_job_params["batch_manifest_size"] = int_value(
+            job_params.get("batch_manifest_size"), cls.DEFAULT_BATCH_MANIFESTS_SIZE
+        )
         # prefix looks like listing/account/bucket/xxx
         _, account, bucket, *_ = job_params["technical_manifest_prefix"].split("/")
         return sanitized_job_params, f"{account}/{bucket}"
@@ -297,92 +379,102 @@ class BatchReplicatorJob(XcuteJob):
             pool_manager=self.api.container.pool_manager,
         )
 
-    def _unsafe_get_tasks(self, job_params, marker=None, reqid=None):
-        """
-        _unsafe_get_tasks is not safe because timeouts can happens easily on manifests.
-        """
+    def get_tasks(self, job_params, marker=None, reqid=None):
         manifest_marker = None
         line_marker = 0
+        batch_offset_marker = 0
+
+        new_marker_format = True
         if marker:
-            manifest_marker, line_marker = marker.split(";")
-            line_marker = int(line_marker)
+            parts = marker.split(";")
+            if len(parts) == 3:
+                # Format is batch_offset_marker;manifest_name;line_number
+                batch_offset_marker = int(parts[0])
+                manifest_marker = parts[1]
+                line_marker = int(parts[2])
+            else:
+                # Old format: manifest_name;line_number
+                manifest_marker = parts[0]
+                line_marker = int(parts[1])
+                new_marker_format = False
 
-        # Prepare iterators for each manifests
-        manifest_iters = []
-        for manifest in self.get_manifests(job_params=job_params, reqid=reqid):
-            _, stream = self.api.object_fetch(
-                job_params["technical_account"],
-                job_params["technical_bucket"],
-                manifest["name"],
-                reqid=reqid,
+        # Get all manifests first
+        all_manifests = list(self.get_manifests(job_params=job_params, reqid=reqid))
+        nb_manifests = len(all_manifests)
+
+        if nb_manifests == 0:
+            return
+
+        # stride_size is the spacing between manifests in a batch
+        if new_marker_format:
+            # Using ceil to ensure max <BATCH_MANIFESTS_SIZE> manifests per batch
+            batch_manifest_size = job_params.get(
+                "batch_manifest_size", self.DEFAULT_BATCH_MANIFESTS_SIZE
             )
-            manifest_iters.append(
-                (manifest["name"], iter_lines_from_stream(stream, line_marker))
-            )
+            stride_size = max(1, ceil(nb_manifests / batch_manifest_size))
+        else:
+            stride_size = 1
 
-        manifest_name_finished = []
-        while True:
-            for manifest_name, it in manifest_iters:
-                try:
-                    index, event = next(it)
-                    if manifest_marker:
-                        if manifest_name != manifest_marker:
-                            # Marker not reached, continue
-                            continue
-                        manifest_marker = None
-                        # Marker reached, next manifest will be the good one
-                        continue
-                    task_id = f"{manifest_name};{index}"
-                    yield (task_id, json.loads(event))
-                except StopIteration:
-                    manifest_name_finished.append(manifest_name)
+        for batch_offset in range(batch_offset_marker, stride_size):
+            # Select manifests for this batch
+            batch_indexes = list(range(batch_offset, nb_manifests, stride_size))
 
-            for manifest_name in manifest_name_finished:
-                manifest_iters = [m for m in manifest_iters if m[0] != manifest_name]
-            if not manifest_iters:
-                break
-            manifest_name_finished = []
+            # Prepare iterators only for manifests in this batch
+            manifest_iters = []
 
-    def get_tasks(self, job_params, marker=None, reqid=None):
-        """Call _unsafe_get_tasks and retry on known errors."""
-        max_retries = 3  # arbitrary value, we only want to stop if error persists
-        current_marker = marker
-        retries = 0
-
-        while True:
-            try:
-                for task_id, task_payload in self._unsafe_get_tasks(
-                    job_params=job_params,
-                    marker=current_marker,
-                    reqid=reqid,
-                ):
-                    current_marker = task_id
-                    # Reset retry counter if there is something to yield.
-                    # For a huge bucket with MPU, we might have several timeouts on
-                    # manifest but we don't want the job to fail.
-                    retries = 0
-                    yield task_id, task_payload
-
-                return
-
-            except (ServiceUnavailable, OioNetworkException, ServiceBusy) as err:
-                self.logger.error(
-                    "[job_id=%s] Error while reading manifests: %s (retries=%d)",
-                    self.job_id,
-                    err,
-                    retries,
+            for batch_index in batch_indexes:
+                manifest = all_manifests[batch_index]
+                manifest_iters.append(
+                    ManifestIterator(
+                        api=self.api,
+                        job_params=job_params,
+                        manifest_name=manifest["name"],
+                        start_line=line_marker,
+                        reqid=reqid,
+                        job_id=self.job_id,
+                        logger=self.logger,
+                    )
                 )
-                retries += 1
-                if retries > max_retries:
-                    raise
 
-                # On very first retry, we want to retry immediately. This way, there
-                # is no loss of time because of a potential timeout on manifests.
-                if retries > 1:
-                    sleep(job_params["delay_retry_later"])
+            if line_marker:
+                # Line marker is only required for the first batch of manifest
+                line_marker = 0
 
-                # Resume from last known marker
-                continue
+            while manifest_iters:
+                manifest_name_finished = []
+
+                for manifest_iter in manifest_iters:
+                    # Retry loop for this specific manifest until we yield something
+                    while True:
+                        try:
+                            index, event = next(manifest_iter)
+                            if manifest_marker:
+                                if manifest_iter.name != manifest_marker:
+                                    # Manifest marker not reached, continue
+                                    break
+                                manifest_marker = None
+                                # Marker reached, next manifest will be the good one
+                                break
+
+                            task_id = f"{manifest_iter.name};{index}"
+                            if new_marker_format:
+                                task_id = f"{batch_offset};{task_id}"
+                            yield (task_id, json.loads(event))
+                            break  # Successfully yielded, move to next manifest
+                        except StopIteration:
+                            manifest_name_finished.append(manifest_iter)
+                            break  # This manifest is done, move to next one
+                        except ManifestNotCurrentlyAvailable:
+                            # We have to answer something to the orchestrator in order
+                            # to give him the possibility to do something else.
+                            # Otherwise, from the orchestrator point of view, we are
+                            # stuck in a while loop.
+                            yield None, None
+                            sleep(job_params["delay_retry_later"])
+                            # Continue the while True loop to retry this manifest
+
+                for finished_iter in manifest_name_finished:
+                    manifest_iters.remove(finished_iter)
 
     def get_total_tasks(self, job_params, marker=None, reqid=None):
         manifests = self.get_manifests(
