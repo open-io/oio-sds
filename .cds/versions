@@ -1,7 +1,7 @@
 export DEB_SNAPSHOT="20230601-21h42m26s"
 export FDB_VERSION="6.3.23"
 export GO_PACKAGE="go-1.23.4-ovh1645"
-export PYPI_SNAPSHOT="20250625-21h42m01s"
+export PYPI_SNAPSHOT="20260119-21h42m01s"
 # Please make sure PYTHON_PACKAGE from obsto-zookeeper is in sync
 export PYTHON_PACKAGE="python-3.10.19-ovh224"
 export RUST_VERSION="1.80"
