@@ -38,7 +38,7 @@ all = ["oio[event,object,service,zk,boto]"]
 
 # Use the event system
 event = [
-  "confluent_kafka~=2.3.0",
+  "confluent_kafka~=2.13.0",
 ]
 # Check the code
 lint = [
