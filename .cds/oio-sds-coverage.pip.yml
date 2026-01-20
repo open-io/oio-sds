@@ -61,7 +61,7 @@ jobs:
         script:
           - . $HOME/oiovenv/bin/activate
           - cd {{.cds.workspace}}
-          - coverage combine .coverage.*
+          - coverage combine $(find . -type f -name ".coverage.*" -a ! -name "*.xml" -printf "%f ")
           - coverage xml -o .coverage.xml
           - coverage html --omit="/usr/lib/python3*" --skip-empty --ignore-errors --show-contexts -d coverage-report-py
           - coverage json --omit="/usr/lib/python3*" --ignore-errors -o coverage-report-py-full.json

@@ -11,6 +11,7 @@ tests =
 tools =
 	tools/
 	/tmp/*/run/tools
+	/tmp/oio/bin
 
 [run]
 dynamic_context = test_function
