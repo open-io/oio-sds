@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -79,12 +79,23 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "silently corrupt.",
         )
         parser.add_argument(
+            "--use-incident-date",
+            action="store_true",
+            help=(
+                "Use the incident date set in the rdir associated to the rawx. "
+                "Only chunks prior to this date will be rebuilt. "
+                "Be aware that crawlers may automatically index chunks. "
+                '(see "openio volume admin show").'
+            ),
+        )
+        parser.add_argument(
             "--set-incident-date",
             action="store_true",
             help=(
                 "Set a new incident date to rebuild from the current date. "
-                "Otherwise, the already existing incident date will be used "
-                '(see "openio volume admin show").'
+                'If "--use-incident-date" is set, the already existing incident '
+                'date will be used (see "openio volume admin show"). '
+                'Override the "--use-incident-date" parameter.'
             ),
         )
         parser.add_argument(
@@ -93,7 +104,8 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             help=(
                 "Set a specific incident date to rebuild from this date "
                 "(seconds since Epoch). "
-                'Override the "--set-incident-date" parameter.'
+                'Override the "--use-incident-date" and '
+                '"--set-incident-date" parameters.'
             ),
         )
 
@@ -109,6 +121,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "allow_same_rawx": not parsed_args.not_same_rawx,
             "read_all_available_sources": parsed_args.read_all_available_sources,
             "try_chunk_delete": parsed_args.delete_faulty_chunks,
+            "use_incident_date": parsed_args.use_incident_date,
             "set_incident_date": parsed_args.set_incident_date,
             "set_specific_incident_date": parsed_args.set_specific_incident_date,
         }

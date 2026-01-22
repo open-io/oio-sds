@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -82,7 +82,8 @@ class RawxRebuildJob(XcuteRdirJob):
     DEFAULT_ALLOW_SAME_RAWX = True
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_ALLOW_FROZEN_CT = False
-    DEFAULT_DECLARE_INCIDENT_DATE = False
+    DEFAULT_USE_INCIDENT_DATE = False
+    DEFAULT_SET_INCIDENT_DATE = False
     DEFAULT_READ_ALL_AVAILABLE_SOURCES = False
 
     @classmethod
@@ -115,17 +116,20 @@ class RawxRebuildJob(XcuteRdirJob):
             job_params.get("try_chunk_delete"), cls.DEFAULT_TRY_CHUNK_DELETE
         )
 
+        use_incident_date = boolean_value(
+            job_params.get("use_incident_date"), cls.DEFAULT_USE_INCIDENT_DATE
+        )
+        set_incident_date = boolean_value(
+            job_params.get("set_incident_date"), cls.DEFAULT_SET_INCIDENT_DATE
+        )
         set_specific_incident_date = int_value(
             job_params.get("set_specific_incident_date"), None
         )
-        if set_specific_incident_date is None:
-            set_incident_date = boolean_value(
-                job_params.get("set_incident_date"), cls.DEFAULT_DECLARE_INCIDENT_DATE
-            )
-            if set_incident_date:
-                set_specific_incident_date = int(time.time())
-        else:
-            set_incident_date = True
+        if set_specific_incident_date is None and set_incident_date:
+            set_specific_incident_date = int(time.time())
+        set_incident_date = set_incident_date or set_specific_incident_date is not None
+        use_incident_date = use_incident_date or set_incident_date
+        sanitized_job_params["use_incident_date"] = use_incident_date
         sanitized_job_params["set_incident_date"] = set_incident_date
         sanitized_job_params["set_specific_incident_date"] = set_specific_incident_date
 
@@ -180,10 +184,11 @@ class RawxRebuildJob(XcuteRdirJob):
         service_id = job_params["service_id"]
         rdir_fetch_limit = job_params["rdir_fetch_limit"]
         rdir_timeout = job_params["rdir_timeout"]
+        use_incident_date = job_params["use_incident_date"]
 
         chunk_info = self.rdir_client.chunk_fetch(
             service_id,
-            rebuild=True,
+            rebuild=use_incident_date,
             timeout=rdir_timeout,
             limit=rdir_fetch_limit,
             start_after=marker,

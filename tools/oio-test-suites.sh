@@ -464,8 +464,6 @@ func_tests_rebuilder_mover() {
 
 	# Wait for the indexers to finish their pass
 	sleep 5
-	# Stop every crawlers to be able to run rebuilder and mover tests properly
-	$SYSTEMCTL stop oio-crawler.target
 
 	if [ -n "${REBUILDER}" ]; then
 		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
