@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -338,10 +338,10 @@ class TestArchiveRestore(BaseTestCase):
             self.assertFalse(restore.ongoing)
             self.assertListEqual(
                 [
-                    ("openio.restore.deep_archive.duration", 3600.0),
+                    ("openio.restore.deep_archive.duration", 3600000),
                     (
                         "openio.restore.deep_archive.archived.duration",
-                        878400.0,  # Sometimes 878399.0
+                        878400000,  # Sometimes 878399000
                     ),
                 ],
                 [c.args for c in self.statsd_mock.timing.call_args_list],
@@ -529,7 +529,7 @@ class TestArchiveRestore(BaseTestCase):
             )
             self.assertFalse(restore.ongoing)
             self.statsd_mock.timing.called_once_with(
-                "openio.restore.DEEP_ARCHIVE.process", 1.0
+                "openio.restore.DEEP_ARCHIVE.process", 1000
             )
             self.assertListEqual(
                 [

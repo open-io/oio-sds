@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -168,22 +168,22 @@ class ArchiveRestore(Filter):
         storage_class_str = object_storage_class.lower()
         action = "restore"
         if data_transfer:
-            # Send stat for restore processing time
+            # Send stat (ms) for restore processing time
             self.statsd.timing(
                 f"openio.restore.{storage_class_str}.duration",
-                base_time - restore_prop.request_date,
+                int((base_time - restore_prop.request_date) * 1000),
             )
             # Send stat of restored object size
             self.statsd.incr(
                 f"openio.restore.{storage_class_str}.volume", count=object_size
             )
-            # Send stat of time the object had been archived
+            # Send stat of time (ms) the object had been archived
             archived_for = restore_prop.request_date - max(
                 object_mtime, previous_expiry
             )
             self.statsd.timing(
                 f"openio.restore.{storage_class_str}.archived.duration",
-                archived_for,
+                int(archived_for * 1000),
             )
         else:
             action = "extend"
