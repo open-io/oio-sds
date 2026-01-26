@@ -196,8 +196,12 @@ class BatchReplicatorTask(XcuteTask):
                     # Can raise KafkaError
                     self._send_event(event)
 
+                    # In ideal world, replication is done fast, it is not necessary
+                    # to wait the full delay. If object is big or slow to replicate,
+                    # the impact is negligible (an additional event in the delayed
+                    # topic).
                     raise ReplicationNotFinished(
-                        delay=self.delay_retry_later,
+                        delay=int(self.delay_retry_later / 2),
                         extra="replication_event_already_sent",
                     )
                 else:
