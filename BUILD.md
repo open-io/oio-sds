@@ -154,7 +154,7 @@ Building zookeeper from source requires maven.
 
 ### Install python3 packages
 - `pip install .`
-- `pip install -r test-requirements.txt`
+- `pip install -e ".[test]"`
 
 ### Reset stack and start it all
 - `oio-reset.sh -f oio-sds/etc/bootstrap-preset-SINGLE.yml -r RegionOne -U`
