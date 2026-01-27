@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -303,12 +303,9 @@ sqlx_pack_PROPDEL(struct oio_url_s *url, const struct sqlx_name_s *name,
 
 GByteArray *
 sqlx_pack_PROPSET_tab(struct oio_url_s *url, const struct sqlx_name_s *name,
-		gboolean flush, gboolean propagate_to_shards, gchar **kv, gint64 deadline)
+		gboolean propagate_to_shards, gchar **kv, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, url, name, deadline);
-	if (flush) {
-		metautils_message_add_field_strint(req, NAME_MSGKEY_FLUSH, 1);
-	}
 	if (propagate_to_shards) {
 		metautils_message_add_field_strint(req, NAME_MSGKEY_PROPAGATE_SHARDS, 1);
 	}

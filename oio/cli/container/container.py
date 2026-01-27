@@ -402,13 +402,6 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             help="Declare the container belongs to the specified bucket",
         )
         parser.add_argument(
-            "--clear",
-            dest="clear",
-            default=False,
-            help="Clear previous properties",
-            action="store_true",
-        )
-        parser.add_argument(
             "--status",
             choices=self.status_value.keys(),
             help="Set container status",
@@ -465,7 +458,6 @@ class SetContainer(SetPropertyCommandMixin, ContainerCommandMixin, Command):
             self.app.client_manager.account,
             parsed_args.container,
             properties,
-            clear=parsed_args.clear,
             system=system,
             cid=parsed_args.cid,
             reqid=reqid,

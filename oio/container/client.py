@@ -452,15 +452,12 @@ class ContainerClient(ProxyClient):
         account=None,
         reference=None,
         properties=None,
-        clear=False,
         cid=None,
         system=None,
         propagate_to_shards=False,
         **kwargs,
     ):
         params = self._make_params(account=account, reference=reference, cid=cid)
-        if clear:
-            params["flush"] = 1
         if propagate_to_shards:
             params["propagate_to_shards"] = 1
         data = json.dumps({"properties": properties or {}, "system": system or {}})

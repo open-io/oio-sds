@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -577,15 +577,18 @@ class ContainerTest(CliTestCase):
         self.assertEqual("3", output["meta.test3"])
 
         output = self.openio(
-            "container set " + cid_opt + name + " --clear --property test4=4"
+            "container set "
+            + cid_opt
+            + name
+            + " --property test1='' --property test4=4"
         )
         self.assertEqual(output, "")
         output = self.openio("container show " + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertEqual(self.NAME, output["container"])
         self.assertNotIn("meta.test1", output)
-        self.assertNotIn("meta.test2", output)
-        self.assertNotIn("meta.test3", output)
+        self.assertIn("meta.test2", output)
+        self.assertIn("meta.test3", output)
         self.assertEqual("4", output["meta.test4"])
 
     def test_container_set_properties(self):

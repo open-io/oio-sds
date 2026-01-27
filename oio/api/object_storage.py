@@ -921,9 +921,7 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def container_set_properties(
-        self, account, container, properties=None, clear=False, **kwargs
-    ):
+    def container_set_properties(self, account, container, properties=None, **kwargs):
         """
         Set properties on a container.
 
@@ -933,12 +931,10 @@ class ObjectStorageApi(object):
         :type container: `str`
         :param properties: a dictionary of properties
         :type properties: `dict`
-        :param clear:
-        :type clear: `bool`
         :keyword system: dictionary of system properties to set
         """
         return self.container.container_set_properties(
-            account, container, properties, clear=clear, **kwargs
+            account, container, properties, **kwargs
         )
 
     @handle_container_not_found

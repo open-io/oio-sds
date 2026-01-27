@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -226,12 +226,10 @@ action_sqlx_propset_with_decoder(struct req_args_s *args,
 		goto end;
 	}
 
-	gboolean flush = _request_get_flag(args, "flush");
 	gboolean propagate_to_shards = _request_get_flag(args, "propagate_to_shards");
 	GByteArray * _pack (const struct sqlx_name_s *n,
 			const gchar **headers UNUSED) {
-		return sqlx_pack_PROPSET_tab(args->url, n, flush, propagate_to_shards,
-				kv, DL());
+		return sqlx_pack_PROPSET_tab(args->url, n, propagate_to_shards, kv, DL());
 	}
 	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
 	if (err) {

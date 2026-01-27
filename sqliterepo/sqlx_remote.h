@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -92,7 +92,7 @@ GByteArray* sqlx_pack_PROPDEL (struct oio_url_s *url,
  *   kv[2i+1] if the value.
  */
 GByteArray* sqlx_pack_PROPSET_tab (struct oio_url_s *url,
-		const struct sqlx_name_s *name, gboolean flush,
+		const struct sqlx_name_s *name,
 		gboolean propagate_to_shards, gchar **kv,
 		gint64 deadline);
 

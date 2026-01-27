@@ -438,15 +438,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual({}, event.data["system"])
         self.assertDictEqual(metadata3, event.data["properties"])
 
-        # container_set_properties and clear old keys
+        # container_set_properties and clear one key
         key = random.choice(list(metadata.keys()))
-        value = random_str(32)
-        event_properties = {key: None for key in metadata}
-        metadata = {key: value}
-        event_properties.update(metadata)
+        changed_metadata = {key: ""}
+        metadata.pop(key)
         reqid = request_id()
         self.api.container_set_properties(
-            self.account, name, metadata, clear=True, reqid=reqid
+            self.account, name, changed_metadata, reqid=reqid
         )
         data = self._get_properties(name)
         self.assertDictEqual(data["properties"], metadata)
@@ -455,7 +453,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         )
         self.assertDictEqual(event_url, event.url.dict)
         self.assertDictEqual({}, event.data["system"])
-        self.assertDictEqual(event_properties, event.data["properties"])
+        self.assertDictEqual(event.data["properties"], changed_metadata)
 
         # clean
         self._clean(name, True)

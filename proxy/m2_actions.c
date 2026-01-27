@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1756,8 +1756,7 @@ _update_shard_properties(struct req_args_s *args, guint status)
 			oio_url_set(shard_url, OIOURL_HEXID, shard_cid);
 			args->url = shard_url;
 			PACKER_VOID(_pack) {
-				return sqlx_pack_PROPSET_tab(args->url, _u, FALSE, FALSE,
-						shared_properties, DL());
+				return sqlx_pack_PROPSET_tab(args->url, _u, FALSE, shared_properties, DL());
 			};
 			err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 			if (err) {
@@ -5119,7 +5118,7 @@ action_m2_content_policy_transition(struct req_args_s *args,struct json_object *
 // CONTENT{{
 // POST /v3.0/{NS}/content/transition?acct={account}&ref={container}&path={file path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Trigger an asynchrous policy transition from the current policy to the one specified
+// Trigger an asynchronous policy transition from the current policy to the one specified
 // Container stats are updated before data is moved.
 //
 // "internal_transition" allows to make a transition without modifying/adding the ttime.
