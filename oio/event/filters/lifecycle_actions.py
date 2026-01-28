@@ -244,7 +244,7 @@ class LifecycleActions(Filter):
         policies = self.class_to_policy.get(target_storage_class)
         if policies is None:
             raise ValueError(
-                "No policies for storage_class transition %s", target_storage_class
+                f"No policies for storage_class transition {target_storage_class}"
             )
         target_policy = None
         for pol, size in policies:
@@ -253,13 +253,13 @@ class LifecycleActions(Filter):
                 break
         if target_policy is None:
             raise ValueError(
-                "No policy found for storage class %s ", target_storage_class
+                f"No policy found for storage class {target_storage_class}"
             )
         if target_policy == policy:
             raise TransitionSamePolicy()
         current_storage_class = self.policy_to_class.get(policy)
         if current_storage_class is None:
-            raise ValueError("No storage class found for current policy %s ", policy)
+            raise ValueError(f"No storage class found for current policy {policy}")
 
         skip = target_storage_class in self.storage_classes_skip_move.get(
             current_storage_class, []
@@ -400,9 +400,6 @@ class LifecycleActions(Filter):
             }
         )
 
-        # Metrics helper
-        self._metrics = LifecycleMetricTracker(self.conf)
-
     def log_context_from_env(self, env):
         ctx = super().log_context_from_env(env, LifecycleFilterContext)
         data = env.get("data", {})
@@ -537,27 +534,6 @@ class LifecycleActions(Filter):
         )
         self.logger.debug("Processing complete")
         return self.app(env, cb)
-
-    def _update_metrics(self, account, bucket, container, run_id, action):
-        # update metrics
-        step = LifecycleStep.PROCESSED
-        if action in ("Expiration", "NoncurrentVersionExpiration"):
-            action = LifecycleAction.DELETE
-        elif action in ("Transition", "NoncurrentVersionTransition"):
-            action = LifecycleAction.TRANSITION
-        elif action in ("AbortIncompleteMultipartUpload",):
-            action = LifecycleAction.ABORT_MPU
-        else:
-            raise ValueError(f"Unsupported action {action} for stats ")
-        self._metrics.increment_counter(
-            run_id,
-            account,
-            bucket,
-            container,
-            step,
-            action,
-            value=1,
-        )
 
 
 def filter_factory(global_conf, **local_conf):
