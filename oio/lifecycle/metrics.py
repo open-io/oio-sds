@@ -92,10 +92,11 @@ class LifecycleMetricTracker:
             )
 
     def disconnect(self):
-        # close applies for both modes: master and sentinel
-        self._redis_client.conn.close()
-        self._redis_client = None
-        self._script_set_container_objects = None
+        if self._redis_client is not None:
+            # close applies for both modes: master and sentinel
+            self._redis_client.conn.close()
+            self._redis_client = None
+            self._script_set_container_objects = None
 
     def __key(self, *fields, separator="/"):
         return separator.join([f for f in fields if f is not None])
