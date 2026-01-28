@@ -333,6 +333,7 @@ class RawxDecommissionJob(XcuteUsageTargetJob):
         kept_chunks_ratio = 1 - (usage_target / float(current_usage))
         chunk_info = self.get_chunk_list(job_params, marker=marker, reqid=reqid)
         i = 0
+        chunk_id = None
         for i, chunk_id in enumerate(chunk_info, 1):
             if i % 1000 == 0:
                 yield (
