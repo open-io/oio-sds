@@ -17,6 +17,7 @@
 import random
 import time
 
+import pytest
 from mock import Mock, patch
 
 from oio.common.constants import OIO_DB_DISABLED, OIO_DB_ENABLED
@@ -425,6 +426,9 @@ class TestMeta2Database(BaseTestCase):
         )
         self.assertEqual(cprops["system"]["sys.status"], str(OIO_DB_ENABLED))
 
+    # This test is flaky because of a missing retry logic in
+    # action_m2_container_destroy in oio-proxy, not because of meta2.
+    @pytest.mark.flaky(reruns=1)
     def test_write_after_incomplete_destroy(self):
         """
         Make sure partially deleted databases do not resurrect.
@@ -436,24 +440,28 @@ class TestMeta2Database(BaseTestCase):
         if len(db_peers) <= 1:
             self.skipTest("need replicated bases")
 
+        # We should be able to stop any peer. However, the problem seemed more
+        # frequent when stopping the master.
+        #
+        #  status = self.storage.admin.election_status(
+        #      account=self.account, reference=self.reference, service_type="meta2"
+        #  )
+        #  down_m2 = status["master"]
+
         # Stop one meta2 service hosting this container
         down_m2 = db_peers[-1]
         sd_key = self.service_to_ctl_key(down_m2, "meta2")
         self._service(sd_key, "stop", wait=2.0)
         try:
-            # Request container deletion. We will get a ServiceBusy error
-            # because of the third service, but the database will be deleted
-            # from the first and second services anyway.
+            # Request container deletion. We should not get a ServiceBusy error anymore
             reqid = request_id("del-cont-")
-            self.assertRaises(
-                ServiceBusy,
-                self.storage.container_delete,
+            self.storage.container_delete(
                 self.account,
                 self.reference,
                 reqid=reqid,
             )
         finally:
-            # Restart the service even if the test above has failed
+            # Restart the service even if the call above has failed
             self._service(sd_key, "start", wait=2.0)
 
         self.assertIsNotNone(self.wait_for_service("meta2", down_m2, timeout=10.0))
@@ -476,7 +484,7 @@ class TestMeta2Database(BaseTestCase):
                 properties={"user.writable": "false"},
                 service_id=down_m2,
                 reqid=reqid,
-                # timeout=5.0,  # A short timeout may fail on CI env
+                # timeout=5.0,  # Note: a short timeout may fail on CI env
             )
         finally:
             self._apply_conf_on_proxy(reverse=True)

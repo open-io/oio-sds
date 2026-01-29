@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -607,15 +607,33 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 		return NEWERROR(0, "Failed to create gridd clients");
 
 	gridd_clients_start(clients);
+	int error_count = 0;
+	GError *last_error = NULL;
 	GError *err = gridd_clients_loop(clients);
-	for (struct gridd_client_s **p = clients; !err && p && *p ;p++) {
+	for (struct gridd_client_s **p = clients; !err && p && *p; p++) {
 		if (!(err = gridd_client_error(*p)))
 			continue;
-		GRID_DEBUG("Database destruction attempts failed: (%d) %s",
-				err->code, err->message);
+		GRID_DEBUG("Database destruction attempts failed: (%d) %s (reqid=%s)",
+				err->code, err->message, oio_ext_get_reqid());
 		if (err->code == CODE_CONTAINER_NOTFOUND || err->code == CODE_NOT_FOUND) {
 			g_clear_error(&err);
 			continue;
+		}
+		error_count++;
+		g_error_transmit(&last_error, err);
+		err = NULL;
+	}
+
+	if (last_error) {
+		EXTRA_ASSERT(err == NULL);
+		if (error_count > 1) {
+			GRID_WARN("%d M2_DESTROY failed, last error: (%d) %s (reqid=%s)",
+					error_count, last_error->code, last_error->message, oio_ext_get_reqid());
+			g_error_transmit(&err, last_error);
+		} else {
+			GRID_WARN("One M2_DESTROY failed: (%d) %s (reqid=%s)",
+					last_error->code, last_error->message, oio_ext_get_reqid());
+			g_clear_error(&last_error);
 		}
 	}
 

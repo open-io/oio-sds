@@ -313,15 +313,17 @@ _container_old_props_to_headers (struct req_args_s *args, gchar **props)
 		_container_single_prop_to_headers (args, *p, g_strdup(*(p+1)));
 }
 
+static gboolean
+_run_single_props_to_headers(gchar *k, gchar *v, gpointer args)
+{
+	_container_single_prop_to_headers(args, k, g_strdup(v));
+	return FALSE;
+}
+
 static void
 _container_new_props_to_headers (struct req_args_s *args, GTree *props)
 {
-	gboolean _run (gchar *k, gchar *v, gpointer i) {
-		(void) i;
-		_container_single_prop_to_headers (args, k, g_strdup(v));
-		return FALSE;
-	}
-	g_tree_foreach (props, (GTraverseFunc)_run, NULL);
+	g_tree_foreach(props, (GTraverseFunc)_run_single_props_to_headers, args);
 }
 
 /** @private */
@@ -614,6 +616,13 @@ _dump_json_aliases_and_headers(struct oio_url_s *url, GString *gstr,
 	oio_url_clean(object_url);
 }
 
+static gboolean
+_slist_cleaner(gpointer key UNUSED, gpointer val, gpointer data UNUSED)
+{
+	g_slist_free(val);
+	return FALSE;
+}
+
 static void
 _dump_json_beans (struct oio_url_s *url, GString *gstr, GSList *beans)
 {
@@ -658,15 +667,9 @@ _dump_json_beans (struct oio_url_s *url, GString *gstr, GSList *beans)
 
 	_dump_json_aliases_and_headers(url, gstr, aliases, headers, props, chunks);
 
-	gboolean _cleaner(gpointer key UNUSED,
-			gpointer val, gpointer data UNUSED)
-	{
-		g_slist_free(val);
-		return FALSE;
-	}
-	g_tree_foreach(props, _cleaner, NULL);
+	g_tree_foreach(props, _slist_cleaner, NULL);
 	g_tree_destroy(props);
-	g_tree_foreach(chunks, _cleaner, NULL);
+	g_tree_foreach(chunks, _slist_cleaner, NULL);
 	g_tree_destroy(chunks);
 
 	g_slist_free(aliases);
@@ -816,18 +819,21 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_mtime(alias)));
 }
 
+static void
+_fill_reply(struct req_args_s *_args)
+{
+	 /* Populate the "tail" as late as possible to have as more info as possible */
+	 _args->rp->access_tail("hexid:%s\tversion_id:%s",
+			oio_url_get(_args->url, OIOURL_HEXID),
+			oio_url_get(_args->url, OIOURL_VERSION));
+}
+
 static enum http_rc_e
 _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 		GSList *beans, gboolean legacy_format)
 {
 	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
 
-	void _fill_reply(struct req_args_s *_args) {
-		/* Populate the "tail" as late as possible to have as more info as possible */
-		_args->rp->access_tail("hexid:%s\tversion_id:%s",
-				oio_url_get(_args->url, OIOURL_HEXID),
-				oio_url_get(_args->url, OIOURL_VERSION));
-	}
 	if (err) {
 		_fill_reply(args);
 		return _reply_m2_error(args, err);
@@ -1413,6 +1419,57 @@ _re_enable (struct req_args_s *args)
 	}
 }
 
+static GError *
+_destroy_on_meta2(struct req_args_s *args, struct client_ctx_s *ctx,
+		gchar **urlv, const gboolean force)
+{
+	GError *err = NULL;
+	const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
+
+	meta1_urlv_shift_addr(urlv);
+	/* Execute the first destroy on the master
+	 * so that the delete event is sent from the master. */
+	sort_services(ctx, urlv);
+	err = m2v2_remote_execute_DESTROY(
+			urlv[0], args->url, M2V2_DESTROY_EVENT|flag_force);
+	if (err) {
+		/* rollback! */
+		struct meta1_service_url_s m1u;
+		m1u.seq = 1;
+		g_strlcpy(m1u.srvtype, NAME_SRVTYPE_META2, LIMIT_LENGTH_SRVTYPE);
+		gchar *hosts = g_strjoinv(OIO_CSV_SEP, urlv);
+		g_strlcpy(m1u.host, hosts, 256);
+		g_free(hosts);
+		m1u.args[0] = 0;
+		GError * _link (const char * m1) {
+			gchar *packed = meta1_pack_url(&m1u);
+			GError *e = meta1v2_remote_force_reference_service(
+					m1, args->url, packed, FALSE, FALSE,
+					oio_ext_get_deadline());
+			g_free(packed);
+			return e;
+		}
+		GError *m1_err = _m1_locate_and_action(args, _link);
+		if (m1_err) {
+			GRID_ERROR("Failed to re-link the meta2 services for %s: "
+					"(%d) %s", oio_url_get(args->url, OIOURL_HEXID),
+					m1_err->code, m1_err->message);
+			g_error_free(m1_err);
+		}
+		_re_enable(args);
+	} else if (urlv[1]) {
+		/* Force destroy on peers. As the base is already unlinked and the master
+		 * deleted, there is no need for a soft destroy. */
+		err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
+				M2V2_DESTROY_FORCE);
+		if (err) {
+			g_prefix_error(&err, "while destroying slaves: ");
+		}
+	}
+
+	return err;
+}
+
 static enum http_rc_e
 action_m2_container_destroy (struct req_args_s *args)
 {
@@ -1444,7 +1501,6 @@ action_m2_container_destroy (struct req_args_s *args)
 			/* rollback! There are chances the request made a timeout
 			 * but was actually managed by the server. */
 			_re_enable (args);
-			goto clean_and_exit;
 		}
 	}
 
@@ -1455,7 +1511,6 @@ action_m2_container_destroy (struct req_args_s *args)
 		if (err != NULL) {
 			/* rollback! */
 			_re_enable (args);
-			goto clean_and_exit;
 		}
 	}
 
@@ -1470,55 +1525,14 @@ action_m2_container_destroy (struct req_args_s *args)
 			/* Rolling back will be hard if there is any chance the UNLINK has
 			 * been managed by the server, despite a time-out that occurred. */
 			_re_enable (args);
-			goto clean_and_exit;
 		}
 	}
 
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
-		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
-
-		meta1_urlv_shift_addr(urlv);
-		/* Execute the first destroy on the master
-		 * so that the delete event is sent from the master. */
-		sort_services(&ctx, urlv);
-		err = m2v2_remote_execute_DESTROY(urlv[0], args->url,
-				M2V2_DESTROY_EVENT|flag_force);
-		if (err != NULL) {
-			/* rollback! */
-			struct meta1_service_url_s m1u;
-			m1u.seq = 1;
-			g_strlcpy(m1u.srvtype, n.type, LIMIT_LENGTH_SRVTYPE);
-			gchar *hosts = g_strjoinv(OIO_CSV_SEP, urlv);
-			g_strlcpy(m1u.host, hosts, 256);
-			g_free(hosts);
-			m1u.args[0] = 0;
-			GError * _link (const char * m1) {
-				gchar *packed = meta1_pack_url(&m1u);
-				GError *e = meta1v2_remote_force_reference_service(
-						m1, args->url, packed, FALSE, FALSE,
-						oio_ext_get_deadline());
-				g_free(packed);
-				return e;
-			}
-			GError *_err = _m1_locate_and_action(args, _link);
-			if (_err) {
-				GRID_ERROR("Failed to re-link the meta2 services for %s: "
-						"(%d) %s", oio_url_get(args->url, OIOURL_HEXID),
-						_err->code, _err->message);
-				g_error_free(_err);
-			}
-			_re_enable(args);
-			goto clean_and_exit;
-		} else if (urlv[1]) {
-			/* Force destroy on peers. As the base is already unlinked and the master
-			 * deleted, there is no need for a soft destroy. */
-			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
-					M2V2_DESTROY_FORCE);
-		}
+		err = _destroy_on_meta2(args, &ctx, urlv, force);
 	}
 
-clean_and_exit:
 	/* Whatever happened, decache anything related to that current user */
 	cache_flush_user(args, &ctx);
 
