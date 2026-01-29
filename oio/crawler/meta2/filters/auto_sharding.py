@@ -27,7 +27,7 @@ from oio.common.exceptions import OutOfSyncDB
 from oio.common.green import time
 from oio.common.utils import request_id
 from oio.container.sharding import ContainerSharding
-from oio.crawler.meta2.filters.base import Meta2Filter
+from oio.crawler.meta2.filters.base import CheckShardingMixin, Meta2Filter
 from oio.crawler.meta2.meta2db import (
     Meta2DB,
     Meta2DBError,
@@ -40,7 +40,7 @@ from oio.crawler.meta2.meta2db import (
 SHRINKING_COEF_LAST_SHARD = 2.5
 
 
-class AutomaticSharding(Meta2Filter):
+class AutomaticSharding(Meta2Filter, CheckShardingMixin):
     """
     Trigger the sharding for given container.
     """
@@ -102,6 +102,7 @@ class AutomaticSharding(Meta2Filter):
         self.sharding_stuck_timeout = self.step_timeout * 2
 
         self.api = self.app_env["api"]
+        self.directory_client = self.api.directory
         self.container_sharding = ContainerSharding(
             self.conf,
             logger=self.logger,
@@ -152,6 +153,18 @@ class AutomaticSharding(Meta2Filter):
             if self.container_sharding.sharding_in_progress({"system": meta2db.system}):
                 sharding_timestamp = self._get_sharding_timestamp(meta2db)
                 if time.time() - sharding_timestamp > self.sharding_stuck_timeout:
+                    _, _, is_orphan = self._is_orphan(
+                        meta2db, reqid=reqid, force_master=True
+                    )
+                    if is_orphan:
+                        self.logger.warning(
+                            "Container %s is a possible orphan shard "
+                            "and has been in sharding for more than %ds!",
+                            meta2db.cid,
+                            int(self.sharding_stuck_timeout),
+                        )
+                        self.possible_orphan_shards += 1
+                        return self.app(env, cb)
                     self.logger.warning(
                         "Sharding of container %s has been in progress "
                         "for more than %ds!",

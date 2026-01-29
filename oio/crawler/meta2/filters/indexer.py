@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,17 +19,17 @@ import shutil
 
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, M2_PROP_CONTAINER_NAME
 from oio.common.easy_value import boolean_value, float_value
-from oio.common.exceptions import NotFound, OioException
+from oio.common.exceptions import OioException
 from oio.common.green import time
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import request_id
 from oio.crawler.common.base import ORPHANS_DIR
-from oio.crawler.meta2.filters.base import Meta2Filter
+from oio.crawler.meta2.filters.base import CheckShardingMixin, Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError, Meta2DBNotFound
 from oio.rdir.client import RdirClient
 
 
-class Indexer(Meta2Filter):
+class Indexer(Meta2Filter, CheckShardingMixin):
     """
     Index meta2 databases to the associated rdir service(s).
     """
@@ -102,22 +102,6 @@ class Indexer(Meta2Filter):
         except FileNotFoundError:
             # NotFound -> deleted recently?
             return True
-
-    def _is_orphan(self, meta2db: Meta2DB, reqid, force_master=False):
-        try:
-            data = self.directory_client.list(
-                cid=meta2db.cid, force_master=force_master, reqid=reqid
-            )
-            is_orphan = meta2db.volume_id not in (
-                x["host"] for x in data["srv"] if x["type"] == "meta2"
-            )
-            account = data["account"]
-            container = data["name"]
-        except NotFound:
-            is_orphan = True
-            account = None
-            container = None
-        return account, container, is_orphan
 
     def _move_to_orphan_dir(self, meta2db: Meta2DB, reqid):
         """
