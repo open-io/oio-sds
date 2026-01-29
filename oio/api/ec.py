@@ -852,9 +852,14 @@ class EcChunkWriter(object):
             except (Exception, SocketError, ChunkWriteTimeout) as exc:
                 self.failed = True
                 # With SocketError the timeout value is not printed automatically.
-                msg = f"{exc}, read_timeout={self.read_timeout}"
+                msg = (
+                    f"{exc}, read_timeout={self.read_timeout}, "
+                    f"bytes_transferred={self.bytes_transferred}"
+                )
+                chunk_info = self.chunk.copy()
+                chunk_info.pop("size", None)
                 self.logger.warning(
-                    "Failed to write to %s (%s, reqid=%s)", self.chunk, msg, self.reqid
+                    "Failed to write to %s (%s, reqid=%s)", chunk_info, msg, self.reqid
                 )
                 self.chunk["error"] = f"write: {msg}"
                 io.close_source(self, self.logger)
@@ -882,9 +887,26 @@ class EcChunkWriter(object):
         # this will end the chunked body
         if not data:
             return
+        # Don't put data if writer has already failed
+        # This prevents orphaned items in queue after _send exits
+        if self.failed:
+            return
         # put the data to send into the queue
         # it will be processed by the send coroutine
-        self.queue.put(data)
+        try:
+            with WatchdogTimeout(self.watchdog, self.read_timeout, ChunkWriteTimeout):
+                self.queue.put(data)
+        except ChunkWriteTimeout:
+            self.failed = True
+            msg = f"queue put timeout after {self.read_timeout}s"
+            self.logger.warning(
+                "Failed to queue data for %s (%s, reqid=%s)",
+                self.chunk["url"],
+                msg,
+                self.reqid,
+            )
+            self.chunk["error"] = f"write: {msg}"
+            raise ChunkWriteTimeout(msg)
 
     def finish(self, metachunk_size, metachunk_hash):
         """
