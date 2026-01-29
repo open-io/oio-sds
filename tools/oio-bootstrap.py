@@ -530,7 +530,9 @@ boto_profile = keystone
 # boto_secret_key = DEMO_PASS
 # boto_region = ${REGION}
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
-tasks_per_second = 100
+tasks_per_second = 200
+max_tasks_per_second = 1000
+task_step = 10
 # In seconds
 delay_retry_later = 2
 

@@ -14,6 +14,7 @@
 # License along with this library.
 
 
+from oio.common.easy_value import int_value
 from oio.common.exceptions import NotFound
 from oio.common.utils import request_id
 from oio.crawler.bucket.filters.common import BucketFilter
@@ -31,8 +32,17 @@ class BatchReplicatorCreator(BucketFilter):
         self.skipped_lister_not_finished = 0
         self.skipped_lister_error = 0
         self.CURRENT_PREFIX = self.IN_PROGRESS_LISTER_PREFIX
-        self.tasks_per_second = self.conf.get(
-            "tasks_per_second", BatchReplicatorJob.DEFAULT_TASKS_PER_SECOND
+        self.tasks_per_second = int_value(
+            self.conf.get("tasks_per_second"),
+            BatchReplicatorJob.DEFAULT_TASKS_PER_SECOND,
+        )
+        self.max_tasks_per_second = int_value(
+            self.conf.get("max_tasks_per_second"),
+            BatchReplicatorJob.DEFAULT_MAX_TASKS_PER_SECOND,
+        )
+        self.task_step = int_value(
+            self.conf.get("task_step"),
+            BatchReplicatorJob.DEFAULT_TASKS_STEP,
         )
 
     def _check_if_object_should_be_process(
@@ -87,22 +97,30 @@ class BatchReplicatorCreator(BucketFilter):
             "technical_account": self.internal_account,
             "technical_bucket": self.internal_bucket,
         }
-        if self.conf.get("replication_topic"):
-            job_params["replication_topic"] = self.conf.get("replication_topic")
-        if self.conf.get("replication_delayed_topic"):
-            job_params["replication_delayed_topic"] = self.conf.get(
-                "replication_delayed_topic"
-            )
-        if self.conf.get("kafka_max_lags"):
-            job_params["kafka_max_lags"] = self.conf.get("kafka_max_lags")
-        if self.conf.get("kafka_min_available_space"):
-            job_params["kafka_min_available_space"] = self.conf.get(
-                "kafka_min_available_space"
-            )
-        if self.conf.get("delay_retry_later"):
-            job_params["delay_retry_later"] = self.conf.get("delay_retry_later")
+        replication_topic = self.conf.get("replication_topic")
+        if replication_topic:
+            job_params["replication_topic"] = replication_topic
+        replication_delayed_topic = self.conf.get("replication_delayed_topic")
+        if replication_delayed_topic:
+            job_params["replication_delayed_topic"] = replication_delayed_topic
+        kafka_max_lags = int_value(self.conf.get("kafka_max_lags"), None)
+        if kafka_max_lags:
+            job_params["kafka_max_lags"] = kafka_max_lags
+        kafka_min_available_space = int_value(
+            self.conf.get("kafka_min_available_space"), None
+        )
+        if kafka_min_available_space:
+            job_params["kafka_min_available_space"] = kafka_min_available_space
+        delay_retry_later = int_value(self.conf.get("delay_retry_later"), None)
+        if delay_retry_later:
+            job_params["delay_retry_later"] = delay_retry_later
 
-        return {"params": job_params, "tasks_per_second": self.tasks_per_second}
+        return {
+            "params": job_params,
+            "tasks_per_second": self.tasks_per_second,
+            "max_tasks_per_second": self.max_tasks_per_second,
+            "task_step": self.task_step,
+        }
 
     def process(self, env, cb):
         obj_wrapper = ObjectWrapper(env)
