@@ -542,7 +542,7 @@ class BatchReplicatorJob(XcuteJob):
         tasks_per_shard = job_info["config"]["tasks_per_second"]
         tasks_per_bucket = job_info["config"]["max_tasks_per_second"]
 
-        computed_nb_shards = min(1, int(nb_objects_replicated / NB_OBJECTS_PER_SHARD))
+        computed_nb_shards = 1 + nb_objects_replicated // NB_OBJECTS_PER_SHARD
         target = min(computed_nb_shards * tasks_per_shard, tasks_per_bucket)
         self.logger.debug(
             "New computed target: %d (with %d processed tasks)",
