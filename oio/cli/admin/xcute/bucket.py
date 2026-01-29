@@ -69,6 +69,12 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             type=int,
             default=-1,
         )
+        parser.add_argument(
+            "--restorable-policies",
+            dest="restorable_policies",
+            nargs="+",
+            help="List of restorable policies (objects using it will not be listed)",
+        )
 
         return parser
 
@@ -83,6 +89,8 @@ class BucketLister(CustomerCommand, XcuteJobStartCommand):
             "policy_manifest": parsed_args.policy_manifest,
             "time_limit": parsed_args.time_limit,
         }
+        if parsed_args.restorable_policies:
+            job_params["restorable_policies"] = parsed_args.restorable_policies
         return {"params": job_params}
 
 

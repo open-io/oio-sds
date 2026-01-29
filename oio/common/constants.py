@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -297,3 +297,8 @@ S3_STORAGE_CLASSES_ORDER = [
 ]
 
 ARCHIVE_RESTORE_USER_AGENT = "archive-restore"
+
+S3_STORAGE_CLASSES_RESTORABLE = [
+    S3StorageClasses.GLACIER,
+    S3StorageClasses.DEEP_ARCHIVE,
+]

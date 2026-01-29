@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -39,12 +39,13 @@ class BucketListerTask(XcuteTask):
         self.customer_bucket = job_params["bucket"]
         self.technical_account = job_params["technical_account"]
         self.technical_bucket = job_params["technical_bucket"]
+        self.time_limit = job_params["time_limit"]
         self.replication_configuration = job_params["replication_configuration"]
+        self.restorable_policies = job_params.get("restorable_policies")
 
     def process(self, task_id, task_payload, reqid=None, job_id=None):
         def objects_generator(resp: Counter):
             marker = task_payload["lower"]
-            time_limit = task_payload.get("time_limit", -1)
             while True:
                 listing = self.api.object_list(
                     account=self.customer_account,
@@ -56,15 +57,29 @@ class BucketListerTask(XcuteTask):
                     reqid=reqid,
                 )
                 for obj in listing["objects"]:
-                    if time_limit >= 0 and time_limit < obj["mtime"]:
+                    key = obj["name"]
+                    # Ignore older objects
+                    if self.time_limit >= 0 and self.time_limit < obj["mtime"]:
                         self.logger.debug(
-                            "object %s skipped: %d < %d",
-                            obj["name"],
-                            time_limit,
+                            "object %s skipped (mtime): %d < %d",
+                            key,
+                            self.time_limit,
                             obj["mtime"],
                         )
                         continue
-                    key = obj["name"]
+
+                    # Ignore restorable policies
+                    if (
+                        self.restorable_policies
+                        and obj["policy"] in self.restorable_policies
+                    ):
+                        self.logger.debug(
+                            "object %s skipped (restorable policy): %s",
+                            key,
+                            obj["policy"],
+                        )
+                        continue
+
                     prefix = "x-object-sysmeta-"
                     metadata = {}
                     props = obj.get("properties")
@@ -148,8 +163,18 @@ class BucketListerJob(XcuteJob):
         sanitized_job_params["replication_configuration"] = optimize_replication_conf(
             job_params["replication_configuration"]
         )
+        # Only objects older than the limit are listed
         sanitized_job_params["time_limit"] = int_value(job_params.get("time_limit"), -1)
         sanitized_job_params["policy_manifest"] = job_params["policy_manifest"]
+        # Objects with those policies are not listed
+        sanitized_job_params["restorable_policies"] = job_params.get(
+            "restorable_policies"
+        )
+        if (
+            sanitized_job_params["restorable_policies"]
+            and type(sanitized_job_params["restorable_policies"]) is not list
+        ):
+            raise ValueError("restorable_policies should be a list")
         return sanitized_job_params, f"{job_params['account']}/{job_params['bucket']}"
 
     def __init__(self, conf, logger=None, **kwargs):
@@ -168,7 +193,6 @@ class BucketListerJob(XcuteJob):
                 {
                     "lower": lower,
                     "upper": upper,
-                    "time_limit": job_params["time_limit"],
                 },
             )
 

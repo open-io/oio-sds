@@ -48,6 +48,12 @@ max_tasks_per_second = 1000
 task_step = 10
 # Policy to use for the manifests
 policy_manifest = SINGLE
+# Storage class / policy mapping
+storage_class.EXPRESS_ONEZONE = EC:-2,SINGLE
+storage_class.STANDARD = EC21,TWOCOPIES:0,EC21:102400,ANY-E93
+storage_class.STANDARD_IA = THREECOPIES
+storage_class.GLACIER = ECX21
+storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 
 [filter:batch_replicator_creator]
 use = egg:oio#batch_replicator_creator

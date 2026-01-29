@@ -63,7 +63,9 @@ class BucketListerHelper(XcuteTest):
             ],
         }
 
-    def _create_objects(self, container, obj_prefix, reqid, nb_obj=10):
+    def _create_objects(
+        self, container, obj_prefix, reqid, nb_obj=10, policy="THREECOPIES"
+    ):
         self.clean_later(container)
         for i in range(nb_obj):
             name = f"{obj_prefix}-{i:0>5}"
@@ -72,7 +74,7 @@ class BucketListerHelper(XcuteTest):
                 container,
                 obj_name=name,
                 data=b"yes",
-                policy="THREECOPIES",
+                policy=policy,
                 reqid=reqid,
                 max_retries=3,
             )
@@ -124,6 +126,7 @@ class BucketListerHelper(XcuteTest):
             "technical_bucket": self.internal_bucket,
             "replication_configuration": self._get_conf_repli(bucket),
             "policy_manifest": "SINGLE",
+            "restorable_policies": ["THREECOPIES_DA"],
         }
 
         job = self.xcute_client.job_create(
@@ -162,6 +165,8 @@ class BucketListerHelper(XcuteTest):
                 data += chunk
             # Read line by line as json
             for i, line in enumerate(data.decode("utf-8").strip().split("\n")):
+                if not line:
+                    continue
                 obj_line = json.loads(line)
                 # Cast json as event
                 event = Event(obj_line)
@@ -213,9 +218,7 @@ class TestBucketLister(BucketListerHelper):
         nb_obj = 5
         reqid = request_id("test_xcute_bucket_lister-")
         self._create_objects(bucket, obj_prefix, reqid=reqid, nb_obj=nb_obj)
-        self._create_manifest_and_parts(
-            bucket, "xcute-bucket-lister-00005", reqid=reqid
-        )
+        self._create_manifest_and_parts(bucket, f"{obj_prefix}-00005", reqid=reqid)
 
         self._test_xcute_bucket_lister(
             bucket=bucket,
@@ -269,3 +272,18 @@ class TestBucketLister(BucketListerHelper):
                 timeout=10.0,
             )
             self.assertIsNotNone(_event, f"Received events {i}/{nb_obj}")
+
+    def test_xcute_bucket_lister_restorable_objects(self):
+        bucket = "xcute-bucket-lister-restorable-objects"
+        obj_prefix = "xcute-bucket-lister-restorable-objects"
+        nb_obj = 5
+        reqid = request_id("test_xcute_bucket_lister_restorable_objects-")
+        self._create_objects(
+            bucket, obj_prefix, reqid=reqid, nb_obj=nb_obj, policy="THREECOPIES_DA"
+        )
+
+        self._test_xcute_bucket_lister(
+            bucket=bucket,
+            obj_prefix=obj_prefix,
+            nb_obj=0,
+        )

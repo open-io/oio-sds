@@ -1,4 +1,4 @@
-# Copyright (C) 2025 OVH SAS
+# Copyright (C) 2025-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,8 @@ import json
 
 from botocore.exceptions import ClientError
 
-from oio.common.utils import depaginate, request_id
+from oio.common.constants import S3_STORAGE_CLASSES_RESTORABLE
+from oio.common.utils import depaginate, read_storage_mappings, request_id
 from oio.crawler.bucket.filters.common import BucketFilter
 from oio.crawler.bucket.object_wrapper import BucketCrawlerError, ObjectWrapper
 from oio.xcute.jobs.bucket_lister import BucketListerJob
@@ -31,6 +32,13 @@ class BucketListerCreator(BucketFilter):
         self.skipped_lock_already_taken = 0
         self.policy_manifest = self.conf["policy_manifest"]
         self.CURRENT_PREFIX = self.ON_HOLD_PREFIX
+
+        # Extract policies from conf then keep only policies from restorable
+        # storage classes.
+        policy_to_class, _ = read_storage_mappings(self.conf)
+        self.restorable_policies = [
+            k for k, v in policy_to_class.items() if v in S3_STORAGE_CLASSES_RESTORABLE
+        ]
 
     def _create_progression_object(self, obj_wrapper: ObjectWrapper, reqid: str):
         """
@@ -140,6 +148,7 @@ class BucketListerCreator(BucketFilter):
             "replication_configuration": data["replication_conf"],
             "policy_manifest": self.policy_manifest,
             "time_limit": time_limit,
+            "restorable_policies": self.restorable_policies,
         }
         job_id, error = self._create_xcute_job(
             obj_wrapper,

@@ -474,7 +474,7 @@ shorten_days_dates_factor = ${SHORTEN_DAYS_DATES_FACTOR}
 lifecycle_configuration_backup_account = internal
 lifecycle_configuration_backup_bucket = internal_lifecycle
 
-# Order from highest to lowset
+# Order from highest to lowest
 storage_class.EXPRESS_ONEZONE = EC:-2,SINGLE
 storage_class.STANDARD = EC21,TWOCOPIES:0,EC21:102400,ANY-E93
 storage_class.STANDARD_IA = THREECOPIES
@@ -522,6 +522,12 @@ boto_profile = keystone
 # boto_region = ${REGION}
 # boto_endpoint_url = http://s3.regionone.io.lo.team-swift.ovh:5000
 policy_manifest = SINGLE
+# Note, we could add only restorable classes, but this will simplify indus integration
+storage_class.EXPRESS_ONEZONE = EC:-2,SINGLE
+storage_class.STANDARD = EC21,TWOCOPIES:0,EC21:102400,ANY-E93
+storage_class.STANDARD_IA = THREECOPIES
+storage_class.GLACIER = ECX21
+storage_class.DEEP_ARCHIVE = THREECOPIES_DA
 
 [filter:batch_replicator_creator]
 use = egg:oio#batch_replicator_creator
