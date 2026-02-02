@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -76,6 +76,7 @@ class AccountClient(ServiceClient):
         marker=None,
         end_marker=None,
         prefix=None,
+        region=None,
         stats=None,
         sharding_accounts=None,
         **kwargs,
@@ -111,6 +112,7 @@ class AccountClient(ServiceClient):
             "marker": marker,
             "end_marker": end_marker,
             "prefix": prefix,
+            "region": region,
             "stats": stats,
             "sharding_accounts": sharding_accounts,
         }

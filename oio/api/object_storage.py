@@ -468,6 +468,7 @@ class ObjectStorageApi(object):
         marker=None,
         end_marker=None,
         prefix=None,
+        region=None,
         stats=None,
         sharding_accounts=None,
         **kwargs,
@@ -503,6 +504,7 @@ class ObjectStorageApi(object):
             marker=marker,
             end_marker=end_marker,
             prefix=prefix,
+            region=region,
             stats=stats,
             sharding_accounts=sharding_accounts,
             **kwargs,
@@ -2278,7 +2280,9 @@ class ObjectStorageApi(object):
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def account_refresh(self, account=None, container_refresh=False, **kwargs):
+    def account_refresh(
+        self, account=None, region=None, container_refresh=False, **kwargs
+    ):
         """
         Refresh counters of an account.
 
@@ -2293,6 +2297,7 @@ class ObjectStorageApi(object):
                 item_key=lambda x: x["id"],
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
+                region=region,
                 **kwargs,
             )
         else:

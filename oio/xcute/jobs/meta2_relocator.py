@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -304,8 +304,9 @@ class Meta2RelocationJob(XcuteJob):
             marker_key=lambda x: x["next_marker"],
             truncated_key=lambda x: x["truncated"],
             marker=account_marker,
-            reqid=reqid,
             sharding_accounts=True,
+            region=self.api.account.region,
+            reqid=reqid,
         )
         for account in accounts:
             self.logger.info(

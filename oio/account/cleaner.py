@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -56,6 +56,7 @@ class AccountServiceCleaner(object):
                     marker_key=lambda x: x["next_marker"],
                     truncated_key=lambda x: x["truncated"],
                     sharding_accounts=sharding_accounts,
+                    region=self.region,
                     reqid=reqid,
                 )
                 for account in accounts:

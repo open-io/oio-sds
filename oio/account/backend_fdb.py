@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1021,6 +1021,7 @@ class AccountBackendFdb(object):
         end_marker=None,
         prefix=None,
         stats=False,
+        region=None,
         sharding_accounts=False,
         **_kwargs,
     ):
@@ -1052,6 +1053,21 @@ class AccountBackendFdb(object):
         else:
             format_account = self._format_account_for_listing
 
+        filters = []
+        if region:
+            region = region.upper()
+
+            def _filter_region(account_name, account_info):
+                region_info = account_info[REGIONS_FIELD].get(region)
+                if region_info is None:
+                    return False
+                return (
+                    region_info.get(CONTAINERS_FIELD, 0) > 0
+                    or region_info.get(BUCKETS_FIELD, 0) > 0
+                )
+
+            filters.append(_filter_region)
+
         remaining = limit
         accounts = []
         while remaining > 0:
@@ -1063,7 +1079,7 @@ class AccountBackendFdb(object):
                 start,
                 stop,
                 remaining,
-                [],
+                filters,
                 accounts_space.unpack,
                 format_account,
                 readonly=True,

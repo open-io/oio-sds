@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -249,6 +249,11 @@ class ListAccounts(Lister):
             action=ValueFormatStoreTrueAction,
         )
         parser.add_argument(
+            "--region",
+            metavar="<region>",
+            help="Filter list by selecting accounts using the <region>",
+        )
+        parser.add_argument(
             "--stats",
             "--long",
             dest="long_listing",
@@ -274,6 +279,8 @@ class ListAccounts(Lister):
             kwargs["end_marker"] = parsed_args.end_marker
         if parsed_args.limit:
             kwargs["limit"] = parsed_args.limit
+        if parsed_args.region:
+            kwargs["region"] = parsed_args.region
         if parsed_args.long_listing:
             kwargs["stats"] = parsed_args.long_listing
         if parsed_args.sharding_accounts:

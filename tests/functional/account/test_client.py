@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1585,3 +1585,109 @@ class TestAccountClient(AccountBaseTestCase):
             )
         finally:
             self._service(sd_key, "start")
+
+    def test_account_list_with_region(self):
+        # Account 1: containers and buckets in region1
+        account_r1 = f"{self.account_id}_region_test_1"
+        self._create_account(account_r1)
+        self._create_container(account_r1, "container1", region="region1")
+        self._create_bucket(account_r1, "bucket1", region="region1")
+
+        # Account 2: containers and buckets in region2
+        account_r2 = f"{self.account_id}_region_test_2"
+        self._create_account(account_r2)
+        self._create_container(account_r2, "container2", region="region2")
+        self._create_bucket(account_r2, "bucket2", region="region2")
+
+        # Account with only containers in region3 (no buckets)
+        account_containers_only = f"{self.account_id}_containers_only"
+        self._create_account(account_containers_only)
+        self._create_container(account_containers_only, "container3", region="region3")
+
+        # Account with only buckets in region4 (no containers)
+        account_buckets_only = f"{self.account_id}_buckets_only"
+        self._create_account(account_buckets_only)
+        self._create_bucket(account_buckets_only, "bucket3", region="region4")
+
+        # Account with multiple regions
+        account_multi_region = f"{self.account_id}_multi_region"
+        self._create_account(account_multi_region)
+        self._create_container(account_multi_region, "container4", region="region2")
+        self._create_bucket(account_multi_region, "bucket4", region="region2")
+        self._create_container(account_multi_region, "container5", region="region4")
+        self._create_bucket(account_multi_region, "bucket5", region="region4")
+
+        # Basic region filtering
+        resp = self.account_client.account_list(region="region1")
+        self.assertListEqual(
+            [account_r1],
+            [a["id"] for a in resp["listing"]],
+        )
+        self.assertFalse(resp["truncated"])
+        resp = self.account_client.account_list(region="region2")
+        self.assertListEqual(
+            [account_multi_region, account_r2],
+            [a["id"] for a in resp["listing"]],
+        )
+        self.assertFalse(resp["truncated"])
+        resp = self.account_client.account_list(region="region3")
+        self.assertListEqual(
+            [account_containers_only],
+            [a["id"] for a in resp["listing"]],
+        )
+        self.assertFalse(resp["truncated"])
+        resp = self.account_client.account_list(region="region4")
+        self.assertListEqual(
+            [account_buckets_only, account_multi_region],
+            [a["id"] for a in resp["listing"]],
+        )
+
+        # Non-existent region
+        resp = self.account_client.account_list(region="nonexistent")
+        self.assertFalse(resp["truncated"])
+        self.assertListEqual(
+            [],
+            [a["id"] for a in resp["listing"]],
+        )
+
+        # Case-insensitivity
+        for region_1_name in ("region1", "REGION1", "Region1", "ReGiOn1"):
+            resp = self.account_client.account_list(region=region_1_name)
+            self.assertListEqual(
+                [account_r1],
+                [a["id"] for a in resp["listing"]],
+            )
+            self.assertFalse(resp["truncated"])
+
+        # Region filter with stats=True
+        resp = self.account_client.account_list(region="region1", stats=True)
+        listing = resp["listing"]
+        self.assertEqual(1, len(listing))
+        acc = listing[0]
+        self.assertEqual(account_r1, acc["id"])
+        self.assertIn("ctime", acc)
+        self.assertIn("mtime", acc)
+        self.assertIn("bytes", acc)
+        self.assertIn("objects", acc)
+        self.assertIn("containers", acc)
+        self.assertIn("buckets", acc)
+        self.assertFalse(resp["truncated"])
+
+        # Region filter with limit (pagination)
+        resp = self.account_client.account_list(region="region2", limit=1)
+        self.assertListEqual(
+            [account_multi_region],
+            [a["id"] for a in resp["listing"]],
+        )
+        self.assertTrue(resp["truncated"])
+        self.assertEqual(account_multi_region, resp["next_marker"])
+
+        # Region filter with prefix
+        resp = self.account_client.account_list(
+            region="region2", prefix=f"{self.account_id}_region_test_2"
+        )
+        self.assertListEqual(
+            [account_r2],
+            [a["id"] for a in resp["listing"]],
+        )
+        self.assertFalse(resp["truncated"])

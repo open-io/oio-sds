@@ -151,6 +151,7 @@ class OioChangeStoragePolicy:
                 marker_key=lambda x: x["next_marker"],
                 truncated_key=lambda x: x["truncated"],
                 marker=account_marker,
+                region=self.region,
                 reqid=self._main_request_id,
             )
         for account in accounts:
@@ -167,8 +168,8 @@ class OioChangeStoragePolicy:
                     truncated_key=lambda x: x["truncated"],
                     account=account,
                     marker=container_marker,
-                    reqid=self._main_request_id,
                     region=self.region,
+                    reqid=self._main_request_id,
                 )
                 container_marker = None
 
