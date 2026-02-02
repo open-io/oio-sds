@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+# Copyright (C) 2026 OVH SAS
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import argparse
+import sys
+
+from oio.account.backend_fdb import AccountBackendFdb
+from oio.common.configuration import read_conf
+from oio.common.logger import get_logger
+
+
+class DeletedBucketReservationCleaner:
+    """
+    Cleaner for expired bucket reservations in FoundationDB.
+
+    This cleaner removes bucket reservation markers that have exceeded their
+    grace delay period. When a bucket is deleted, the system sets a grace
+    delay (rtime) to allow the previous owner to recreate the bucket within
+    a configurable time window. Once this grace period expires, the
+    reservation marker must be cleaned up to:
+
+    - Free the bucket name for use by other accounts
+    - Prevent accumulation of stale reservation data in FoundationDB
+
+    Attributes:
+        conf (dict): Configuration dictionary for the account server.
+        logger: Logger instance for output messages.
+        backend (AccountBackendFdb): The FoundationDB backend instance.
+
+    Example:
+        >>> cleaner = DeletedBucketReservationCleaner(conf, logger)
+        >>> cleaned_count = cleaner.run(limit=1000, dry_run=False)
+        >>> print(f"Cleaned {cleaned_count} expired reservations")
+    """
+
+    def __init__(self, conf, logger):
+        """
+        Initialize the DeletedBucketReservationCleaner.
+
+        Args:
+            conf (dict): Configuration dictionary containing account-server
+                settings and FoundationDB connection parameters.
+            logger: Logger instance for logging operations.
+        """
+        self.conf = conf
+        self.logger = logger
+        self.backend = AccountBackendFdb(conf, logger)
+        self.backend.init_db()
+
+    def run(self, limit=None, dry_run=False):
+        """
+        Run the cleanup process for expired deleted bucket reservations.
+
+        This method scans the FoundationDB bucket reservation space for
+        entries with expired grace delay
+        (rtime + bucket_reservation_timeout <= current time) and removes
+        them, making those bucket names available for new reservations.
+
+        Args:
+            limit (int): Maximum number of reservations to cleanup in a single
+                run. When not specified (None), defaults to 1000. Use this to
+                control the pagination batch size and prevent long-running
+                transactions. Default is None.
+            dry_run (bool): If True, only list expired reservations without
+                actually deleting them. Useful for previewing what would be
+                cleaned up. Default is False.
+
+        Returns:
+            dict: A dictionary with keys ``cleaned``, ``errors``, ``scanned``.
+        """
+        result = self.backend.cleanup_deleted_bucket_reservations(
+            limit=limit, dry_run=dry_run
+        )
+
+        action = "would be cleaned" if dry_run else "cleaned"
+        self.logger.info(
+            "Bucket reservations %s: %d, errors: %d, scanned: %d",
+            action,
+            result["cleaned"],
+            result["errors"],
+            result["scanned"],
+        )
+
+        return result
+
+
+def make_arg_parser():
+    """Create and configure the argument parser for the CLI."""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Do not modify data, only report count",
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=1000,
+        help="Maximum number of bucket reservations to scan "
+        "in each transaction (default: 1000)",
+    )
+    parser.add_argument(
+        "--verbose",
+        "-v",
+        action="store_true",
+        help="More verbose output",
+    )
+    parser.add_argument(
+        "configuration",
+        help="Path to the account-server configuration file",
+    )
+    return parser
+
+
+def main():
+    """Main entry point for the bucket reservation cleaner."""
+    args = make_arg_parser().parse_args()
+    conf = read_conf(args.configuration, "account-server")
+    logger = get_logger(conf, verbose=args.verbose)
+
+    cleaner = DeletedBucketReservationCleaner(conf, logger)
+    result = cleaner.run(limit=args.limit, dry_run=args.dry_run)
+    sys.exit(1 if result["errors"] else 0)
+
+
+if __name__ == "__main__":
+    main()

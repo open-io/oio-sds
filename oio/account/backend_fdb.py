@@ -2817,6 +2817,160 @@ class AccountBackendFdb(object):
         return new_marker if count > batch_size else None
 
     @catch_service_errors
+    def cleanup_deleted_bucket_reservations(self, limit=None, dry_run=False, **_kwargs):
+        """
+        Clean up expired bucket reservations (grace period has passed).
+
+        :param limit: Maximum number of buckets to process
+        :param dry_run: If True, don't actually clean up, just count
+        :returns: dict with keys ``cleaned``, ``errors``, ``scanned``
+        :rtype: dict
+        """
+        buckets = self._list_expired_reservations(limit=limit)
+        cleaned = 0
+        errors = 0
+        scanned = 0
+        while True:
+            try:
+                bucket = next(buckets)
+            except StopIteration:
+                break
+            except Exception as exc:
+                self.logger.warning("Failed to list expired reservations: %s", exc)
+                errors += 1
+                break
+            scanned += 1
+            try:
+                if self._cleanup_deleted_bucket_reservation(
+                    self.db, bucket, dry_run=dry_run
+                ):
+                    cleaned += 1
+            except Exception as exc:
+                errors += 1
+                self.logger.warning(
+                    "Failed to clean reservation for bucket %s: %s",
+                    bucket,
+                    exc,
+                )
+        return {"cleaned": cleaned, "errors": errors, "scanned": scanned}
+
+    def _list_expired_reservations(self, limit=None):
+        """
+        Generator that yields buckets with expired grace period.
+
+        :param limit: Maximum number of buckets to scan per batch
+                    (not just expired ones)
+        :yields: Bucket names with expired rtime
+        """
+        # Use a default batch size when no limit is specified to prevent infinite loops
+        # when re-scanning the same buckets from the beginning
+        batch_limit = limit if limit else 1000
+        marker = None
+        while True:
+            buckets, marker = self._get_expired_reservation_batch(
+                limit=batch_limit, marker=marker
+            )
+            if not buckets:
+                break
+            for bucket in buckets:
+                yield bucket
+            # If marker is None, we've reached the end, don't call again
+            if marker is None:
+                break
+
+    def _get_expired_reservation_batch(self, limit=None, marker=None):
+        """
+        Get a batch of buckets with expired grace period
+        (rtime + reservation_delay <= now).
+
+        :param limit: Maximum number of buckets to scan (not just expired ones)
+        :param marker: Bucket name to start from (exclusive)
+        :returns: Tuple of (list of expired bucket names, next marker or None)
+        """
+        now = self._get_timestamp()
+        tr = self.db.create_transaction()
+
+        while True:
+            try:
+                buckets = []
+                next_marker = None
+                # Determine start and stop positions for range scan
+                start, stop = self._get_start_and_stop(
+                    self.bucket_db_space, marker=marker
+                )
+
+                # Use snapshot to avoid conflicts on read-only scan
+                iterator = tr.snapshot.get_range(
+                    start,
+                    stop,
+                    streaming_mode=fdb.StreamingMode.want_all,
+                )
+
+                last_bucket = None
+                buckets_scanned = 0
+                for key, value in iterator:
+                    bucket, field = self.bucket_db_space.unpack(key)
+
+                    # Track last bucket seen and count unique buckets
+                    if last_bucket != bucket:
+                        # Check if we've already scanned the limit
+                        # before processing new bucket
+                        if limit and buckets_scanned >= limit:
+                            # Already scanned limit buckets, stop here
+                            # marker is the last completed bucket
+                            next_marker = last_bucket
+                            break
+                        buckets_scanned += 1
+                        last_bucket = bucket
+
+                    # Only process rtime fields
+                    if field != "rtime":
+                        continue
+                    rtime_val = self._timestamp_value_to_timestamp(value)
+                    if rtime_val + self.bucket_reservation_timeout <= now:
+                        buckets.append(bucket)
+
+                return buckets, next_marker
+            except fdb.impl.FDBError as exc:
+                tr.on_error(exc).wait()
+                tr = self.db.create_transaction()
+
+    @fdb.transactional
+    def _cleanup_deleted_bucket_reservation(self, tr, bucket, dry_run=False):
+        """
+        Clean up a single expired bucket reservation.
+
+        :param bucket: Bucket name to clean up
+        :param dry_run: If True, don't actually clean up
+        :returns: True if reservation was cleaned (or would be), False otherwise
+        """
+        reserved_bucket_space = self.bucket_db_space[bucket]
+
+        current_account = tr[reserved_bucket_space.pack(("account",))]
+        if not current_account.present():
+            return False
+        current_account = current_account.decode("utf-8")
+
+        # Check if the actual bucket still exists
+        bucket_space = self.bucket_space[current_account][bucket]
+        bucket_exists = tr[bucket_space.pack((REGION_FIELD,))].present()
+
+        if dry_run:
+            return True
+
+        if bucket_exists:
+            # Bucket was recreated
+            # make sure deleted and rtime keys are cleared
+            tr.clear(reserved_bucket_space.pack(("rtime",)))
+            tr.clear(reserved_bucket_space.pack(("deleted",)))
+        else:
+            # Bucket doesn't exist, clear entire reservation space
+            reserved_bucket_range = reserved_bucket_space.range()
+            tr.clear_range(reserved_bucket_range.start, reserved_bucket_range.stop)
+
+        return True
+
+    @catch_service_errors
     def reserve_bucket(self, bucket, account_id, **_kwargs):
         self._reserve_bucket(self.db, bucket, account_id)
 

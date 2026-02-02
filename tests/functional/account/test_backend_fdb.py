@@ -4769,3 +4769,235 @@ class TestBucketDeletionReservation(BaseTestCase):
         # And create it
         result = self.backend.create_bucket(bucket_name, other_account_id, region)
         self.assertTrue(result)
+
+    def test_list_expired_deleted_bucket_reservations(self):
+        """Test listing buckets with expired grace period."""
+        account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Bucket should not appear in expired list yet (grace period active)
+        expired_buckets = list(self.backend._list_expired_reservations())
+        self.assertNotIn(bucket_name, expired_buckets)
+
+        # Wait for grace period to expire
+        sleep(3)
+
+        # Now bucket should appear in expired list
+        expired_buckets = list(self.backend._list_expired_reservations())
+        self.assertIn(bucket_name, expired_buckets)
+
+    def test_cleanup_deleted_bucket_reservations(self):
+        """Test cleanup of expired bucket reservations."""
+        account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Wait for grace period to expire
+        sleep(3)
+
+        # Run cleanup
+        result = self.backend.cleanup_deleted_bucket_reservations()
+        self.assertEqual(result["cleaned"], 1)
+        self.assertEqual(result["errors"], 0)
+
+        # Reservation markers should be cleared
+        reserved_bucket_space = self.backend.bucket_db_space[bucket_name]
+        tr = self.backend.db.create_transaction()
+
+        rtime = tr[reserved_bucket_space.pack(("rtime",))]
+        account = tr[reserved_bucket_space.pack(("account",))]
+
+        self.assertFalse(rtime.present(), "rtime should be cleared after cleanup")
+        self.assertFalse(account.present(), "account should be cleared after cleanup")
+
+    def test_cleanup_deleted_bucket_reservations_dry_run(self):
+        """Test dry run of cleanup does not modify data."""
+        account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Wait for grace period to expire
+        sleep(3)
+
+        # Run cleanup in dry-run mode
+        result = self.backend.cleanup_deleted_bucket_reservations(dry_run=True)
+        self.assertEqual(result["cleaned"], 1)
+        self.assertEqual(result["errors"], 0)
+
+        # Reservation markers should still be present
+        reserved_bucket_space = self.backend.bucket_db_space[bucket_name]
+        tr = self.backend.db.create_transaction()
+
+        rtime = tr[reserved_bucket_space.pack(("rtime",))]
+        account = tr[reserved_bucket_space.pack(("account",))]
+
+        self.assertTrue(rtime.present(), "rtime should still be present after dry-run")
+        self.assertTrue(
+            account.present(), "account should still be present after dry-run"
+        )
+
+    def test_cleanup_preserves_recreated_bucket(self):
+        """Test that cleanup only removes markers if bucket was recreated."""
+        account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Recreate the bucket (as previous owner)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Wait for original grace period to expire
+        sleep(3)
+
+        # Run cleanup - should not clean anything since bucket was recreated
+        result = self.backend.cleanup_deleted_bucket_reservations()
+        self.assertEqual(result["cleaned"], 0)
+
+        # Bucket should still exist
+        bucket_info = self.backend.get_bucket_info(bucket_name, account=account_id)
+        self.assertIsNotNone(bucket_info)
+        self.assertEqual(bucket_info.get("account"), account_id)
+
+    def test_cleanup_with_limit(self):
+        """Test cleanup respects limit parameter."""
+        account_id = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and multiple buckets
+        self.backend.create_account(account_id)
+
+        bucket_names = [random_str(16) for _ in range(3)]
+        for bucket_name in bucket_names:
+            self.backend.create_bucket(bucket_name, account_id, region)
+            self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Wait for grace period to expire
+        sleep(3)
+
+        # Cleanup with limit=1
+        result = self.backend.cleanup_deleted_bucket_reservations(limit=1)
+        self.assertEqual(
+            result["cleaned"], 3, "Should clean all expired buckets even with limit=1"
+        )
+
+        # Should have no expired buckets
+        expired_buckets = list(self.backend._list_expired_reservations())
+        self.assertEqual(
+            len(expired_buckets), 0, "All expired buckets should be cleaned"
+        )
+
+    def test_get_expired_reservation_batch_listing(self):
+        """Test that batch listing for expired reservations works correctly."""
+        account_id = random_str(16)
+        region = "REGIONONE"
+
+        # Create account
+        self.backend.create_account(account_id)
+
+        # Create and delete multiple buckets to populate reservations
+        num_buckets = 15
+        bucket_names = []
+        for i in range(num_buckets):
+            bucket_name = random_str(16)
+            bucket_names.append(bucket_name)
+            self.backend.create_bucket(bucket_name, account_id, region)
+            self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Wait for grace period to expire
+        sleep(3)
+
+        # Test batch listing with batch_size=5
+        batch_size = 5
+        received_buckets = []
+        marker = None
+        batch_count = 0
+
+        for _ in range(10):  # Limit iterations to prevent infinite loop
+            buckets_batch, next_marker = self.backend._get_expired_reservation_batch(
+                limit=batch_size, marker=marker
+            )
+
+            if not buckets_batch:
+                break
+
+            batch_count += 1
+            received_buckets.extend(buckets_batch)
+
+            # Verify batch respects size limit
+            self.assertLessEqual(
+                len(buckets_batch),
+                batch_size,
+                f"Batch {batch_count} size {len(buckets_batch)} "
+                f"exceeds limit {batch_size}",
+            )
+
+            marker = next_marker
+            if marker is None:
+                break
+
+        # Verify results
+        self.assertGreater(batch_count, 1, "Should have multiple batches")
+        self.assertGreaterEqual(
+            len(received_buckets), num_buckets, "Should collect all expired buckets"
+        )
+
+        # Verify all received buckets are from created list
+        for bucket_name in received_buckets:
+            self.assertIn(bucket_name, bucket_names)
+
+        # Test marker pagination with smaller batch size (3)
+        marker = None
+        all_buckets = []
+        page_count = 0
+
+        for _ in range(20):  # Limit iterations
+            buckets_batch, next_marker = self.backend._get_expired_reservation_batch(
+                limit=3, marker=marker
+            )
+
+            if not buckets_batch:
+                break
+
+            page_count += 1
+            all_buckets.extend(buckets_batch)
+
+            # Verify batch respects limit
+            self.assertLessEqual(len(buckets_batch), 3)
+
+            marker = next_marker
+            if marker is None:
+                break
+
+        # Verify pagination collected same buckets
+        self.assertEqual(len(all_buckets), len(received_buckets))
+        self.assertGreater(
+            page_count, batch_count, "Smaller limit should produce more pages"
+        )
