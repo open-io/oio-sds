@@ -22,7 +22,13 @@ from enum import IntEnum
 from functools import wraps
 
 import fdb
-from werkzeug.exceptions import BadRequest, Conflict, Forbidden, NotFound
+from werkzeug.exceptions import (
+    BadRequest,
+    Conflict,
+    Forbidden,
+    InternalServerError,
+    NotFound,
+)
 
 from oio.account.common_fdb import CommonFdb
 from oio.common.constants import (
@@ -2165,14 +2171,16 @@ class AccountBackendFdb(object):
                 pass
             raise
 
-        try:
-            self._release_bucket(tr, bucket, account, check_reservation=False)
-        except Forbidden:
-            # It may happen that a bucket is still present,
-            # but that there is no longer an owner or that it has changed
-            pass
-
         self._real_delete_bucket(tr, bucket, account, region)
+        # Reserve the bucket name for the previous owner during grace period
+        now = self._get_timestamp()
+        reserved_bucket_space = self.bucket_db_space[bucket]
+        tr[reserved_bucket_space.pack(("account",))] = account.encode("utf-8")
+        # Mark deletion with grace delay to prevent immediate recreation
+        # by another customer / project_id
+        self._set_timestamp(tr, reserved_bucket_space.pack(("rtime",)), now)
+        # Mark as reservation after deletion
+        tr[reserved_bucket_space.pack(("deleted",))] = b"\x01"
 
     @fdb.transactional
     def _real_delete_bucket(self, tr, bucket, account, region):
@@ -2817,14 +2825,30 @@ class AccountBackendFdb(object):
         self._check_max_buckets(tr, account)
 
         reserved_bucket_space = self.bucket_db_space[bucket]
+        now = self._get_timestamp()
 
         rtime = tr[reserved_bucket_space.pack(("rtime",))]
-        now = self._get_timestamp()
         if rtime.present():
             # Check if the reservation is ongoing
-            rtime = self._timestamp_value_to_timestamp(rtime.value)
-            if rtime + self.bucket_reservation_timeout > now:
-                raise Forbidden("Already reserved")
+            rtime_val = self._timestamp_value_to_timestamp(rtime.value)
+            if rtime_val + self.bucket_reservation_timeout > now:
+                # Still within grace period or active reservation
+                current_account = tr[reserved_bucket_space.pack(("account",))]
+                if current_account.present():
+                    current_account = current_account.decode("utf-8")
+                    is_deleted_reservation = tr[
+                        reserved_bucket_space.pack(("deleted",))
+                    ]
+                    if (
+                        account != current_account
+                        or not is_deleted_reservation.present()
+                    ):
+                        raise Forbidden("Already reserved")
+                else:
+                    raise InternalServerError(
+                        f"Inconsistent reservation state for bucket {bucket}: "
+                        "rtime is set but account is missing"
+                    )
         else:
             current_account = tr[reserved_bucket_space.pack(("account",))]
             if current_account.present():
@@ -2843,7 +2867,7 @@ class AccountBackendFdb(object):
 
         current_account = tr[reserved_bucket_space.pack(("account",))]
         if not current_account.present():
-            return  # Already release
+            return  # Already released
         current_account = current_account.decode("utf-8")
         if account != current_account:
             raise Forbidden("Bucket reserved by another owner")
@@ -2889,6 +2913,7 @@ class AccountBackendFdb(object):
                 bucket,
             )
         tr.clear(reserved_bucket_space.pack(("rtime",)))
+        tr.clear(reserved_bucket_space.pack(("deleted",)))
 
     @catch_service_errors
     def get_bucket_owner(self, bucket, **_kwargs):

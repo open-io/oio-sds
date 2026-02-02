@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,7 +27,7 @@ from unittest.mock import patch
 import eventlet
 import fdb
 import pytest
-from werkzeug.exceptions import BadRequest, Conflict
+from werkzeug.exceptions import BadRequest, Conflict, Forbidden
 
 from oio.account.backend_fdb import (
     FEATURE_ACTIONS_HISTORY,
@@ -4631,3 +4631,141 @@ class TransactionGetRangeError:
     def on_error(self, *args, **kwargs) -> None:
         self.tr.commit().wait()
         return self.tr.on_error(*args, **kwargs)
+
+
+@pytest.mark.no_thread_patch
+class TestBucketDeletionReservation(BaseTestCase):
+    """Tests for bucket deletion reservation functionality."""
+
+    def setUp(self):
+        super(TestBucketDeletionReservation, self).setUp()
+        if os.path.exists(CommonFdb.DEFAULT_FDB):
+            fdb_file = CommonFdb.DEFAULT_FDB
+        else:
+            fdb_file = str(Path.home()) + f"/.oio/sds/conf/{self.ns}-fdb.cluster"
+        self.account_conf = {
+            "fdb_file": fdb_file,
+            # Short grace delay for testing
+            "bucket_reservation_timeout": 1,
+        }
+        self.backend = AccountBackendFdb(self.account_conf, self.logger)
+        self.backend.init_db()
+        self.backend.db.clear_range(b"\x00", b"\xfe")
+
+    @classmethod
+    def _monkey_patch(cls):
+        eventlet.patcher.monkey_patch(os=False, thread=False)
+
+    def test_delete_bucket_sets_grace_delay(self):
+        """Test that deleting a bucket sets rtime marker for grace period."""
+        account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Check that rtime and account are set in reservation space
+        reserved_bucket_space = self.backend.bucket_db_space[bucket_name]
+        tr = self.backend.db.create_transaction()
+
+        rtime = tr[reserved_bucket_space.pack(("rtime",))]
+        account = tr[reserved_bucket_space.pack(("account",))]
+
+        self.assertTrue(rtime.present(), "rtime should be set after deletion")
+        self.assertTrue(account.present(), "account should be set after deletion")
+        self.assertEqual(account.decode("utf-8"), account_id)
+
+    def test_other_account_cannot_reserve_during_grace_period(self):
+        """Test that another account cannot reserve bucket during grace period."""
+        account_id = random_str(16)
+        other_account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create accounts and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_account(other_account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Another account should not be able to reserve the bucket
+        with self.assertRaises(Forbidden):
+            self.backend.reserve_bucket(bucket_name, other_account_id)
+
+    def test_previous_owner_can_recreate_during_grace_period(self):
+        """Test that previous owner can recreate bucket during grace period."""
+        account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create account and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Previous owner should be able to recreate the bucket
+        result = self.backend.create_bucket(bucket_name, account_id, region)
+        self.assertTrue(result, "Previous owner should be able to recreate bucket")
+
+    def test_previous_owner_recreate_clears_deleted_marker(self):
+        """Test that recreating a bucket clears the deleted reservation key."""
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
+        region = "REGIONONE"
+
+        self.backend.create_account(account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        reserved_bucket_space = self.backend.bucket_db_space[bucket_name]
+        tr = self.backend.db.create_transaction()
+        deleted_marker = tr[reserved_bucket_space.pack(("deleted",))]
+        self.assertTrue(
+            deleted_marker.present(),
+            "deleted marker should be present after bucket deletion",
+        )
+
+        recreated = self.backend.create_bucket(bucket_name, account_id, region)
+        self.assertTrue(recreated, "Previous owner should be able to recreate bucket")
+
+        tr = self.backend.db.create_transaction()
+        deleted_marker = tr[reserved_bucket_space.pack(("deleted",))]
+        self.assertFalse(
+            deleted_marker.present(),
+            "deleted marker should be cleared when bucket is recreated",
+        )
+
+    def test_any_account_can_reserve_after_grace_period_expires(self):
+        """Test that any account can reserve bucket after grace period expires."""
+        account_id = random_str(16)
+        other_account_id = random_str(16)
+        bucket_name = random_str(16)
+        region = "REGIONONE"
+
+        # Create accounts and bucket
+        self.backend.create_account(account_id)
+        self.backend.create_account(other_account_id)
+        self.backend.create_bucket(bucket_name, account_id, region)
+
+        # Delete the bucket
+        self.backend.delete_bucket(bucket_name, account_id, region)
+
+        # Wait for grace period to expire (2 seconds + buffer)
+        sleep(3)
+
+        # Another account should now be able to reserve the bucket
+        self.backend.reserve_bucket(bucket_name, other_account_id)
+
+        # And create it
+        result = self.backend.create_bucket(bucket_name, other_account_id, region)
+        self.assertTrue(result)

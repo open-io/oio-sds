@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -45,6 +45,8 @@ class TestBucketClient(AccountBaseTestCase):
         self.assertEqual(self.account_id1, owner)
         # Release the bucket
         self.bucket_client.bucket_delete(self.bucket_name, self.account_id1)
+        # The bucket name is reserved for the previous owner
+        # during grace period
         self.assertRaises(
             NotFound, self.bucket_client.bucket_get_owner, self.bucket_name
         )
@@ -64,14 +66,14 @@ class TestBucketClient(AccountBaseTestCase):
         self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
         self.bucket_client.bucket_delete(self.bucket_name, self.account_id1)
         # Reserve the bucket with another owner
-        self.bucket_client.bucket_reserve(self.bucket_name, self.account_id2)
+        # The bucket name is still reserved for the previous owner
+        # during grace period, so the owner should still be the same
         self.assertRaises(
-            NotFound, self.bucket_client.bucket_get_owner, self.bucket_name
+            Forbidden,
+            self.bucket_client.bucket_reserve,
+            self.bucket_name,
+            self.account_id2,
         )
-        # Go to reservation with the second owner
-        self.bucket_client.bucket_create(self.bucket_name, self.account_id2)
-        owner = self.bucket_client.bucket_get_owner(self.bucket_name)
-        self.assertEqual(self.account_id2, owner)
 
     def test_reserve_bucket_already_reserved(self):
         self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
@@ -327,3 +329,44 @@ class TestBucketClient(AccountBaseTestCase):
             self.assertListEqual(buckets, expected_list)
             truncated = resp["truncated"]
             self.assertFalse(truncated)
+
+    def test_grace_period_allows_previous_owner_recreation(self):
+        """Test that previous owner can recreate bucket during grace period."""
+        # Reserve and create bucket with account1
+        self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
+
+        # Delete the bucket
+        self.bucket_client.bucket_delete(self.bucket_name, self.account_id1)
+
+        # Previous owner should be able to recreate during grace period
+        # without explicit reservation
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
+        owner = self.bucket_client.bucket_get_owner(self.bucket_name)
+        self.assertEqual(self.account_id1, owner)
+
+    def test_grace_period_prevents_recreate_with_different_owner(self):
+        """
+        Test that bucket cannot be created with different owner
+        during grace period.
+        """
+        # Create and delete with account1
+        self.bucket_client.bucket_reserve(self.bucket_name, self.account_id1)
+        self.bucket_client.bucket_create(self.bucket_name, self.account_id1)
+        self.bucket_client.bucket_delete(self.bucket_name, self.account_id1)
+
+        # Reserve with account2 should fail during grace period
+        self.assertRaises(
+            Forbidden,
+            self.bucket_client.bucket_reserve,
+            self.bucket_name,
+            self.account_id2,
+        )
+
+        # Create with account2 should fail during grace period
+        self.assertRaises(
+            Forbidden,
+            self.bucket_client.bucket_create,
+            self.bucket_name,
+            self.account_id2,
+        )
