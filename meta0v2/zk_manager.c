@@ -2,7 +2,7 @@
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -235,7 +235,6 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 	for (int i=0; i<sv.count; i++) {
 		gchar buffer[512] = {0};
 		int buflen = sizeof(buffer)-1;
-		zknode = g_malloc0(sizeof(struct zk_node_s));
 		gchar *fullpath = g_strdup_printf("%s/%s",dirpath,sv.data[i]);
 		rc = zoo_get(manager->zh, fullpath, 1, buffer , &buflen, &my_stat);
 		if ( rc != ZOK ) {
@@ -244,10 +243,12 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 			goto end_error;
 		}
 
+		zknode = g_malloc0(sizeof(struct zk_node_s));
 		zknode->path = fullpath;
 		fullpath = NULL;
-		if ( buflen > 0 )
-			zknode->content=g_strdup(buffer);
+		if (buflen > 0) {
+			zknode->content = g_strdup(buffer);
+		}
 		list = g_slist_prepend(list,zknode);
 	}
 	*result=list;
