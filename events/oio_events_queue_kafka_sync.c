@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2024-2025 OVH SAS
+Copyright (C) 2024-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -128,7 +128,7 @@ _q_destroy(struct oio_events_queue_s *self)
 
 	q->healthy = FALSE;
 
-	kafka_destroy(q->kafka);
+	kafka_destroy(q->kafka, TRUE);
 	oio_str_clean(&q->endpoint);
 	oio_str_clean(&q->username);
 	oio_str_clean(&q->password);

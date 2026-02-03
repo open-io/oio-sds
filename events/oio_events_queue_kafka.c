@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2023-2025 OVH SAS
+Copyright (C) 2023-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -218,7 +218,6 @@ _q_maybe_check(struct _queue_with_endpoint_s *q, struct _running_ctx_s *ctx)
 		// Force reconnect
 		kafka_close(ctx->kafka);
 
-		ctx->kafka->producer = NULL;
 		return FALSE;
 	}
 
@@ -308,7 +307,7 @@ _q_run(struct _queue_with_endpoint_s *q)
 	}
 
 	/* close the socket to the kafka broker */
-	err = kafka_destroy(ctx.kafka);
+	err = kafka_destroy(ctx.kafka, TRUE);
 
 	return err;
 }

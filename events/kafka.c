@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2023-2025 OVH SAS
+Copyright (C) 2023-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -228,7 +228,7 @@ kafka_create(const gchar *endpoint,
 	if (!err) {
 		*out = oio_memdup(&out1, sizeof(struct kafka_s));
 	} else {
-		kafka_destroy(&out1);
+		kafka_destroy(&out1, FALSE);
 	}
 	g_strfreev(options);
 	return err;
@@ -377,7 +377,7 @@ kafka_close(struct kafka_s *kafka)
 }
 
 GError*
-kafka_destroy(struct kafka_s *kafka)
+kafka_destroy(struct kafka_s *kafka, gboolean free_kafka)
 {
 	GError* err = NULL;
 
@@ -387,6 +387,9 @@ kafka_destroy(struct kafka_s *kafka)
 		g_free((gchar*)kafka->topic);
 		if (kafka->callback_ctx) {
 			g_free(kafka->callback_ctx);
+		}
+		if (free_kafka) {
+			g_free(kafka);
 		}
 	}
 
