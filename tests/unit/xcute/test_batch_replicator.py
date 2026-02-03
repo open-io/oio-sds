@@ -822,3 +822,155 @@ class TestBatchReplicatorServiceUnavailable(TestBatchReplicator):
         super().__init__(*args, **kwargs)
         # simulate 42 errors on manifest_2 (so lot of None, None)
         self.simulate_errors = 42
+
+
+class TestGetTargetTaskPerSecond(unittest.TestCase):
+    """Tests for the get_target_task_per_second method."""
+
+    def _create_batch_replicator_job(self):
+        """Create a BatchReplicatorJob instance for testing."""
+        with patch(
+            "oio.xcute.jobs.batch_replicator.ObjectStorageApi", new_callable=Mock()
+        ), patch(
+            "oio.xcute.jobs.batch_replicator.KafkaClusterHealth", new_callable=Mock()
+        ):
+            return BatchReplicatorJob({"namespace": "fake"})
+
+    def _create_job_info(
+        self, nb_objects_processed, tasks_per_second, max_tasks_per_second
+    ):
+        """Create a job_info dict for testing."""
+        return {
+            "tasks": {
+                "processed": nb_objects_processed,
+            },
+            "config": {
+                "tasks_per_second": tasks_per_second,
+                "max_tasks_per_second": max_tasks_per_second,
+            },
+        }
+
+    def test_initial_state_no_objects(self):
+        """
+        At the start, when no objects have been replicated,
+        target should be tasks_per_second.
+        """
+        job = self._create_batch_replicator_job()
+        job_info = self._create_job_info(
+            nb_objects_processed=0,  # No shard, but 1 root container
+            tasks_per_second=200,
+            max_tasks_per_second=1000,
+        )
+
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 200)
+
+    def test_first_shard_threshold(self):
+        """Test behavior when reaching the first shard threshold."""
+        job = self._create_batch_replicator_job()
+        job_info = self._create_job_info(
+            nb_objects_processed=600000,  # At least 2 shards
+            tasks_per_second=200,
+            max_tasks_per_second=1000,
+        )
+
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 400)
+
+    def test_multiple_shards(self):
+        """Test behavior with multiple shards."""
+        job = self._create_batch_replicator_job()
+        job_info = self._create_job_info(
+            nb_objects_processed=1800000,  # At least 4 shards
+            tasks_per_second=200,
+            max_tasks_per_second=1000,
+        )
+
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 800)
+
+    def test_max_tasks_per_second_limit(self):
+        """Test that target is capped at max_tasks_per_second."""
+        job = self._create_batch_replicator_job()
+        job_info = self._create_job_info(
+            nb_objects_processed=2**24,  # At least 28 shards
+            tasks_per_second=200,
+            max_tasks_per_second=1000,
+        )
+
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 1000)
+
+    def test_exact_shard_boundary(self):
+        """Test behavior exactly at shard boundaries."""
+        job = self._create_batch_replicator_job()
+
+        # Test at exactly 1 shard boundary
+        job_info = self._create_job_info(
+            nb_objects_processed=599999, tasks_per_second=200, max_tasks_per_second=1000
+        )
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 200)
+
+        # Test just after 1 shard boundary
+        job_info = self._create_job_info(
+            nb_objects_processed=600001, tasks_per_second=200, max_tasks_per_second=1000
+        )
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 400)
+
+    def test_different_tasks_per_second_values(self):
+        """Test with different tasks_per_second configurations."""
+        job = self._create_batch_replicator_job()
+
+        # Test with higher tasks_per_second
+        job_info = self._create_job_info(
+            nb_objects_processed=1200000,  # At least 3 shards
+            tasks_per_second=500,
+            max_tasks_per_second=5000,
+        )
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 1500)
+
+    def test_low_max_tasks_limit(self):
+        """Test when max_tasks_per_second is low and limits growth."""
+        job = self._create_batch_replicator_job()
+        job_info = self._create_job_info(
+            nb_objects_processed=1800000,  # At least 4 shards
+            tasks_per_second=200,
+            max_tasks_per_second=500,  # low limit
+        )
+
+        target = job.get_target_task_per_second(job_info)
+        self.assertEqual(target, 500)
+
+    def test_scaling_progression(self):
+        """Test that target scales properly as objects are processed."""
+        job = self._create_batch_replicator_job()
+        tasks_per_second = 100
+        max_tasks_per_second = 2000
+
+        test_cases = [
+            (0, 100),  # At least 1 shard
+            (300000, 100),  # At least 1 shard
+            (600000, 200),  # At least 2 shards
+            (900000, 200),  # At least 2 shards
+            (1200000, 300),  # At least 3 shards
+            (1800000, 400),  # At least 4 shards
+            (2400000, 500),  # At least 5 shards
+            (6000000, 1100),  # At least 11 shards but capped
+        ]
+
+        for nb_objects, expected_target in test_cases:
+            job_info = self._create_job_info(
+                nb_objects_processed=nb_objects,
+                tasks_per_second=tasks_per_second,
+                max_tasks_per_second=max_tasks_per_second,
+            )
+            target = job.get_target_task_per_second(job_info)
+            self.assertEqual(
+                target,
+                expected_target,
+                f"Failed for {nb_objects} objects: expected {expected_target}, "
+                f"got {target}",
+            )
