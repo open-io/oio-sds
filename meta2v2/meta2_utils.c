@@ -3903,6 +3903,9 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 					g_string_overwrite_len(current_ttime, 0, (const gchar *) val->data, val->len);
 				}
 			}
+			_bean_clean(prop);
+		} else {
+			_bean_clean(bean);
 		}
 	}
 
@@ -3976,8 +3979,9 @@ m2db_transition_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		previous_policy = target_policy;
 	}
 	gint64 size = CONTENTS_HEADERS_get_size(current_header);
-	const gchar *new_policy_str = m2v2_policy_encode(actual_policy, new_policy);
+	gchar *new_policy_str = m2v2_policy_encode(actual_policy, new_policy);
 	CONTENTS_HEADERS_set2_policy(current_header, new_policy_str);
+	g_free(new_policy_str);
 	err = _db_save_bean(sq3, current_header);
 	// Target policy has been previously set,
 	// assuming policy updates were handled at that time
