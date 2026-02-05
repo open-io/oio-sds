@@ -22,6 +22,7 @@ from time import time as now
 
 from oio.cli import Command, Lister, ShowOne
 from oio.common.constants import (
+    ACL_PROPERTY_KEY,
     BUCKET_PROP_RATELIMIT,
     DRAINING_STATE_NAME,
     DRAINING_STATE_NEEDED,
@@ -61,6 +62,7 @@ from oio.common.exceptions import (
     NotFound,
     OioException,
 )
+from oio.common.json import json
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, timeout_to_deadline
 
@@ -159,6 +161,21 @@ class CreateBucket(Lister):
             "--region", help="Ensure the container is created in this region"
         )
         parser.add_argument(
+            "--beta",
+            action="store_true",
+            help=(
+                "Create a new metadata beta bucket (adds a header to the reserve call)"
+            ),
+        )
+        parser.add_argument(
+            "--owner-id",
+            metavar="<project_name:user_name>",
+            help=(
+                "S3 owner identifier used in ACL metadata "
+                "(format: project_name:user_name)"
+            ),
+        )
+        parser.add_argument(
             "buckets", metavar="<bucket-name>", nargs="+", help="New bucket name(s)"
         )
         return parser
@@ -169,12 +186,56 @@ class CreateBucket(Lister):
         reqid = self.app.request_id(prefix="CLI-bucket-create-")
         results = []
         account = self.app.client_manager.account
+        reserve_headers = None
+        acl_properties = None
+        owner_id = parsed_args.owner_id
+
+        if owner_id:
+            if ":" not in owner_id:
+                raise CommandError(
+                    "Invalid --owner-id format, expected project_name:user_name"
+                )
+
+            project_name, user_name = owner_id.split(":", 1)
+            if not project_name or not user_name:
+                raise CommandError(
+                    "Invalid --owner-id format, expected project_name:user_name"
+                )
+
+            acl_properties = {
+                ACL_PROPERTY_KEY: json.dumps(
+                    {
+                        # Swift s3api sysmeta format is Owner as a scalar and
+                        # Grant as a list of compact grant dictionaries.
+                        "Owner": owner_id,
+                        "Grant": [
+                            {
+                                "Grantee": owner_id,
+                                "Permission": "FULL_CONTROL",
+                            }
+                        ],
+                    }
+                )
+            }
+
+        if parsed_args.beta:
+            if not owner_id:
+                raise CommandError(
+                    "--owner-id <project_name:user_name> is required with --beta"
+                )
+            reserve_headers = {"x-oio-bucket-variant": "beta"}
         for bucket in parsed_args.buckets:
             success = True
             # We are about to create a root container, reserve its name.
             try:
+                if parsed_args.beta:
+                    print(f"Reserving beta bucket: {bucket}")
                 self.app.client_manager.storage.bucket.bucket_reserve(
-                    bucket, account, region=parsed_args.region, reqid=reqid
+                    bucket,
+                    account,
+                    region=parsed_args.region,
+                    reqid=reqid,
+                    headers=reserve_headers,
                 )
             except Exception as exc:
                 self.log.error("Failed to reserve bucket name %s: %s", bucket, exc)
@@ -187,13 +248,10 @@ class CreateBucket(Lister):
                         account,
                         bucket,
                         region=parsed_args.region,
+                        properties=acl_properties,
                         system=system,
                         reqid=reqid,
                     )
-                    if not created:
-                        self.app.client_manager.storage.container_set_properties(
-                            account, bucket, system=system, reqid=reqid
-                        )
                 except Exception as exc:
                     self.log.error(
                         "Failed to create root container %s: %s", bucket, exc
@@ -228,13 +286,13 @@ class CreateBucket(Lister):
                     except Exception as exc2:
                         self.log.error("Failed to release bucket %s: %s", bucket, exc2)
             if success:
-                if created:
+                if not acl_properties and created:
                     self.log.warning(
                         "The root container %s was created, but it lacks some "
                         "properties (like ACLs) to be compatible with S3",
                         bucket,
                     )
-                else:
+                elif not acl_properties:
                     self.log.warning(
                         "The root container %s linked to the bucket, "
                         "but it lacks some properties (like ACLs) "
@@ -526,9 +584,9 @@ class DeleteBucket(Lister):
             success = True
             try:
                 meta = self.app.client_manager.storage.bucket.bucket_show(
-                    bucket, account, reqid=reqid
+                    bucket, account, details=True, reqid=reqid
                 )
-                if meta["containers"] > 1:
+                if meta.get("containers", 0) > 1:
                     raise OioException("Too many containers in bucket")
             except NotFound:
                 # The bucket no longer exists, but try deleting anyway

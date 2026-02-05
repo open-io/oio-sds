@@ -18,7 +18,9 @@
 import re
 import tempfile
 import uuid
+from json import loads as json_loads
 
+from oio.common.constants import ACL_PROPERTY_KEY
 from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
@@ -120,6 +122,66 @@ class ContainerTest(CliTestCase):
         self.assertEqual("True\n", output)
         # Bucket not found (HTTP 404)
         self.assertRaises(CommandFailed, self.openio, "bucket show " + cname)
+
+    def test_bucket_create_beta_sets_s3_acl_metadata(self):
+        cname = "mybucket-beta-" + random_str(4).lower()
+        owner_id = f"project-{random_str(4).lower()}:user-{random_str(4).lower()}"
+        created = False
+
+        try:
+            opts = self.get_format_opts(fields=("Created",))
+            output = self.openio(
+                f"bucket create --beta --owner-id {owner_id} {cname} {opts}"
+            )
+            self.assertIn("True", output)
+            created = True
+
+            # Ensure the bucket exists and can be queried through CLI.
+            show_opts = self.get_format_opts(fields=("account",))
+            output = self.openio("bucket show " + cname + show_opts)
+            self.assertEqual(self.account_from_env() + "\n", output)
+
+            meta = self.storage.container_get_properties(self.account_from_env(), cname)
+            acl_value = meta["properties"].get(ACL_PROPERTY_KEY)
+            self.assertIsNotNone(acl_value)
+            acl = json_loads(acl_value)
+
+            # Swift s3api expects Owner as a scalar and Grant as a list.
+            self.assertEqual(owner_id, acl.get("Owner"))
+            self.assertIn("Grant", acl)
+            self.assertTrue(acl["Grant"])
+            self.assertEqual(owner_id, acl["Grant"][0].get("Grantee"))
+            self.assertEqual("FULL_CONTROL", acl["Grant"][0].get("Permission"))
+        finally:
+            if not created:
+                return
+            self.openio("bucket delete " + cname)
+
+    def test_bucket_create_owner_id_sets_s3_acl_metadata_without_beta(self):
+        cname = "mybucket-owner-" + random_str(4).lower()
+        owner_id = f"project-{random_str(4).lower()}:user-{random_str(4).lower()}"
+        created = False
+
+        try:
+            opts = self.get_format_opts(fields=("Created",))
+            output = self.openio(f"bucket create --owner-id {owner_id} {cname} {opts}")
+            self.assertIn("True", output)
+            created = True
+
+            meta = self.storage.container_get_properties(self.account_from_env(), cname)
+            acl_value = meta["properties"].get(ACL_PROPERTY_KEY)
+            self.assertIsNotNone(acl_value)
+            acl = json_loads(acl_value)
+
+            self.assertEqual(owner_id, acl.get("Owner"))
+            self.assertIn("Grant", acl)
+            self.assertTrue(acl["Grant"])
+            self.assertEqual(owner_id, acl["Grant"][0].get("Grantee"))
+            self.assertEqual("FULL_CONTROL", acl["Grant"][0].get("Permission"))
+        finally:
+            if not created:
+                return
+            self.openio("bucket delete " + cname)
 
     def test_bucket_show_with_feature(self):
         cname = "mybucket-" + random_str(4).lower()
