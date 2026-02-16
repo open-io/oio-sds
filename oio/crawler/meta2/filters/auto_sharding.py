@@ -116,6 +116,7 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
         self.cleaning_errors = 0
         self.huge_databases = 0
         self.possible_orphan_shards = 0
+        self.orphan_shards = 0
         self.sharding_in_progress = 0
         self.sharding_no_change = 0
         self.sharding_stuck = 0
@@ -158,12 +159,12 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
                     )
                     if is_orphan:
                         self.logger.warning(
-                            "Container %s is a possible orphan shard "
+                            "Container %s is an orphan shard "
                             "and has been in sharding for more than %ds!",
                             meta2db.cid,
                             int(self.sharding_stuck_timeout),
                         )
-                        self.possible_orphan_shards += 1
+                        self.orphan_shards += 1
                         return self.app(env, cb)
                     self.logger.warning(
                         "Sharding of container %s has been in progress "
@@ -434,6 +435,7 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
             "skipped": self.skipped,
             "errors": self.errors,
             "possible_orphan_shards": self.possible_orphan_shards,
+            "orphan_shards": self.orphan_shards,
             "cleaning_successes": self.cleaning_successes,
             "cleaning_errors": self.cleaning_errors,
             "huge_databases": self.huge_databases,
@@ -451,6 +453,7 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
         self.skipped = 0
         self.errors = 0
         self.possible_orphan_shards = 0
+        self.orphan_shards = 0
         self.cleaning_successes = 0
         self.cleaning_errors = 0
         self.huge_databases = 0
