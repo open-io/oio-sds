@@ -149,8 +149,8 @@ class Content(object):
         adjacent_mode=False,
         **kwargs,
     ):
-        notin = ChunksHelper(chunks_notin, False).raw()
-        broken = ChunksHelper(chunks_broken, False).raw()
+        notin = ChunksHelper(list(chunks_notin), False).raw()
+        broken = ChunksHelper(list(chunks_broken), False).raw()
         if fake_excluded_chunks:
             for fake_excluded_chunk in fake_excluded_chunks:
                 chunk = fake_excluded_chunk.copy()
