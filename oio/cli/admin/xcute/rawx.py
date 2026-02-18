@@ -50,13 +50,13 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "--dry-run", action="store_true", help="Display actions but do nothing."
         )
         parser.add_argument(
-            "--delete-faulty-chunks",
+            "--delete-chunks-rebuilt",
             action="store_true",
             help=(
-                "Try to delete faulty chunks after they have been "
-                "rebuilt elsewhere. This option is useful if the chunks "
-                "you are rebuilding are not actually missing but are "
-                "corrupted."
+                "Try to delete chunks after they have been rebuilt elsewhere. "
+                "This option is useful if the chunks you are rebuilding are not "
+                "actually missing but are corrupted. However, this option is not "
+                "relevant and should not be used in case of a disk replacement."
             ),
         )
         parser.add_argument(
@@ -120,7 +120,7 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             "dry_run": parsed_args.dry_run,
             "allow_same_rawx": not parsed_args.not_same_rawx,
             "read_all_available_sources": parsed_args.read_all_available_sources,
-            "try_chunk_delete": parsed_args.delete_faulty_chunks,
+            "try_chunk_delete": parsed_args.delete_chunks_rebuilt,
             "use_incident_date": parsed_args.use_incident_date,
             "set_incident_date": parsed_args.set_incident_date,
             "set_specific_incident_date": parsed_args.set_specific_incident_date,
