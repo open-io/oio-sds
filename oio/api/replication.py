@@ -76,6 +76,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.quorum_or_fail([co.chunk for co in current_conns], failed_chunks)
 
         bytes_transferred = 0
+        error_occurred = False
         try:
             with green.ContextPool(len(meta_chunk)) as pool:
                 for conn in current_conns:
@@ -126,9 +127,11 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         green.eventlet_yield()
 
         except green.SourceReadTimeout as err:
+            error_occurred = True
             self.logger.warning("Source read timeout (reqid=%s): %s", self.reqid, err)
             raise SourceReadTimeout(err) from err
         except SourceReadError as err:
+            error_occurred = True
             self.logger.warning(
                 "Source read error (reqid=%s, policy=%s): %s",
                 self.reqid,
@@ -137,14 +140,25 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             )
             raise
         except (SocketError, Timeout) as to:
+            error_occurred = True
             self.logger.warning("Timeout writing data (reqid=%s): %s", self.reqid, to)
             raise OioTimeout(to) from to
         except Exception as exc:
+            error_occurred = True
             # Do not log the stack trace here (we reraise the exception).
             self.logger.error(
                 "Exception reading or writing data (reqid=%s): %s", self.reqid, exc
             )
             raise
+        finally:
+            # Try to close connections when an error occurs
+            if error_occurred:
+                for conn in current_conns:
+                    try:
+                        if conn:
+                            conn.close()
+                    except Exception:
+                        pass
 
         success_chunks = []
 
