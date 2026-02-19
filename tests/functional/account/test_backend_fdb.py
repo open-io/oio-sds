@@ -1369,7 +1369,7 @@ class TestAccountBackend(BaseTestCase):
             self.assertLess(end - start, 4.0)
 
     def test_refresh_metrics(self):
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
 
         scenario = {
             account_id: [
@@ -1446,7 +1446,7 @@ class TestAccountBackend(BaseTestCase):
 
     def test_refresh_account(self):
         region = "LOCALHOST"
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
 
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -1608,7 +1608,7 @@ class TestAccountBackend(BaseTestCase):
         self._check_backend(*backend_info)
 
     def test_refresh_account_multiregions(self):
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
 
         scenario = {
             account_id: [
@@ -1815,7 +1815,7 @@ class TestAccountBackend(BaseTestCase):
 
     def test_flush_account(self):
         region = "LOCALHOST"
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
 
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -2009,7 +2009,7 @@ class TestAccountBackend(BaseTestCase):
 
     def test_flush_account_with_shards(self):
         region = "LOCALHOST"
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
 
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
@@ -2188,7 +2188,7 @@ class TestAccountBackend(BaseTestCase):
 
     def test_refresh_bucket(self):
         # Create account
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
         self.assertEqual(self.backend.create_account(account_id), account_id)
         backend_info = (
             {("accounts",): 1},
@@ -2394,7 +2394,7 @@ class TestAccountBackend(BaseTestCase):
     def test_refresh_bucket_with_policies(self):
         policies = ["SINGLE", "EC", "THREECOPIES"]
         # Create account
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
         self.assertEqual(self.backend.create_account(account_id), account_id)
 
         region = "LOCALHOST"
@@ -3940,7 +3940,7 @@ class TestAccountBackend(BaseTestCase):
 
     def test_delete_ghost_shard_container(self):
         account = random_str(16)
-        bucket_name = random_str(16)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGION_2"
         # Create account
         account_ctime = Timestamp().timestamp
@@ -4658,8 +4658,8 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_delete_bucket_sets_grace_delay(self):
         """Test that deleting a bucket sets rtime marker for grace period."""
-        account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and bucket
@@ -4682,9 +4682,9 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_other_account_cannot_reserve_during_grace_period(self):
         """Test that another account cannot reserve bucket during grace period."""
-        account_id = random_str(16)
-        other_account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        other_account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create accounts and bucket
@@ -4701,8 +4701,8 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_previous_owner_can_recreate_during_grace_period(self):
         """Test that previous owner can recreate bucket during grace period."""
-        account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and bucket
@@ -4747,9 +4747,9 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_any_account_can_reserve_after_grace_period_expires(self):
         """Test that any account can reserve bucket after grace period expires."""
-        account_id = random_str(16)
-        other_account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        other_account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create accounts and bucket
@@ -4772,8 +4772,8 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_list_expired_deleted_bucket_reservations(self):
         """Test listing buckets with expired grace period."""
-        account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and bucket
@@ -4796,8 +4796,8 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_cleanup_deleted_bucket_reservations(self):
         """Test cleanup of expired bucket reservations."""
-        account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and bucket
@@ -4827,8 +4827,8 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_cleanup_deleted_bucket_reservations_dry_run(self):
         """Test dry run of cleanup does not modify data."""
-        account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and bucket
@@ -4860,8 +4860,8 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_cleanup_preserves_recreated_bucket(self):
         """Test that cleanup only removes markers if bucket was recreated."""
-        account_id = random_str(16)
-        bucket_name = random_str(16)
+        account_id = "account-" + random_str(6)
+        bucket_name = "bucket-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and bucket
@@ -4888,7 +4888,7 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_cleanup_with_limit(self):
         """Test cleanup respects limit parameter."""
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
         region = "REGIONONE"
 
         # Create account and multiple buckets
@@ -4916,7 +4916,7 @@ class TestBucketDeletionReservation(BaseTestCase):
 
     def test_get_expired_reservation_batch_listing(self):
         """Test that batch listing for expired reservations works correctly."""
-        account_id = random_str(16)
+        account_id = "account-" + random_str(6)
         region = "REGIONONE"
 
         # Create account
@@ -4926,7 +4926,7 @@ class TestBucketDeletionReservation(BaseTestCase):
         num_buckets = 15
         bucket_names = []
         for i in range(num_buckets):
-            bucket_name = random_str(16)
+            bucket_name = "bucket-" + random_str(6)
             bucket_names.append(bucket_name)
             self.backend.create_bucket(bucket_name, account_id, region)
             self.backend.delete_bucket(bucket_name, account_id, region)
