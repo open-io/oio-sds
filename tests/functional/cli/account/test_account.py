@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -69,6 +69,7 @@ class AccountTest(CliTestCase):
         regex = r"|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
+        self.openio("account delete " + self.NAME)
 
     def test_account_refresh(self):
         self.openio("account create " + self.NAME)
@@ -139,6 +140,7 @@ class AccountTest(CliTestCase):
             data["metadata"],
             {"max-buckets": AccountBackendFdb.DEFAULT_MAX_BUCKETS_PER_ACCOUNT},
         )
+        self.openio("account delete " + self.NAME)
 
     def test_account_unset_no_property(self):
         self.openio("account unset " + self.NAME, expected_returncode=1)
