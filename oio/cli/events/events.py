@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2023 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,26 +18,6 @@ from logging import getLogger
 
 from oio.cli import Lister, ShowOne
 from oio.common.easy_value import boolean_value
-
-
-class StatsEvents(ShowOne):
-    """
-    Get statistics about events, from the beanstalkd service
-    behind the local event-agent.
-    """
-
-    log = getLogger(__name__ + ".StatsEvents")
-
-    def get_parser(self, prog_name):
-        parser = super().get_parser(prog_name)
-        parser.add_argument("--tube", metavar="<tube>", help="Tube name")
-        return parser
-
-    def take_action(self, parsed_args):
-        self.log.debug("take_action(%s)", parsed_args)
-
-        data = self.app.client_manager.event.stats(parsed_args.tube)
-        return list(zip(*sorted(data.items())))
 
 
 class EventsExhume(ShowOne):
