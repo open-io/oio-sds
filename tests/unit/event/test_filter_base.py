@@ -17,6 +17,7 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 from oio.common.exceptions import (
+    ClientException,
     DeadlineReached,
     OioNetworkException,
     OioTimeout,
@@ -246,6 +247,124 @@ class TestFilterSafeProcess(unittest.TestCase):
         cb.assert_called_once()
         call_args = cb.call_args
         self.assertIn(error_message, call_args[0][1])
+
+    def test_safe_process_catches_502_bad_gateway(self):
+        """
+        Test that ClientException with http_status 502 (Bad Gateway)
+        is caught and converted to RetryableEventError.
+        """
+        env = self._create_event()
+        cb = self._create_mock_callback()
+
+        # Mock process to raise ClientException with 502
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(
+                http_status=502, message="502 Bad Gateway from nginx"
+            ),
+        ):
+            self.filter(env, cb)
+
+        # Verify the callback was called with status 503 (retryable)
+        cb.assert_called_once()
+        call_args = cb.call_args
+        self.assertEqual(call_args[0][0], 503)
+        self.assertIn("Retryable gateway error", call_args[0][1])
+        self.assertIn("502 Bad Gateway", call_args[0][1])
+
+    def test_safe_process_catches_504_gateway_timeout(self):
+        """
+        Test that ClientException with http_status 504 (Gateway Timeout)
+        is caught and converted to RetryableEventError.
+        """
+        env = self._create_event()
+        cb = self._create_mock_callback()
+
+        # Mock process to raise ClientException with 504
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=504, message="504 Gateway Timeout"),
+        ):
+            self.filter(env, cb)
+
+        # Verify the callback was called with status 503 (retryable)
+        cb.assert_called_once()
+        call_args = cb.call_args
+        self.assertEqual(call_args[0][0], 503)
+        self.assertIn("Retryable gateway error", call_args[0][1])
+        self.assertIn("504 Gateway Timeout", call_args[0][1])
+
+    def test_safe_process_does_not_catch_other_client_exceptions(self):
+        """
+        Test that ClientException with non-retryable http_status codes
+        (like 400, 403, 404, 409) are not caught and are re-raised.
+        """
+        env = self._create_event()
+        cb = self._create_mock_callback()
+
+        # Test with 400 Bad Request - should be re-raised
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=400, message="Bad Request"),
+        ):
+            with self.assertRaises(ClientException) as context:
+                self.filter(env, cb)
+            self.assertEqual(context.exception.http_status, 400)
+
+        # Test with 403 Forbidden - should be re-raised
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=403, message="Forbidden"),
+        ):
+            with self.assertRaises(ClientException) as context:
+                self.filter(env, cb)
+            self.assertEqual(context.exception.http_status, 403)
+
+        # Test with 404 Not Found - should be re-raised
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=404, message="Not Found"),
+        ):
+            with self.assertRaises(ClientException) as context:
+                self.filter(env, cb)
+            self.assertEqual(context.exception.http_status, 404)
+
+        # Test with 409 Conflict - should be re-raised
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=409, message="Conflict"),
+        ):
+            with self.assertRaises(ClientException) as context:
+                self.filter(env, cb)
+            self.assertEqual(context.exception.http_status, 409)
+
+    def test_safe_process_gateway_error_includes_retry_delay(self):
+        """
+        Test that gateway errors (502, 504) include the configured retry delay.
+        """
+        # Set a specific retry delay
+        self.filter._retry_delay = 3.5
+
+        env = self._create_event()
+        cb = self._create_mock_callback()
+
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=502, message="Bad Gateway"),
+        ):
+            self.filter(env, cb)
+
+        # Verify the delay is passed to the callback
+        cb.assert_called_once()
+        call_kwargs = cb.call_args[1]
+        self.assertEqual(call_kwargs.get("delay"), 3.5)
 
 
 class TestFilterSafeProcessWithDifferentEvents(unittest.TestCase):

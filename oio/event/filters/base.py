@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 from uuid import uuid4
 
 from oio.common.exceptions import (
+    ClientException,
     DeadlineReached,
     OioException,
     OioNetworkException,
@@ -143,6 +144,18 @@ class Filter(object):
                 delay=self._retry_delay,
             )
             return resp(env, cb)
+        except ClientException as exc:
+            # Treat gateway errors (502, 504) as retryable
+            if exc.http_status in (502, 504):
+                event = Event(env)
+                resp = RetryableEventError(
+                    event=event,
+                    body=f"Retryable gateway error: {exc}",
+                    delay=self._retry_delay,
+                )
+                return resp(env, cb)
+            # Other ClientException will be raised and handled by filters
+            raise
 
     def process(self, env, cb):
         return self.app(env, cb)
