@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2022-2025 OVH SAS
+Copyright (C) 2022-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,7 +45,7 @@ _drop_event(const gchar *queue_name, gchar *key, gchar *msg)
 		G_LOG_LEVEL_INFO,
 		"topic:%s\tkey:%s\tevent:%s",
 		queue_name,
-		key ? "-" : key,
+		key ? key : "-",
 		msg);
 	g_free(key);
 	g_free(msg);
