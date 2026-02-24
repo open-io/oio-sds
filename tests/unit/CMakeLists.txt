@@ -122,4 +122,8 @@ add_executable(test_events_beanstalkd test_events_beanstalkd.c)
 target_link_libraries(test_events_beanstalkd oioevents ${ENLARGED} server)
 add_test(NAME events/beanstalkd COMMAND test_events_beanstalkd)
 
+add_executable(test_kafka test_kafka.c)
+target_link_libraries(test_kafka oioevents ${ENLARGED} ${KAFKA_LIBRARIES})
+add_test(NAME events/kafka COMMAND test_kafka)
+
 endif (NOT SDK_ONLY)
