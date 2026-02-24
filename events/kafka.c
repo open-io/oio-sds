@@ -327,6 +327,14 @@ kafka_publish_message(struct kafka_s *kafka,
 			rd_kafka_poll(kafka->producer, OIO_EVENTS_KAFKA_SYNC_POLL_DELAY / 1000);
 			i += 1;
 			if (i >= OIO_EVENTS_KAFKA_SYNC_MAX_POLLS) {
+				/* Purge the inflight message so librdkafka triggers its
+				 * delivery callback on next poll. As the callback is using
+				 * our local err_sync variable, we must wait for it to return. */
+				rd_kafka_purge(kafka->producer,
+					RD_KAFKA_PURGE_F_QUEUE | RD_KAFKA_PURGE_F_INFLIGHT);
+				while (err_sync == MAGICAL_SYNC) {
+					rd_kafka_poll(kafka->producer, 1);
+				}
 				return TIMEOUT("Sync message still not received, aborting...");
 			}
 		}
