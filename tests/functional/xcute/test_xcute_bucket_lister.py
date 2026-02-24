@@ -235,7 +235,7 @@ class TestBucketLister(BucketListerHelper):
 
         try:
             # Stop crawlers because to avoid auto shrinking
-            self._service("oio-crawler.target", "stop", wait=3)
+            self._service_group("crawler", "stop", wait=3)
 
             self.shard_container(bucket)
 
@@ -246,7 +246,7 @@ class TestBucketLister(BucketListerHelper):
                 nb_shards=2,
             )
         finally:
-            self._service("oio-crawler.target", "start", wait=1)
+            self._service_group("crawler", "start", wait=1)
 
     def test_xcute_bucket_lister_lot_objects(self):
         bucket = "test-xcute-bucket-lister-lot-objects"

@@ -1,5 +1,5 @@
 # Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2024 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -31,7 +31,10 @@ class ElectionTest(CliTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.openio("container delete " + cls.NAME)
+        try:
+            cls.openio("container delete " + cls.NAME)
+        except Exception as err:
+            cls.logger.warning("Failed to delete container %s: %s", cls.NAME, err)
         super().tearDownClass()
 
     def test_election_leave(self):

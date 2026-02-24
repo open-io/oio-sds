@@ -1566,7 +1566,7 @@ class TestAccountClient(AccountBaseTestCase):
         self.assertGreater(len(self.account_client._endpoints), 1)
         # svc_by_addr = {s["addr"]: s for s in account_services}
         first_host = urlparse(self.account_client._endpoints[0])
-        sd_key = self.service_to_systemd_key(first_host.netloc, "account")
+        sd_key = self.service_to_ctl_key(first_host.netloc, "account")
         self.logger.warning("%f Stopping service %s", time.monotonic(), sd_key)
         self._service(sd_key, "stop", wait=1.0)
         self.logger.warning("%f Service %s stopped", time.monotonic(), sd_key)

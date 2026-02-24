@@ -324,11 +324,11 @@ class TestFilterMpuCleanerWithSharding(TestFilterMpuCleaner):
     def setUpClass(cls):
         super(TestFilterMpuCleanerWithSharding, cls).setUpClass()
         # Prevent shrinking to happen
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(TestFilterMpuCleanerWithSharding, cls).tearDownClass()
 
     def setUp(self):

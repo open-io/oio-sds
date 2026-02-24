@@ -66,10 +66,10 @@ class TestBlobRebuilder(BaseTestCase):
         self.content_id = meta["id"]
         self.stopped = []
         # Prevent the chunks' rebuilds by the rdir crawlers
-        self._service("oio-crawler.target", "stop", wait=3)
+        self._service_group("crawler", "stop", wait=3)
 
     def tearDown(self):
-        self._service("oio-crawler.target", "start", wait=1)
+        self._service_group("crawler", "start", wait=1)
         for service in self.stopped:
             self._service(service, "start", wait=3)
         super(TestBlobRebuilder, self).tearDown()

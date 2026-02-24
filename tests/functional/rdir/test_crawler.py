@@ -31,11 +31,11 @@ class RdirCrawlerTestTool(BaseTestCase):
     def setUpClass(cls):
         super(BaseTestCase, cls).setUpClass()
         # Prevent chunks or meta2 rebuilds by the rdir crawlers
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(BaseTestCase, cls).tearDownClass()
 
     def create_container(self, container):

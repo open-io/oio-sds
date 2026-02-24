@@ -30,11 +30,11 @@ class TestRawxFilterChecksum(BaseTestCase):
     def setUpClass(cls):
         super(TestRawxFilterChecksum, cls).setUpClass()
         # Prevent the chunks' rebuilds or moves by the crawlers
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(TestRawxFilterChecksum, cls).tearDownClass()
 
     def setUp(self):

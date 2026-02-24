@@ -762,20 +762,30 @@ class BaseTestCase(CommonTestCase):
             time.sleep(wait)
 
     @classmethod
+    def _service_ctl_cmd(cls) -> list:
+        """
+        Get the base command used to control microservices.
+        """
+        supervisord_cfg = os.getenv("OIOCI_CFG_SUPERVISOR")
+        if supervisord_cfg:
+            cmd = ["supervisorctl", "-c", supervisord_cfg]
+        else:
+            cmd = ["systemctl"]
+            if "OIO_SYSTEMD_SYSTEM" not in os.environ:
+                cmd.append("--user")
+        return cmd
+
+    @classmethod
     def _service(cls, name, action, wait=0):
         """
         Execute a systemctl action on a service, and optionally sleep for
         some seconds before returning.
 
-        :param name: The service or group upon which the command
-            should be executed.
+        :param name: The service on which the command should be executed.
         :param action: The command to send. (E.g. 'start' or 'stop')
         :param wait: The amount of time in seconds to wait after the command.
         """
-        cmd = ["systemctl"]
-        if "OIO_SYSTEMD_SYSTEM" not in os.environ:
-            cmd.append("--user")
-
+        cmd = cls._service_ctl_cmd()
         if action == "daemon-reload":
             cmd.append(action)
         else:
@@ -783,6 +793,25 @@ class BaseTestCase(CommonTestCase):
         check_call(cmd)
         if wait > 0:
             time.sleep(wait)
+
+    @classmethod
+    def _service_group(cls, name, action, wait=0):
+        """
+        Execute a systemctl action on a service group, and optionally sleep for
+        some seconds before returning.
+
+        :param name: The group upon which the command
+            should be executed.
+        :param action: The command to send. (E.g. 'start' or 'stop')
+        :param wait: The amount of time in seconds to wait after the command.
+        """
+        supervisord_cfg = os.getenv("OIOCI_CFG_SUPERVISOR")
+        if supervisord_cfg:
+            group_name = f"{name}:*" if name != "all" else name
+            return cls._service(group_name, action, wait=wait)
+
+        group_name = "oio-cluster.target" if name == "all" else f"oio-{name}.target"
+        return cls._service(group_name, action, wait=wait)
 
     def grouped_services(self, type_, key, reqid=None):
         """
@@ -812,15 +841,34 @@ class BaseTestCase(CommonTestCase):
         with open(watch_file, "w", encoding="utf-8") as outfile:
             yaml.dump(conf, outfile)
 
+    def service_to_ctl_key(self, svc, type_):
+        """
+        Convert a service ID or address to the appropriate key
+        for the microservice supervisor.
+        """
+        if os.getenv("OIOCI_CFG_SUPERVISOR"):
+            return self.service_to_supervisord_key(svc, type_)
+        return self.service_to_systemd_key(svc, type_)
+
+    def service_to_supervisord_key(self, svc, type_):
+        """
+        Convert a service addr or ID to the supervisord key for the same service.
+        """
+        for descr in self.conf["services"][type_]:
+            svcid = descr.get("service_id")
+            if svc == svcid or svc == descr["addr"]:
+                return f"{type_}:{svcid}"
+        raise ValueError(f"{svc} not found in the list of {type_} services")
+
     def service_to_systemd_key(self, svc, type_):
         """
         Convert a service addr or ID to the systemd key for the same service.
         """
         for descr in self.conf["services"][type_]:
             svcid = descr.get("service_id")
-            if svc == svcid:
+            if svc == svcid or svc == descr["addr"]:
                 return descr["unit"]
-            elif svc == descr["addr"]:
+            elif svc == descr.get("num"):
                 return descr["unit"]
         raise ValueError("%s not found in the list of %s services" % (svc, type_))
 

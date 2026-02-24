@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -127,8 +127,8 @@ broker_endpoint = {endpoint}
                     worker.stop()
                     worker.join()
             self.pool = None
-        self._service("oio-rawx.target", "start", wait=1)
-        self._service("oio-event-agent-delete.target", "start", wait=3)
+        self._service_group("rawx", "start", wait=1)
+        self._service_group("event-agent-delete", "start", wait=3)
         self.wait_for_score(("rawx",), score_threshold=10)
         super().tearDown()
 
@@ -235,9 +235,9 @@ broker_endpoint = {endpoint}
         self.create_objects(cname, 12, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
-        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        self._service_group("event-agent-delete", "stop", wait=5)
         # Stop rawx services
-        self._service("oio-rawx.target", "stop", wait=5)
+        self._service_group("rawx", "stop", wait=5)
         # Delete objects created
         for obj in self.created_objects:
             self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)
@@ -265,9 +265,9 @@ broker_endpoint = {endpoint}
         self.create_objects(cname, 12, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
-        self._service("oio-event-agent-delete.target", "stop", wait=1)
+        self._service_group("event-agent-delete", "stop", wait=1)
         # Stop rawx services
-        self._service("oio-rawx.target", "stop", wait=5)
+        self._service_group("rawx", "stop", wait=5)
 
         KafkaEventWorker.process_message = Mock(side_effect=exc.OioProtocolError)
         # Delete objects created
@@ -315,7 +315,7 @@ broker_endpoint = {endpoint}
         self.create_objects(cname, 10, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
-        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        self._service_group("event-agent-delete", "stop", wait=5)
         # Delete objects created
         for obj in self.created_objects:
             self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)
@@ -374,7 +374,7 @@ broker_endpoint = {endpoint}
         self.create_objects(cname, 50, reqid=create_reqid)
         # Stop treating chunks delete events
         self.logger.debug("Stopping the event system responsible for delete events")
-        self._service("oio-event-agent-delete.target", "stop", wait=5)
+        self._service_group("event-agent-delete", "stop", wait=5)
         # Delete objects created
         for obj in self.created_objects:
             self.storage.object_delete(self.account, cname, obj=obj, reqid=delete_reqid)

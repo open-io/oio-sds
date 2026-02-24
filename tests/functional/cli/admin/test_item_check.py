@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -41,7 +41,7 @@ class ItemCheckTest(CliTestCase):
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
         cls.autocontainer = HashedContainerBuilder(bits=cls.FLAT_BITS)
         # Prevent the chunks' rebuilds or moves by the crawlers
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
@@ -65,7 +65,7 @@ class ItemCheckTest(CliTestCase):
                 cls.api.account_delete(acct)
             except Exception as exc:
                 print(f"Failed to delete {acct}: {exc}")
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(ItemCheckTest, cls).tearDownClass()
 
     def setUp(self):
@@ -1686,10 +1686,10 @@ class ItemCheckTest(CliTestCase):
 
         # Stop treating the events
         self.logger.debug("Stopping the event system")
-        self._service("oio-event.target", "stop", wait=8)
+        self._service_group("event", "stop", wait=8)
         # Verify the event-agent is actually stopped
         self.assertRaises(
-            CalledProcessError, self._service, "oio-event.target", "status", wait=0
+            CalledProcessError, self._service_group, "event", "status", wait=0
         )
 
         stderr = None
@@ -1712,7 +1712,7 @@ class ItemCheckTest(CliTestCase):
             self.assert_list_output(expected_items, output)
         finally:
             self.logger.info("stderr was:\n%s", stderr)
-            self._service("oio-event.target", "start", wait=3)
+            self._service_group("event", "start", wait=3)
 
     def test_chunk_check_with_missing_object(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1743,7 +1743,7 @@ class ItemCheckTest(CliTestCase):
         expected_items.append("chunk chunk=%s error" % (chunk["url"]))
 
         # Prevent the deletion of chunks
-        self._service("oio-event.target", "stop", wait=8)
+        self._service_group("event", "stop", wait=8)
 
         try:
             # Delete object
@@ -1756,7 +1756,7 @@ class ItemCheckTest(CliTestCase):
             )
             self.assert_list_output(expected_items, output)
         finally:
-            self._service("oio-event.target", "start", wait=2)
+            self._service_group("event", "start", wait=2)
 
     def test_chunk_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1916,7 +1916,10 @@ class PeersCheckTest(CliTestCase):
         return super(PeersCheckTest, self).setUp()
 
     def tearDown(self):
-        self.openio(f"container delete {self.container}")
+        try:
+            self.api.container_delete(self.account_from_env(), self.container)
+        except Exception as err:
+            self.logger.error("Failed to delete container %s: %s", self.container, err)
         return super(PeersCheckTest, self).tearDown()
 
     def test_meta2_peers_valid(self):

@@ -438,7 +438,7 @@ class TestMeta2Database(BaseTestCase):
 
         # Stop one meta2 service hosting this container
         down_m2 = db_peers[-1]
-        sd_key = self.service_to_systemd_key(down_m2, "meta2")
+        sd_key = self.service_to_ctl_key(down_m2, "meta2")
         self._service(sd_key, "stop", wait=2.0)
         try:
             # Request container deletion. We will get a ServiceBusy error

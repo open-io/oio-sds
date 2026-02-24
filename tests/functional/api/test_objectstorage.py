@@ -2498,7 +2498,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # With a DOWN service
         down_chunk = random.choice(expected_chunks)
         service_id = down_chunk["url"].split("/")[2]
-        systemd_key = self.service_to_systemd_key(service_id, "rawx")
+        systemd_key = self.service_to_ctl_key(service_id, "rawx")
         try:
             # Set the PUT scores to 0 to verify that it is not used
             for chunk in expected_chunks:
@@ -4151,7 +4151,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         # With a DOWN service
         down_chunk = random.choice(expected_chunks)
         service_id = down_chunk["url"].split("/")[2]
-        systemd_key = self.service_to_systemd_key(service_id, "rawx")
+        systemd_key = self.service_to_ctl_key(service_id, "rawx")
         try:
             # Set the PUT scores to 0 to verify that it is not used
             for chunk in expected_chunks:

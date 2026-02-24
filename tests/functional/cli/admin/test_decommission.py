@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 OVH SAS
+# Copyright (C) 2022-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -30,13 +30,13 @@ class ServiceDecommissionTest(CliTestCase):
     def setUpClass(cls):
         super(ServiceDecommissionTest, cls).setUpClass()
         # Prevent the chunks' indexation by crawlers
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
         cls._cls_reload_proxy()
         time.sleep(1)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(ServiceDecommissionTest, cls).tearDownClass()
 
     def setUp(self):
@@ -112,7 +112,7 @@ class ServiceDecommissionTest(CliTestCase):
         if decommission_percentage is not None:
             opts = f"--decommission-percentage {decommission_percentage} " + opts
         else:
-            # Do not pass the parameter, but use 100 for result analyzis
+            # Do not pass the parameter, but use 100 for result analysis
             decommission_percentage = 100
         job_id = self.openio_admin("xcute meta2 decommission %s %s" % (candidate, opts))
         attempts = 15

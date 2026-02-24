@@ -1,5 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -36,11 +36,11 @@ class TestRdirClient(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super(TestRdirClient, cls).setUpClass()
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(TestRdirClient, cls).tearDownClass()
 
     def _push_chunks(self, max_containers=4, max_objects=5, max_chunks=5):
@@ -643,7 +643,7 @@ class TestRdirClient(BaseTestCase):
         if len(rdir_hosts) < 2:
             self.skipTest("This test requires more than 1 rdir assigned per rawx")
         stopped_rdir = rdir_hosts[0]
-        self._service(self.service_to_systemd_key(stopped_rdir, "rdir"), "stop")
+        self._service(self.service_to_ctl_key(stopped_rdir, "rdir"), "stop")
         container_id = "0" * 64
         content_id = "0" * 32
         chunk_id = f"http://{self.rawx_id}/{random.randrange(2**128):064X}"
@@ -672,7 +672,7 @@ class TestRdirClient(BaseTestCase):
                 write_quorum=1,
             )
         finally:
-            self._service(self.service_to_systemd_key(stopped_rdir, "rdir"), "start")
+            self._service(self.service_to_ctl_key(stopped_rdir, "rdir"), "start")
 
     def test_batch_push_delete_chunks(self):
         max_containers = 4

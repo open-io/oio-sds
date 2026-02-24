@@ -338,10 +338,13 @@ class TestConscienceFunctional(BaseTestCase):
 
         # Stop conscience.
         conscience_service = self.conf["services"]["conscience"][0]
-        self._service(conscience_service["unit"], "stop")
+        self._service(self.service_to_ctl_key("1", "conscience"), "stop")
         # Ensure conscience is stopped.
         self.assertRaises(
-            Exception, self._service, conscience_service["unit"], "status"
+            Exception,
+            self._service,
+            self.service_to_ctl_key("1", "conscience"),
+            "status",
         )
 
         def _check_list_rawx(cs=None, request_attempts=1):
@@ -365,7 +368,11 @@ class TestConscienceFunctional(BaseTestCase):
                     self.assertGreater(rawx_srv["scores"]["score.get"], 0)
 
         # Start it again.
-        thread = eventlet.spawn(self._service, conscience_service["unit"], "start")
+        thread = eventlet.spawn(
+            self._service,
+            self.service_to_ctl_key("1", "conscience"),
+            "start",
+        )
 
         # Load all rawx services during the restart on the conscience service
         # which has restarted
@@ -394,7 +401,7 @@ class TestConscienceFunctional(BaseTestCase):
             self.skipTest("Requires at least 2 consciences")
 
         cs_addr = self.conf["services"]["conscience"][0]["addr"]
-        cs_unit = self.conf["services"]["conscience"][0]["unit"]
+        cs_unit = self.service_to_ctl_key("1", "conscience")
 
         # Stop conscience.
         self._service(cs_unit, "stop")
@@ -593,11 +600,10 @@ class TestConscienceFunctional(BaseTestCase):
             expected_services.sort(key=lambda x: x["addr"])
 
             conscience_service = self.conf["services"]["conscience"][0]
-            self._service(conscience_service["unit"], "stop")
+            cs_unit = self.service_to_ctl_key("1", "conscience")
+            self._service(cs_unit, "stop")
             # Ensure conscience is stopped.
-            self.assertRaises(
-                Exception, self._service, conscience_service["unit"], "status"
-            )
+            self.assertRaises(Exception, self._service, cs_unit, "status")
 
             self.maxDiff = None
 
@@ -613,7 +619,7 @@ class TestConscienceFunctional(BaseTestCase):
                 )
 
             # Start it again.
-            thread = eventlet.spawn(self._service, conscience_service["unit"], "start")
+            thread = eventlet.spawn(self._service, cs_unit, "start")
 
             # Load all rawx services during the restart on the conscience service
             # which has restarted
@@ -743,7 +749,7 @@ class TestConscienceFunctional(BaseTestCase):
 
     def test_seamlessly_reload_proxy(self):
         start = time.time()
-        self._service("oio-proxy-1.service", "reload")
+        self._service(self.service_to_ctl_key("proxy-1", "proxy"), "reload")
         exc_count = 0
         # Send requests for 2 seconds and count the number of errors we get
         while time.time() < start + 2.0:
@@ -874,7 +880,10 @@ class TestConscienceFunctional(BaseTestCase):
         must_remove = True
         try:
             # Test the insertion of a new tag
-            self._service("oio-conscience-agent-1.service", "restart")
+            self._service(
+                "oio-conscience-agent-1.service",  # FIXME(FVE): support supervisord
+                "restart",
+            )
             time.sleep(2)
             proxy_service = self.wait_for_service("oioproxy", svc, full=True)
             self.assertIn(
@@ -891,7 +900,10 @@ class TestConscienceFunctional(BaseTestCase):
             watch_conf["stats"].remove(static_conf)
             self.save_watch_conf(svc, watch_conf)
             must_remove = False
-            self._service("oio-conscience-agent-1.service", "restart")
+            self._service(
+                "oio-conscience-agent-1.service",
+                "restart",
+            )
             # /!\ do not call self._deregister_srv() here: we want to check
             # that outdated tags are automatically removed (maybe not immediately).
             for _ in range(5):

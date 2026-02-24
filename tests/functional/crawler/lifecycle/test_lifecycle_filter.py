@@ -1,4 +1,4 @@
-# Copyright (C) 2024-2025 OVH SAS
+# Copyright (C) 2024-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -118,7 +118,7 @@ class TestLifecycleCrawler(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
         cls._cls_lifecycle_consumer = cls._register_consumer(
             topic=DEFAULT_LIFECYCLE_TOPIC
         )
@@ -132,7 +132,7 @@ class TestLifecycleCrawler(BaseTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=2)
+        cls._service_group("crawler", "start", wait=2)
         super().tearDownClass()
 
     def setUp(self):

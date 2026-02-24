@@ -40,8 +40,10 @@ class ContainerTest(CliTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        output = cls.openio("container delete " + cls.NAME)
-        cls.assertOutput("", output)
+        try:
+            cls.openio("container delete " + cls.NAME)
+        except Exception as err:
+            cls.logger.warning("Failed to delete container %s: %s", cls.NAME, err)
         super().tearDownClass()
 
     def setUp(self):
@@ -611,8 +613,10 @@ class TestContainerSharding(CliTestCase):
 
     @classmethod
     def tearDownClass(cls):
-        output = cls.openio("container delete " + cls.NAME)
-        cls.assertOutput("", output)
+        try:
+            cls.openio("container delete " + cls.NAME)
+        except Exception as err:
+            cls.logger.warning("Failed to delete container %s: %s", cls.NAME, err)
         super().tearDownClass()
 
     def test_abort_no_sharding_yet(self):

@@ -1,5 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -36,11 +36,11 @@ class ItemRebuildTest(CliTestCase):
         super(ItemRebuildTest, cls).setUpClass()
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
         # Prevent the chunks' rebuilds by the rdir crawlers
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(ItemRebuildTest, cls).tearDownClass()
 
     def setUp(self):

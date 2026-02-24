@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -58,7 +58,7 @@ class RawxTestSuite(CommonTestCase):
         self._setup()
         _, rawx_path, rawx_addr, _ = self.get_service_url("rawx")
         self.rawx = "http://" + rawx_addr
-        self.rawx_path = rawx_path + "/"
+        self.rawx_path = rawx_path
 
     def _chunk_attr(self, chunk_id, data, path=None):
         if path is not None:
@@ -87,8 +87,7 @@ class RawxTestSuite(CommonTestCase):
         return "/".join((self.rawx, chunkid))
 
     def _chunk_path(self, chunkid):
-        chunkid = chunkid.upper()
-        return self.rawx_path + "/" + chunkid[:3] + "/" + chunkid
+        return "/".join((self.rawx_path, chunkid[:3], chunkid.upper()))
 
     def _setup(self):
         self.container = "blob"
@@ -1035,13 +1034,13 @@ class BlobClientTestSuite(BaseTestCase):
     def setUpClass(cls):
         super(BlobClientTestSuite, cls).setUpClass()
         # Prevent the chunks' rebuilds or moves by the crawlers
-        cls._service("oio-crawler.target", "stop", wait=3)
+        cls._service_group("crawler", "stop", wait=3)
         cls._cls_reload_proxy()
         time.sleep(1)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service("oio-crawler.target", "start", wait=1)
+        cls._service_group("crawler", "start", wait=1)
         super(BlobClientTestSuite, cls).tearDownClass()
 
     def setUp(self):

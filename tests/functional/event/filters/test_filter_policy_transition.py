@@ -154,20 +154,20 @@ class TestFilterPolicyTransition(BaseTestCase):
     def test_transition_internal_transition(self):
         # Stop processing events
         self.logger.debug("Stopping the event system")
-        self._service("oio-event.target", "stop", wait=8)
+        self._service_group("event", "stop", wait=8)
         try:
             # First time to set target policy and emit the event
             self._check_event_transition()
             # Second time to re emit the event
             self._check_event_transition(internal_transition=True)
         finally:
-            self._service("oio-event.target", "start", wait=3)
+            self._service_group("event", "start", wait=3)
 
     def test_transition_after_grace_delay(self):
         """Test if event is re emitted after transition grace delay (~ 2 days)"""
         # Stop processing events
         self.logger.debug("Stopping the event system")
-        self._service("oio-event.target", "stop", wait=8)
+        self._service_group("event", "stop", wait=8)
 
         self.object = "policy-transition/obj-bis"
         self.storage.object_create_ext(
@@ -203,4 +203,4 @@ class TestFilterPolicyTransition(BaseTestCase):
             # Re emit the event as grace delay has passed
             self._check_event_transition()
         finally:
-            self._service("oio-event.target", "start", wait=3)
+            self._service_group("event", "start", wait=3)

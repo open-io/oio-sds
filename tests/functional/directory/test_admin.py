@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -61,7 +61,7 @@ class TestAdmin(BaseTestCase):
         service_id = peers["srv"][1]["host"]
         self.storage.logger.info("Stopping meta2 %s", service_id)
         try:
-            self._service(self.service_to_systemd_key(service_id, "meta2"), "stop")
+            self._service(self.service_to_ctl_key(service_id, "meta2"), "stop")
             election = self.admin.election_leave(
                 "meta2",
                 account=self.account,
@@ -75,7 +75,7 @@ class TestAdmin(BaseTestCase):
                 election[service_id]["status"]["message"],
             )
         finally:
-            self._service(self.service_to_systemd_key(service_id, "meta2"), "start")
+            self._service(self.service_to_ctl_key(service_id, "meta2"), "start")
 
     def test_election_leave_several_service_ids(self):
         status = self.admin.election_status(
