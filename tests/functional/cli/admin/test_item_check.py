@@ -21,7 +21,6 @@ import time
 from subprocess import CalledProcessError
 
 from oio import ObjectStorageApi
-from oio.common.autocontainer import HashedContainerBuilder
 from oio.common.utils import cid_from_name, request_id
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
@@ -31,7 +30,6 @@ from tests.utils import random_str
 class ItemCheckTest(CliTestCase):
     """Functional tests for item to check."""
 
-    FLAT_BITS = 5
     OBJECTS_CREATED = []
 
     @classmethod
@@ -39,7 +37,6 @@ class ItemCheckTest(CliTestCase):
         super(ItemCheckTest, cls).setUpClass()
         cls.check_opts = cls.get_format_opts(fields=("Type", "Item", "Status"))
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
-        cls.autocontainer = HashedContainerBuilder(bits=cls.FLAT_BITS)
         # Prevent the chunks' rebuilds or moves by the crawlers
         cls._service_group("crawler", "stop", wait=3)
 
@@ -101,18 +98,6 @@ class ItemCheckTest(CliTestCase):
             (account, container, obj_name, obj_meta["version"])
         )
         return obj_meta, obj_chunks
-
-    def create_object_auto(self, account, obj_name):
-        reqid = request_id(self.__class__.__name__)
-        container = self.autocontainer(obj_name)
-        obj_chunks, _, _, obj_meta = self.api.object_create_ext(
-            account, container, obj_name=obj_name, data="test_item_check", reqid=reqid
-        )
-        self._wait_for_kafka_events(obj_chunks, reqid)
-        self.__class__.OBJECTS_CREATED.append(
-            (account, container, obj_name, obj_meta["version"])
-        )
-        return container, obj_meta, obj_chunks
 
     def corrupt_chunk(self, chunk):
         _, service_id, chunk_id = chunk.rsplit("/", 2)
@@ -1060,47 +1045,6 @@ class ItemCheckTest(CliTestCase):
             )
         )
 
-        self.assert_list_output(expected_items, output)
-
-    def test_object_check_with_auto(self):
-        self.container, obj_meta, obj_chunks = self.create_object_auto(
-            self.account, self.obj_name
-        )
-        cid = cid_from_name(self.account, self.container)
-
-        expected_items = list()
-        expected_items.append("account account=%s OK" % self.account)
-        expected_items.append(
-            "container account=%s, container=%s, cid=%s OK"
-            % (self.account, self.container, cid)
-        )
-        expected_items.append(
-            "object account=%s, container=%s, cid=%s, obj=%s, content_id=%s, "
-            "version=%s OK"
-            % (
-                self.account,
-                self.container,
-                cid,
-                self.obj_name,
-                obj_meta["id"],
-                obj_meta["version"],
-            )
-        )
-        for chunk in obj_chunks:
-            expected_items.append("chunk chunk=%s OK" % (chunk["url"]))
-
-        # Check all items
-        output = self.openio_admin(
-            "--oio-account %s object check --limit-listings %d %s"
-            " --auto --flat-bits %d %s"
-            % (
-                self.account,
-                self.limit_listings,
-                self.obj_name,
-                self.FLAT_BITS,
-                self.check_opts,
-            )
-        )
         self.assert_list_output(expected_items, output)
 
     def test_object_with_depth(self):

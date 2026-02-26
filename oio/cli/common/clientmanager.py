@@ -31,8 +31,6 @@ class ClientManager(object):
         self._sds_conf = None
         self._namespace = None
         self._admin_mode = None
-        self._flatns_bits = None
-        self._flatns_manager = None
         self._meta1_digits = None
         self._nsinfo = None
         self._account = None
@@ -157,35 +155,6 @@ class ClientManager(object):
                 logger=self.logger,
             )
         return self._storage
-
-    def flatns_set_bits(self, bits):
-        self._flatns_bits = bits
-
-    @property
-    def flatns_manager(self):
-        if self._flatns_manager is not None:
-            return self._flatns_manager
-        from oio.common.autocontainer import HashedContainerBuilder
-
-        options = self.nsinfo["options"]
-        bitlength, offset, size = None, 0, None
-        try:
-            bitlength = int(self._flatns_bits or options["flat_bitlength"])
-        except Exception:
-            from oio.common.exceptions import ConfigurationException
-
-            raise ConfigurationException("Namespace not configured for autocontainers")
-        try:
-            if "flat_hash_offset" in options:
-                offset = int(options["flat_hash_offset"])
-            if "flat_hash_size" in options:
-                size = int(options["flat_hash_size"])
-        except Exception:
-            raise Exception("Invalid autocontainer config: offset/size")
-        self._flatns_manager = HashedContainerBuilder(
-            offset=offset, size=size, bits=bitlength
-        )
-        return self._flatns_manager
 
     @property
     def pool_manager(self):

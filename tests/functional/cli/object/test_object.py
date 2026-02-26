@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020-2025 OVH SAS
+# Copyright (C) 2020-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -212,20 +212,11 @@ class ObjectTest(CliTestCase):
         self.assertEqual(data_json[0]["Deleted"], True)
         self.assertEqual(data_json[1]["Deleted"], False)
 
-    def test_auto_container(self):
-        with open("/etc/fstab", "rb") as source:
-            test_content = source.read()
-            self._test_auto_container(test_content)
-
-    def _test_auto_container(self, test_content):
-        self._test_obj("/etc/fstab", test_content, "06EE0", auto="--auto")
-
     def _test_obj(
         self,
         obj_file,
         test_content,
         cname,
-        auto="",
         with_cid=False,
         with_tls=False,
         oca="md5",
@@ -251,8 +242,7 @@ class ObjectTest(CliTestCase):
             cid_opt = "--cid "
         # TODO ensure a clean environment before the test, and proper cleanup
         # after, so that we can check the container is properly created
-        if not auto:
-            self.assertTrue(data[0]["Created"])
+        self.assertTrue(data[0]["Created"])
 
         opts = self.get_format_opts("json")
         output = self.openio("container list" + opts)
@@ -265,9 +255,6 @@ class ObjectTest(CliTestCase):
         data = self.json_loads(output)
         self.assert_show_fields(data, CONTAINER_FIELDS)
 
-        fake_cname = cname
-        if auto:
-            fake_cname = "_"
         obj_name = os.path.basename(obj_file)
         opts = self.get_format_opts("json")
         if with_tls:
@@ -277,10 +264,10 @@ class ObjectTest(CliTestCase):
             opts += " --checksum-algo " + oca
         expected_created_objects = 2
         if not use_stdin:
-            command = f"object create {auto} {fake_cname} {obj_file} {obj_file} {opts}"
+            command = f"object create {cname} {obj_file} {obj_file} {opts}"
             output = self.openio(command)
         else:
-            command = f"object create {auto} {fake_cname} - {opts}"
+            command = f"object create {cname} - {opts}"
             # Check stdin without specifying object name is forbidden
             self.assertRaises(CommandFailed, self.openio, command, stdin=test_content)
             command = command + " --name " + obj_name
@@ -369,97 +356,6 @@ class ObjectTest(CliTestCase):
 
     def test_drain_with_cid(self):
         self._test_drain(with_cid=True)
-
-    def _test_autocontainer_object_listing(self, args="", env=None):
-        obj_count = 7
-        prefix = random_str(8)
-        expected = []
-        # TODO(FVE): find a quicker way to upload several objects
-        commands = []
-        for i in range(obj_count):
-            obj_name = f"{prefix}_{i}"
-            commands.append(
-                " ".join(
-                    [
-                        "object create --auto /etc/fstab",
-                        "--name ",
-                        obj_name,
-                        args,
-                    ]
-                )
-            )
-            expected.append(obj_name)
-        self.openio_batch(commands, env=env)
-
-        # Default listing
-        opts = self.get_format_opts("json") + " --attempts 3"
-        output = self.openio(
-            "object list --auto --prefix " + prefix + " " + opts + " " + args, env=env
-        )
-        listing = self.json_loads(output)
-        self.assertEqual(obj_count, len(listing))
-        for obj in listing:
-            # 4 columns
-            self.assertEqual(4, len(obj))
-
-        # Listing with properties
-        output = self.openio(
-            "object list --auto --properties --prefix "
-            + prefix
-            + " "
-            + opts
-            + " "
-            + args,
-            env=env,
-        )
-        listing = self.json_loads(output)
-        self.assertEqual(obj_count, len(listing))
-        for obj in listing:
-            # 10 columns
-            self.assertEqual(10, len(obj))
-
-        # Unpaged listing
-        output = self.openio(
-            "object list --auto --no-paging --prefix "
-            + prefix
-            + " "
-            + opts
-            + " "
-            + args,
-            env=env,
-        )
-        listing = self.json_loads(output)
-        actual = sorted(x["Name"] for x in listing)
-        self.assertEqual(expected, actual)
-        for obj in listing:
-            # 4 columns
-            self.assertEqual(4, len(obj))
-
-        # Cleanup
-        opts = self.get_format_opts("json")
-        output = self.openio(
-            "container list " + opts,
-            env=env,
-        )
-        listing = self.json_loads(output)
-        to_clean = [(env.get("OIO_ACCOUNT"), x["Name"]) for x in listing]
-        self._containers_to_clean.extend(to_clean)
-
-    def test_autocontainer_object_listing(self):
-        self.skipTest("Deprecated")
-        env = dict(os.environ)
-        env["OIO_ACCOUNT"] = f"ACT_{uuid.uuid4().hex}"
-        self._test_autocontainer_object_listing(env=env)
-
-    def test_autocontainer_object_listing_other_flatns(self):
-        self.skipTest("Deprecated")
-        env = dict(os.environ)
-        env["OIO_ACCOUNT"] = f"ACT_{uuid.uuid4().hex}"
-        self._test_autocontainer_object_listing("--flat-bits 8", env=env)
-        opts = self.get_format_opts("json")
-        output = self.openio("container list " + opts, env=env)
-        for entry in self.json_loads(output):
-            self.assertEqual(len(entry["Name"]), 2)
 
     def _test_object_link(self, with_cid=False):
         if not true_value(self.conf.get("shallow_copy")):
