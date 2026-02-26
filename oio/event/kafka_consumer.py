@@ -53,6 +53,8 @@ from oio.event.filters.base import PausePipeline
 DEFAULT_BATCH_SIZE = 100
 DEFAULT_BATCH_INTERVAL = 1.0
 DEFAULT_MAX_RETRY_FLUSH = 30
+DEFAULT_RESTART_BACKOFF_MAX = 30
+DEFAULT_RESTART_STABILITY_THRESHOLD = 300
 
 
 class KafkaFlushException(Exception):
@@ -886,6 +888,7 @@ class KafkaConsumerPool:
         self.worker_class = worker_class
         self.worker_kwargs = kwargs
         self._workers = {}
+        self._statsd = get_statsd(conf=conf)
 
         self._batch_size = int_value(self.conf.get("batch_size"), DEFAULT_BATCH_SIZE)
         # Instantiate events queues
@@ -985,6 +988,19 @@ class KafkaConsumerPool:
                 total_processed_events += worker.processed_events.value
         return total_processed_events
 
+    def _stop_and_join_all_workers(self, reason):
+        self.logger.info("Stopping all workers (%s)", reason)
+        for worker_id, worker in self._workers.items():
+            if worker is None:
+                continue
+            self.logger.info("Stopping worker %s", worker_id)
+            worker.stop()
+        for worker_id, worker in self._workers.items():
+            if worker is None:
+                continue
+            worker.join()
+            self.logger.info("Worker %s joined successfully", worker_id)
+
     def run(self):
         self.running = True
         signal.signal(signal.SIGTERM, lambda _sig, _stack: self.stop())
@@ -994,6 +1010,15 @@ class KafkaConsumerPool:
 
         self._workers = {w: None for w in range(self.processes)}
         self._workers["feeder"] = None
+        restart_count = 0
+        backoff_max = int_value(
+            self.conf.get("restart_backoff_max"), DEFAULT_RESTART_BACKOFF_MAX
+        )
+        stability_threshold = int_value(
+            self.conf.get("restart_stability_threshold"),
+            DEFAULT_RESTART_STABILITY_THRESHOLD,
+        )
+        last_restart_time = None
 
         while self.running:
             if self._max_processed_events_reached():
@@ -1003,23 +1028,50 @@ class KafkaConsumerPool:
                     "Stopping all workers."
                 )
                 self.stop()
+            restart_requested = False
+            restart_reason = None
+            restart_worker_type = None
             for worker_id, instance in self._workers.items():
-                if instance is None or not instance.is_alive():
-                    if instance:
-                        self.logger.info(
-                            "Joining dead worker %s (exitcode=%s)",
-                            worker_id,
-                            instance.exitcode,
-                        )
-                        instance.join()
+                if instance is None:
                     factory = worker_factories.get(worker_id, self._start_worker)
                     factory(worker_id)
+                elif not instance.is_alive():
+                    self.logger.info(
+                        "Joining dead worker %s (exitcode=%s)",
+                        worker_id,
+                        instance.exitcode,
+                    )
+                    instance.join()
+                    restart_requested = True
+                    restart_reason = f"worker {worker_id} died"
+                    restart_worker_type = (
+                        "feeder" if worker_id == "feeder" else "worker"
+                    )
+                    break
+
+            if restart_requested:
+                self._statsd.incr(
+                    f"openio.event.{self.topic}.workers_restart.{restart_worker_type}_died"
+                )
+                self._stop_and_join_all_workers(restart_reason)
+                restart_count += 1
+                last_restart_time = time.time()
+                backoff_delay = min(backoff_max, 2 ** (restart_count - 1))
+                self.logger.info(
+                    "Restarting all workers after %.1fs backoff (attempt %d)",
+                    backoff_delay,
+                    restart_count,
+                )
+                time.sleep(backoff_delay)
+                self._workers = {w: None for w in range(self.processes)}
+                self._workers["feeder"] = None
+                continue
+            if last_restart_time is not None:
+                stable_for = time.time() - last_restart_time
+                if stable_for >= stability_threshold:
+                    restart_count = 0
+                    last_restart_time = None
             time.sleep(1)
 
-        for worker_id, worker in self._workers.items():
-            self.logger.info("Stopping worker %s", worker_id)
-            worker.stop()
-        for worker_id, worker in self._workers.items():
-            worker.join()
-            self.logger.info("Worker %s joined successfully", worker_id)
+        self._stop_and_join_all_workers("pool stopping")
         self.logger.info("All workers stopped")

@@ -93,6 +93,11 @@ event_queue_type = default
 event_queue_ids =
 # Rate limit the events processing (0 = no limit)
 events_per_second = 0
+# Worker restart configuration
+# Maximum delay in seconds between restart attempts (starts at 1s, doubles each time)
+restart_backoff_max = 30
+# Time in seconds of stability before resetting the restart counter
+restart_stability_threshold = 300
 # Specify kafka options with prefixes
 #kafka_consumer_
 #kafka_producer_
