@@ -2,7 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2024 OVH SAS
+Copyright (C) 2024-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -42,15 +42,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"CREATE INDEX IF NOT EXISTS serv_by_cid on services (cid);" \
 	"CREATE INDEX IF NOT EXISTS serv_by_srvtype on services (cid,srvtype);" \
 	"INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"schema_version\",\"1.0\");" \
+		"VALUES ('schema_version','1.0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.admin\",\"1:0\");" \
+		"VALUES ('version:main.admin','1:0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.users\",\"1:0\");" \
+		"VALUES ('version:main.users','1:0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.services\",\"1:0\");" \
+		"VALUES ('version:main.services','1:0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.properties\",\"1:0\")"
+		"VALUES ('version:main.properties','1:0')"
 
 # include <glib.h>
 # include <metautils/lib/metautils.h>

@@ -2,6 +2,7 @@
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,13 +32,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		"prefixes TEXT NOT NULL," \
 		"PRIMARY KEY (addr));" \
 	"INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"schema_version\",\"1.0\");" \
+		"VALUES ('schema_version','1.0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.admin\",\"1:0\");" \
+		"VALUES ('version:main.admin','1:0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.meta1\",\"1:0\");" \
+		"VALUES ('version:main.meta1','1:0');" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.meta1_ref\",\"1:0\");"
+		"VALUES ('version:main.meta1_ref','1:0');"
 
 struct meta0_backend_s;
 struct sqlx_repository_s;

@@ -232,7 +232,7 @@ class Lifecycle(Meta2Filter):
 
         Main container could be the container itself,
         Root container in case of shard,
-        Associated container if +sgement
+        Associated container if +segment
         """
         try:
             # Retrieve properties from root container
@@ -384,7 +384,7 @@ class Lifecycle(Meta2Filter):
         """Process current container:
 
         Get information about container from associated main container
-        Get and load lifecycle configuratiion
+        Get and load lifecycle configuration
         Reorder rules and apply each one in defined order
         """
         meta2db = Meta2DB(self.app_env, env)
@@ -699,7 +699,7 @@ class Lifecycle(Meta2Filter):
         """
         statement = (
             "INSERT OR REPLACE INTO admin(k,v) "
-            f'VALUES ("{self.PROGRESSION_MARKER_PREFIX}{key}", "1");'
+            f"VALUES ('{self.PROGRESSION_MARKER_PREFIX}{key}', '1');"
         )
         res = meta2db.execute_sql(statement, open_mode="rw")
         return res
@@ -709,7 +709,7 @@ class Lifecycle(Meta2Filter):
         Load progression from database
         """
         statement = (
-            f'SELECT k, v FROM admin where k LIKE "{self.PROGRESSION_MARKER_PREFIX}%";'
+            f"SELECT k, v FROM admin where k LIKE '{self.PROGRESSION_MARKER_PREFIX}%';"
         )
         processed = []
         for key, _value in meta2db.execute_sql(statement, open_mode="ro"):
