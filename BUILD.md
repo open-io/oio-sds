@@ -90,7 +90,7 @@ source oiovenv/bin/activate
 
 Then install the python module inside your virtualenv:
 ```
-pip install -e ${SRCDIR}
+pip install -e "${SRCDIR}.[all]"
 ${SRCDIR}/tools/patch-python-modules.sh
 ```
 
@@ -153,7 +153,7 @@ Building zookeeper from source requires maven.
 - start redpanda from oio-sds/docker -> `docker-compose -f redpanda.docker-compose.yml up -d`
 
 ### Install python3 packages
-- `pip install .`
+- `pip install -e ".[all]"`
 - `pip install -e ".[test]"`
 
 ### Reset stack and start it all
@@ -162,5 +162,5 @@ Building zookeeper from source requires maven.
 #### Check if openio responds correctly
 - `openio cluster show`
 #### Check the services in systemctl
-- `systemctl --user list-dependencies oio-cluster.target`  
+- `systemctl --user list-dependencies oio-cluster.target`
 (alternative would be `openioctl.sh -c status|status2`)
