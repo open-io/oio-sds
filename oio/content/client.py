@@ -136,7 +136,7 @@ class ContentClient(RawxScoreMixin, ProxyClient):
         params = {**params} if params else {}
         if cid:
             params["cid"] = cid
-        else:
+        if account and reference:
             params["acct"] = account
             params["ref"] = reference
         if path:

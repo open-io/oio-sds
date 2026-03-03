@@ -324,6 +324,8 @@ class Content(object):
     def _create_object(self, **kwargs):
         data = {"chunks": self.chunks.raw(), "properties": self.properties}
         self.content_client.content_create(
+            account=self.account,
+            reference=self.container_name,
             cid=self.container_id,
             path=self.path,
             content_id=self.content_id,

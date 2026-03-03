@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import warnings
+
 from oio.blob.client import BlobClient
 from oio.common.constants import SHARDING_ACCOUNT_PREFIX
 from oio.common.exceptions import ContentNotFound, NotFound
@@ -92,7 +94,7 @@ class ContentFactory(object):
     def get(
         self, container_id, content_id, account=None, container_name=None, **kwargs
     ):
-        # Deprecated, prefer using get_by_path_and_version.
+        warnings.warn("prefer using get_by_path_and_version", DeprecationWarning)
         # Using path and versions allows to resolve objects in sharded containers.
         try:
             meta, chunks = self.content_client.content_locate(
@@ -154,7 +156,13 @@ class ContentFactory(object):
         **kwargs,
     ):
         meta, chunks = self.content_client.content_prepare(
-            cid=container_id, path=path, size=size, stgpol=policy, **kwargs
+            account=account,
+            reference=container_name,
+            cid=container_id,
+            path=path,
+            size=size,
+            stgpol=policy,
+            **kwargs,
         )
 
         storage_method = STORAGE_METHODS.load(meta["chunk_method"])
