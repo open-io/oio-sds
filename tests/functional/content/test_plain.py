@@ -27,7 +27,7 @@ from oio.common.exceptions import (
 )
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import parse_chunk_method
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from tests.functional.content.test_content import hash_data, hash_stream, random_data
@@ -69,13 +69,18 @@ class TestPlainContent(BaseTestCase):
     def _test_create(self, stgpol, data_size):
         data = random_data(data_size)
         content = self.content_factory.new(
-            self.container_id, self.content, len(data), stgpol
+            self.container_id,
+            self.content,
+            len(data),
+            stgpol,
+            account=self.account,
+            container_name=self.container_name,
         )
 
-        content.create(BytesIO(data))
+        content.create(BytesIO(data), reqid=request_id("test-plain-"))
 
         meta, chunks = self.content_client.content_locate(
-            cid=self.container_id, content=content.content_id
+            cid=self.container_id, path=content.path, content=content.content_id
         )
         self.assertEqual(meta["hash"], hash_data(data, algorithm="md5"))
         self.assertEqual(meta["length"], str(len(data)))
@@ -162,9 +167,11 @@ class TestPlainContent(BaseTestCase):
             len(data),
             stgpol,
             extra_properties=extra_properties,
+            account=self.account,
+            container_name=self.container_name,
         )
 
-        old_content.create(BytesIO(data))
+        old_content.create(BytesIO(data), reqid=request_id("test-plain-"))
 
         broken_chunks_info = {}
         for pos, idx in broken_pos_list:
@@ -183,7 +190,12 @@ class TestPlainContent(BaseTestCase):
 
         # get the new structure of the uploaded content
         return (
-            self.content_factory.get(self.container_id, old_content.content_id),
+            self.content_factory.get_by_path_and_version(
+                self.container_id,
+                old_content.content_id,
+                old_content.path,
+                old_content.version,
+            ),
             broken_chunks_info,
         )
 
@@ -202,8 +214,8 @@ class TestPlainContent(BaseTestCase):
         )
 
         # get the new structure of the content
-        rebuilt_content = self.content_factory.get(
-            self.container_id, content.content_id
+        rebuilt_content = self.content_factory.get_by_path_and_version(
+            self.container_id, content.content_id, content.path, content.version
         )
 
         # find the rebuilt chunk
@@ -353,7 +365,7 @@ class TestPlainContent(BaseTestCase):
             data = random_data(self.chunk_size)
             content, _ = self._new_content(stgpol, data)
             _meta, chunks = self.content_client.content_locate(
-                cid=self.container_id, content=content.content_id
+                cid=self.container_id, path=content.path, content=content.content_id
             )
             for _ in range(2):
                 spare_data = {"notin": chunks, "broken": []}
@@ -361,6 +373,7 @@ class TestPlainContent(BaseTestCase):
                     self.content_client.content_spare(
                         cid=self.container_id,
                         content=content.content_id,
+                        path=content.path,
                         data=spare_data,
                         stgpol=stgpol,
                         position=chunks[0]["pos"],
