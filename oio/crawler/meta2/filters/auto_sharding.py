@@ -102,6 +102,7 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
         self.sharding_stuck_timeout = self.step_timeout * 2
 
         self.api = self.app_env["api"]
+        self.admin_client = self.api.admin
         self.directory_client = self.api.directory
         self.container_sharding = ContainerSharding(
             self.conf,
@@ -116,6 +117,7 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
         self.cleaning_errors = 0
         self.huge_databases = 0
         self.possible_orphan_shards = 0
+        self.possible_out_of_sync_db = 0
         self.orphan_shards = 0
         self.sharding_in_progress = 0
         self.sharding_no_change = 0
@@ -165,6 +167,25 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
                             int(self.sharding_stuck_timeout),
                         )
                         self.orphan_shards += 1
+                        return self.app(env, cb)
+                    master_timestamp = self.api.container_get_properties(
+                        cid=meta2db.cid,
+                        force_master=True,
+                        reqid=reqid,
+                    )["system"].get(M2_PROP_SHARDING_TIMESTAMP)
+                    master_timestamp = int_value(master_timestamp, 0) / 1000000.0
+                    if sharding_timestamp != master_timestamp:
+                        self.possible_out_of_sync_db += 1
+                        self.logger.warning(
+                            "Container %s may be out of sync "
+                            "and has been in sharding for more than %ds! "
+                            "Attempting election sync.",
+                            meta2db.cid,
+                            int(self.sharding_stuck_timeout),
+                        )
+                        self.admin_client.election_sync(
+                            service_type="meta2", cid=meta2db.cid, reqid=reqid
+                        )
                         return self.app(env, cb)
                     self.logger.warning(
                         "Sharding of container %s has been in progress "
@@ -436,6 +457,7 @@ class AutomaticSharding(Meta2Filter, CheckShardingMixin):
             "errors": self.errors,
             "possible_orphan_shards": self.possible_orphan_shards,
             "orphan_shards": self.orphan_shards,
+            "possible_out_of_sync_db": self.possible_out_of_sync_db,
             "cleaning_successes": self.cleaning_successes,
             "cleaning_errors": self.cleaning_errors,
             "huge_databases": self.huge_databases,
