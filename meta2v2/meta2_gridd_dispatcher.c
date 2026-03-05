@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -187,6 +187,7 @@ static gridd_filter M2V2_FLUSH_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
+	meta2_filter_extract_limit,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,

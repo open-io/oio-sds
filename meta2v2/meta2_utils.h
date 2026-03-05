@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -346,7 +346,7 @@ GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
-		gpointer u0, gboolean *truncated);
+		gpointer u0, gint64 limit, gboolean *truncated);
 
 GError* m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 		gpointer u0, gint64 limit, gboolean *truncated);

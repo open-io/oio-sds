@@ -551,8 +551,12 @@ class ContainerClient(ProxyClient):
         data = json.dumps(data)
         self._request("POST", "/raw_delete", data=data, params=params, **kwargs)
 
-    def container_flush(self, account=None, reference=None, cid=None, **kwargs):
+    def container_flush(
+        self, account=None, reference=None, cid=None, limit=None, **kwargs
+    ):
         params = self._make_params(account=account, reference=reference, cid=cid)
+        if limit:
+            params.update({"limit": limit})
         resp, _ = self._request("POST", "/flush", params=params, **kwargs)
         return {"truncated": boolean_value(resp.headers.get("x-oio-truncated"), False)}
 

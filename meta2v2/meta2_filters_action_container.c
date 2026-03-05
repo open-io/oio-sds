@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -164,8 +164,17 @@ meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 	GSList *beans_list_list = NULL;
 	gboolean truncated = FALSE;
 
+	const gchar *limit_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LIMIT);
+	gint64 limit;
+	/* If no limit found in the context, take the default one in the conf.
+	 * Otherwise, take the lowest one. */
+	if (!oio_str_is_number(limit_str, &limit) || limit <= 0 ||
+			limit > meta2_flush_limit) {
+		limit = meta2_flush_limit;
+	}
+
 	GError *err = meta2_backend_flush_container(meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx), _bean_list_cb, &beans_list_list,
+			meta2_filter_ctx_get_url(ctx), limit, _bean_list_cb, &beans_list_list,
 			&truncated);
 
 	for (GSList *l=beans_list_list; l; l=l->next) {

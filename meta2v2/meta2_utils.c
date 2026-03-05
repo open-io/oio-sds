@@ -3645,14 +3645,15 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 GError*
 m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
-		gboolean *truncated)
+		gint64 limit, gboolean *truncated)
 {
 	GError *err = NULL;
-	gint64 limit = meta2_flush_limit + 1;
 
 	GPtrArray *aliases = g_ptr_array_new();
 	GVariant *params[3] = {NULL};
 	gchar sql[32];
+	// Add 1 to the limit to determine if the request is truncated or not.
+	limit = limit + 1;
 	g_snprintf(sql, 32, "1 LIMIT %"G_GINT64_FORMAT, limit);
 	err = ALIASES_load(sq3, sql, params, _bean_buffer_cb, aliases);
 	metautils_gvariant_unrefv(params);
@@ -3665,8 +3666,9 @@ m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		*truncated = TRUE;
 	}
 
-	if (!err)
+	if (!err) {
 		err = _real_delete_aliases(sq3, aliases, cb, u0);
+	}
 	_bean_cleanv2(aliases);
 
 	if (!err && !(*truncated)) {
@@ -3827,6 +3829,10 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		}
 
 		aliases->pdata[i] = NULL;
+	}
+
+	if (err) {
+		goto end;
 	}
 
 	gint64 obj_count = m2db_get_obj_count(sq3);

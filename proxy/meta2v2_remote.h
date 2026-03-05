@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -85,6 +85,7 @@ GByteArray* m2v2_remote_pack_ISEMPTY(
 
 GByteArray* m2v2_remote_pack_FLUSH(
 		struct oio_url_s *url,
+		const char *limit_str,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_PURGEC(

@@ -1326,7 +1326,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 GError *
 meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
-		m2_onbean_cb cb, gpointer u0, gboolean *truncated)
+		gint64 limit, m2_onbean_cb cb, gpointer u0, gboolean *truncated)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1337,7 +1337,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_flush_container(sq3, cb, u0, truncated);
+			err = m2db_flush_container(sq3, cb, u0, limit, truncated);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err) {

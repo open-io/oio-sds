@@ -1562,17 +1562,25 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *j UNUSED
 }
 
 static enum http_rc_e
-action_m2_container_flush (struct req_args_s *args, struct json_object *j UNUSED)
+action_m2_container_flush(struct req_args_s *args, struct json_object *j UNUSED)
 {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url, DL()); }
+	GError *err = NULL;
 	gboolean truncated = FALSE;
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+	const gchar *limit_str = OPT("limit");
+	if (limit_str != NULL && !oio_str_is_number(limit_str, NULL)) {
+		err = BADREQ("Invalid limit parameter: %s", limit_str);
+	} else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_FLUSH(args->url, limit_str, DL());
+		}
+		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
 			m2v2_boolean_truncated_extract);
-	if (NULL != err)
-		return _reply_common_error (args, err);
-	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+
+		args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
 			g_strdup(truncated ? "true" : "false"));
-	return _reply_success_json (args, NULL);
+	}
+
+	return _reply_m2_error(args, err);
 }
 
 static enum http_rc_e

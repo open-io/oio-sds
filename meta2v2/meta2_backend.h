@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -84,7 +84,8 @@ GError *meta2_backend_container_isempty (struct meta2_backend_s *m2,
 
 /* Destroy all contents of a container. */
 GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0, gboolean *truncated);
+		struct oio_url_s *url, gint64 limit, m2_onbean_cb cb, gpointer u0,
+		gboolean *truncated);
 
 GError* meta2_backend_purge_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, gint64 *pmaxvers, m2_onbean_cb cb, gpointer u0);

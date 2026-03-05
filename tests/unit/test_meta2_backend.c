@@ -2,7 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -473,7 +473,7 @@ test_container_flush(void)
 
 		/* flush the container */
 		gboolean truncated = FALSE;
-		err = meta2_backend_flush_container(m2, u, NULL, NULL, &truncated);
+		err = meta2_backend_flush_container(m2, u, 42, NULL, NULL, &truncated);
 		g_assert_no_error(err);
 		g_assert(!truncated);
 		check_list_count(m2, u, 0);
