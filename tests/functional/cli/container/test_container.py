@@ -521,6 +521,40 @@ class ContainerTest(CliTestCase):
     def test_container_flush_quickly_with_cid(self):
         self._test_container_flush_quickly(with_cid=True)
 
+    def _test_container_async_flush(self, with_cid=False):
+        cid_opt = ""
+        name = self.NAME
+        if with_cid:
+            cid_opt = "--cid "
+            name = self.CID
+        with tempfile.NamedTemporaryFile() as ntf:
+            ntf.write(b"test_exists")
+            ntf.flush()
+            obj = ntf.name
+            for _ in range(5):
+                obj_name = random_str(6)
+                self.openio(
+                    "object create "
+                    + cid_opt
+                    + name
+                    + " "
+                    + obj
+                    + " --name "
+                    + obj_name
+                )
+        output = self.openio("container flush-async  " + cid_opt + name)
+        # Cannot check that container is flushed because it is asynchronous
+        self.assertEqual("", output)
+        # Clean container as teardown expect an empty one
+        output = self.openio("container flush " + cid_opt + name)
+        self.assertEqual("", output)
+
+    def test_container_async_flush(self):
+        self._test_container_async_flush()
+
+    def test_container_async_flush_with_cid(self):
+        self._test_container_async_flush(with_cid=True)
+
     def _test_container_drain(self, with_cid=False):
         cid_opt = ""
         name = self.NAME
@@ -543,6 +577,7 @@ class ContainerTest(CliTestCase):
                     + obj_name
                 )
         output = self.openio("container drain " + cid_opt + name)
+        # Cannot check that container is drained because it is asynchronous
         self.assertEqual("", output)
         # Clean container as teardown expect an empty one
         output = self.openio("container flush " + cid_opt + name)

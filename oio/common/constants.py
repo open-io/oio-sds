@@ -105,6 +105,14 @@ DRAINING_STATE_NAME = {
     DRAINING_STATE_IN_PROGRESS: "In progress",
 }
 
+FLUSHING_STATE_NEEDED = 1
+FLUSHING_STATE_IN_PROGRESS = 2
+
+FLUSHING_STATE_NAME = {
+    FLUSHING_STATE_NEEDED: "Needed",
+    FLUSHING_STATE_IN_PROGRESS: "In progress",
+}
+
 CONTAINER_HEADERS = {
     "size": "%ssys-m2-usage" % CONTAINER_METADATA_PREFIX,
     "ns": "%ssys-ns" % CONTAINER_METADATA_PREFIX,
@@ -243,6 +251,10 @@ M2_PROP_VERSIONING_POLICY = "sys.m2.policy.version"
 M2_PROP_DRAINING_STATE = "sys.m2.draining.state"
 # Draining timestamp for the container and its shards.
 M2_PROP_DRAINING_TIMESTAMP = "sys.m2.draining.timestamp"
+# Flushing state for the container and its shards.
+M2_PROP_FLUSHING_STATE = "sys.m2.flushing.state"
+# Flushing timestamp for the container and its shards.
+M2_PROP_FLUSHING_TIMESTAMP = "sys.m2.flushing.timestamp"
 # Lifecycle time bypass flag for testing purpose only.
 M2_PROP_LIFECYCLE_TIME_BYPASS = "sys.m2.lifecycle.time_bypass"
 # Lifecycle custom budget

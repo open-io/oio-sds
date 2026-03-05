@@ -26,12 +26,16 @@ from oio.common.constants import (
     BUCKET_PROP_RATELIMIT,
     DRAINING_STATE_NAME,
     DRAINING_STATE_NEEDED,
+    FLUSHING_STATE_NAME,
+    FLUSHING_STATE_NEEDED,
     GLOBAL_RATELIMIT_GROUP,
     M2_PROP_BUCKET_NAME,
     M2_PROP_CTIME,
     M2_PROP_DEL_EXC_VERSIONS,
     M2_PROP_DRAINING_STATE,
     M2_PROP_DRAINING_TIMESTAMP,
+    M2_PROP_FLUSHING_STATE,
+    M2_PROP_FLUSHING_TIMESTAMP,
     M2_PROP_LIFECYCLE_CUSTOM_BUDGET,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
     M2_PROP_OBJECTS,
@@ -789,6 +793,42 @@ class DrainContainer(ContainersCommandMixin, Command):
             )
 
 
+class FlushAsyncContainer(ContainersCommandMixin, Command):
+    """
+    Set the flushing state to 'needed'. Flushing is not performed here,
+    the meta2-crawler will do it on his next pass.
+    """
+
+    log = getLogger(__name__ + ".AsyncFlushContainer")
+
+    def get_parser(self, prog_name):
+        parser = super(FlushAsyncContainer, self).get_parser(prog_name)
+        self.patch_parser_container(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug("take_action(%s)", parsed_args)
+
+        system = {
+            M2_PROP_FLUSHING_STATE: str(FLUSHING_STATE_NEEDED),
+            M2_PROP_FLUSHING_TIMESTAMP: str(round(now() * 1000000)),
+        }
+        for container in parsed_args.containers:
+            account = self.app.client_manager.account
+            cid = None
+            if parsed_args.is_cid:
+                cid = container
+
+            self.app.client_manager.storage.container_set_properties(
+                account,
+                container,
+                cid=cid,
+                system=system,
+                propagate_to_shards=True,
+                reqid=self.app.request_id(prefix="CLI-container-flush-"),
+            )
+
+
 class ShowBucket(ShowOne):
     """Display information about a bucket."""
 
@@ -971,6 +1011,19 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                 if parsed_args.formatter == "table":
                     draining_timestamp = convert_timestamp(draining_timestamp)
                 info["draining.timestamp"] = draining_timestamp
+
+        if M2_PROP_FLUSHING_STATE in sys:
+            flushing_state = sys[M2_PROP_FLUSHING_STATE]
+            try:
+                flushing_state = FLUSHING_STATE_NAME[int(flushing_state)]
+            except (ValueError, KeyError, TypeError):
+                flushing_state = "Unknown"
+            info["flushing.state"] = flushing_state
+            flushing_timestamp = sys.get(M2_PROP_FLUSHING_TIMESTAMP)
+            if flushing_timestamp is not None:
+                if parsed_args.formatter == "table":
+                    flushing_timestamp = convert_timestamp(flushing_timestamp)
+                info["flushing.timestamp"] = flushing_timestamp
 
         objects_drained = sys.get("extra_counter.drained")
         if objects_drained:
