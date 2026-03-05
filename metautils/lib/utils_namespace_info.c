@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -244,9 +245,6 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 	g_string_append_c(out, ',');
 	oio_str_gstring_append_json_pair_int(out, "chunksize", oio_ns_chunk_size);
 	g_string_append(out, ",\"options\":{");
-	oio_str_gstring_append_json_pair_int(out,
-			"flat_bitlength", oio_ns_flat_bits);
-	g_string_append_c(out, ',');
 	oio_str_gstring_append_json_pair(out,
 			"storage_policy", oio_ns_storage_policy);
 	g_string_append_c(out, ',');

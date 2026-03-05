@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -109,23 +109,6 @@ void oio_str_randomize(gchar *d, const gsize dlen, const char *set);
 
 /** Fills 'b' with 'blen' random bytes */
 void oio_buf_randomize(guint8 *b, gsize blen);
-
-/** Fills 'dst' with the name of the container deduced from the given 'src'
- * which is 'srclen' bytes long. If 'srclen' is 0, then src is expected to be
- * NULL-terminated and its strlen() is considered.
- * 'dst' must be at least '(bits-1)/4 + 2' bytes long, to hold the hexadecimal
- * form of the 'bits' first bits of the hash of 'src'.
- * Because a SHA256 checksum is used, the hash will always be 32 bytes longs,
- * and any hexadecimal prefix won't ever use more than 65 bytes including the
- * final NULL character. */
-const char * oio_str_autocontainer (const char *src, guint srclen,
-		char *dst, guint bits);
-
-/** Get the hexadecimal form of the 'bits' first bits of the input
- * 'src' buffer of size 'len'. The 'dst' buffer is used to store the result
- * and a pointer to 'dst' is returned upon success. */
-const char * oio_buf_prefix (const guint8 *src, guint len,
-		char *dst, guint bits);
 
 /** Free a GString including the underlying char array. */
 void oio_str_gstring_free(GString *str);

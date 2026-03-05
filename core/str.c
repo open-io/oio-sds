@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,12 +24,6 @@ License along with this library.
 #include <oioext.h>
 
 #include "internals.h"
-
-static guint8 masks[] = {
-	0x00, 0x80, 0xC0, 0xE0,
-	0xF0, 0xF8, 0xFC, 0xFE,
-	0xFF
-};
 
 static gchar b2h[][2] =
 {
@@ -283,57 +277,6 @@ void oio_str_randomize (gchar *d, const gsize dlen, const char *set) {
 	for (gsize i=0; i<dlen ;i++)
 		d[i] = set [g_rand_int_range (r, 0, len)];
 	d[dlen-1] = '\0';
-}
-
-const char * oio_str_autocontainer (const char *src, guint size,
-		char *dst, guint bits) {
-	guint8 bin[64];
-	gsize len = sizeof(bin);
-
-	g_assert (src != NULL);
-	g_assert (dst != NULL);
-	if (size == 0)
-		size = strlen(src);
-
-	GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
-	g_checksum_update (checksum, (guint8*)src, size);
-	g_checksum_get_digest (checksum, bin, &len);
-	g_checksum_free (checksum);
-
-	return oio_buf_prefix (bin, len, dst, bits);
-}
-
-const char * oio_buf_prefix (const guint8 *bin, guint len,
-		char *dst, guint bits) {
-	g_assert (bin != NULL);
-	g_assert (len > 0);
-	g_assert (dst != NULL);
-
-	if (!bits || bits >= len*8)
-		return NULL;
-
-	const guint div = bits / 8;
-	const guint mod = bits % 8;
-	const guint last = mod ? div+1 : div;
-	if (last > len)
-		return NULL;
-
-	gchar *p = dst;
-	for (guint i=0; i<div ;i++) {
-		const char *s = b2h[ bin[i] ];
-		*(p++) = s[0];
-		*(p++) = s[1];
-	}
-	if (mod) {
-		register guint8 x = bin[last-1] & masks[mod];
-		const char *s = b2h[x];
-		*(p++) = s[0];
-		if (mod > 4)
-			*(p++) = s[1];
-	}
-	*p = '\0';
-
-	return dst;
 }
 
 gchar **oio_strv_append(gchar **tab, gchar *s) {

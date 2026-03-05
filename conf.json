@@ -411,11 +411,6 @@
 				"descr": "Default number of digits to aggregate meta1 databases.",
 				"def": 4, "min": 0, "max": 4 },
 
-			{ "type": "uint", "name": "oio_ns_flat_bits",
-				"key": "ns.flat_bits",
-				"descr": "Default number of bits with flat-NS computation.",
-				"def": 17, "min": 0, "max": 64 },
-
 			{ "type": "int64", "name": "oio_ns_chunk_size",
 				"key": "ns.chunk_size",
 				"descr": "Default chunk size for the given namespace.",

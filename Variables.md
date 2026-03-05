@@ -853,15 +853,6 @@ Used by `gcc`
  * cmake directive: *OIO_NS_CHUNK_SIZE*
  * range: 1 -> G_MAXINT64
 
-### ns.flat_bits
-
-> Default number of bits with flat-NS computation.
-
- * default: **17**
- * type: guint
- * cmake directive: *OIO_NS_FLAT_BITS*
- * range: 0 -> 64
-
 ### ns.meta1_digits
 
 > Default number of digits to aggregate meta1 databases.

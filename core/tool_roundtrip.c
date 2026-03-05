@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2022 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -707,23 +707,6 @@ _roundtrip_append (const char * const * properties)
 }
 
 static void
-_roundtrip_put_autocontainer (const char * const * properties)
-{
-	struct file_info_s fi;
-	_checksum_file (source_path, &fi);
-
-	/* compute the autocontainer with the SHA1, consider only the first 17 bits */
-	char tmp[65];
-	const char *auto_container = oio_buf_prefix (fi.h, fi.hs, tmp, 17);
-
-	/* build a new URL with the computed container name */
-	struct oio_url_s *url_auto = oio_url_dup (url);
-	oio_url_set (url_auto, OIOURL_USER, auto_container);
-	_roundtrip_put_from_file (properties);
-	oio_url_pclean (&url_auto);
-}
-
-static void
 _test_cycle (gconstpointer d)
 {
 	const struct test_data_s *test_data = (const struct test_data_s*) d;
@@ -822,7 +805,6 @@ main(int argc, char **argv)
 		test_func_f func;
 	} putv[] = {
 		{ "put/file/asis", _roundtrip_put_from_file },
-		{ "put/file/autocontainer", _roundtrip_put_autocontainer },
 		{ "append/buffer/asis",_roundtrip_append },
 		{ "update/file/asis", _roundtrip_put_multipart },
 		{ "truncate/file/asis", _roundtrip_put_multipart_truncate },
