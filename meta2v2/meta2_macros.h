@@ -403,6 +403,7 @@ enum draining_state_e {
 	// Container to drain
 	DRAINING_STATE_NEEDED = 1,
 	DRAINING_STATE_IN_PROGRESS,
+	DRAINING_STATE_DONE,
 };
 
 /* Flushing ----------------------------------------------------------------- */
@@ -411,6 +412,7 @@ enum flushing_state_e {
 	// Container to flush
 	FLUSHING_STATE_NEEDED = 1,
 	FLUSHING_STATE_IN_PROGRESS,
+	FLUSHING_STATE_DONE,
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/
