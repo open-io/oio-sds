@@ -207,6 +207,18 @@ void m2db_set_drain_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp);
 
 void m2db_del_drain_timestamp(struct sqlx_sqlite3_s *sq3);
 
+gint64 m2db_get_flush_state(struct sqlx_sqlite3_s *sq3);
+
+void m2db_set_flush_state(struct sqlx_sqlite3_s *sq3, gint64 state);
+
+void m2db_del_flush_state(struct sqlx_sqlite3_s *sq3);
+
+gint64 m2db_get_flush_timestamp(struct sqlx_sqlite3_s *sq3);
+
+void m2db_set_flush_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp);
+
+void m2db_del_flush_timestamp(struct sqlx_sqlite3_s *sq3);
+
 /* Get just the ALIAS, with version allowed */
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out);

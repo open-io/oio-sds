@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -123,6 +123,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # ifndef M2V2_ADMIN_DRAINING_TIMESTAMP
 # define M2V2_ADMIN_DRAINING_TIMESTAMP M2V2_ADMIN_PREFIX_DRAINING "timestamp"
+# endif
+
+# ifndef M2V2_ADMIN_PREFIX_FLUSHING
+# define M2V2_ADMIN_PREFIX_FLUSHING M2V2_ADMIN_PREFIX_SYS "flushing."
+# endif
+
+# ifndef M2V2_ADMIN_FLUSHING_STATE
+# define M2V2_ADMIN_FLUSHING_STATE M2V2_ADMIN_PREFIX_FLUSHING "state"
+# endif
+
+# ifndef M2V2_ADMIN_FLUSHING_TIMESTAMP
+# define M2V2_ADMIN_FLUSHING_TIMESTAMP M2V2_ADMIN_PREFIX_FLUSHING "timestamp"
 # endif
 
 # ifndef M2V2_ADMIN_CTIME
@@ -391,6 +403,14 @@ enum draining_state_e {
 	// Container to drain
 	DRAINING_STATE_NEEDED = 1,
 	DRAINING_STATE_IN_PROGRESS,
+};
+
+/* Flushing ----------------------------------------------------------------- */
+
+enum flushing_state_e {
+	// Container to flush
+	FLUSHING_STATE_NEEDED = 1,
+	FLUSHING_STATE_IN_PROGRESS,
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

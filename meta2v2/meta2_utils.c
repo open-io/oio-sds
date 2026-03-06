@@ -553,6 +553,43 @@ m2db_del_drain_timestamp(struct sqlx_sqlite3_s *sq3)
 	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP);
 }
 
+gint64
+m2db_get_flush_state(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_FLUSHING_STATE, 0);
+}
+
+void
+m2db_set_flush_state(struct sqlx_sqlite3_s *sq3, gint64 state)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_FLUSHING_STATE, (state>0)?state:0);
+}
+
+void
+m2db_del_flush_state(struct sqlx_sqlite3_s *sq3)
+{
+	sqlx_admin_del(sq3, M2V2_ADMIN_FLUSHING_STATE);
+}
+
+gint64
+m2db_get_flush_timestamp(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_FLUSHING_TIMESTAMP, 0);
+}
+
+void
+m2db_set_flush_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_FLUSHING_TIMESTAMP,
+			(timestamp>0)?timestamp:0);
+}
+
+void
+m2db_del_flush_timestamp(struct sqlx_sqlite3_s *sq3)
+{
+	sqlx_admin_del(sq3, M2V2_ADMIN_FLUSHING_TIMESTAMP);
+}
+
 /* GET ---------------------------------------------------------------------- */
 
 static void
@@ -3671,17 +3708,29 @@ m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 	}
 	_bean_cleanv2(aliases);
 
-	if (!err && !(*truncated)) {
-		int rc = sqlx_exec(sq3->db,
-				"DELETE FROM aliases;"
-				"DELETE FROM contents;"
-				"DELETE FROM chunks;"
-				"DELETE FROM properties");
-		if (rc != SQLITE_OK)
-			return SQLITE_GERROR(sq3->db, rc);
-		// reset container size and object count
-		m2db_set_size(sq3, 0);
-		m2db_set_obj_count(sq3, 0);
+	if (!err) {
+		if (!(*truncated)) {
+			int rc = sqlx_exec(sq3->db,
+					"DELETE FROM aliases;"
+					"DELETE FROM contents;"
+					"DELETE FROM chunks;"
+					"DELETE FROM properties");
+			if (rc != SQLITE_OK) {
+				return SQLITE_GERROR(sq3->db, rc);
+			}
+			// reset container size and object count
+			m2db_set_size(sq3, 0);
+			m2db_set_obj_count(sq3, 0);
+			m2db_del_flush_state(sq3);
+			m2db_del_flush_timestamp(sq3);
+		} else {
+			gint64 flush_state = m2db_get_flush_state(sq3);
+			gint64 flush_timestamp = m2db_get_flush_timestamp(sq3);
+			if (flush_state > 0 && flush_timestamp > 0) {
+				m2db_set_flush_state(sq3, FLUSHING_STATE_IN_PROGRESS);
+				m2db_set_flush_timestamp(sq3, oio_ext_real_time());
+			}
+		}
 	}
 
 	return err;
