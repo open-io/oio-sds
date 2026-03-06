@@ -406,6 +406,10 @@ enum draining_state_e {
 	DRAINING_STATE_DONE,
 };
 
+#define DRAINING_IN_PROGRESS(S) ( \
+		   (S) == DRAINING_STATE_NEEDED \
+		|| (S) == DRAINING_STATE_IN_PROGRESS)
+
 /* Flushing ----------------------------------------------------------------- */
 
 enum flushing_state_e {
@@ -414,5 +418,9 @@ enum flushing_state_e {
 	FLUSHING_STATE_IN_PROGRESS,
 	FLUSHING_STATE_DONE,
 };
+
+#define FLUSHING_IN_PROGRESS(S) ( \
+		   (S) == FLUSHING_STATE_NEEDED \
+		|| (S) == FLUSHING_STATE_IN_PROGRESS)
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

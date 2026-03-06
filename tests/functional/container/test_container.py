@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1115,43 +1115,39 @@ class TestMeta2Containers(BaseTestCase):
         self._create_content(path, version=12345)
         self._create_content(path, version=12345, create_status=409)
 
-    def test_drain_during_sharding(self):
+    def _test_data_flush_during_sharding(self, operation: str):
         path = random_content()
         params_container = self.param_ref(self.ref)
         self._create_content(path)
 
-        system = [
-            {"sys.m2.sharding.state": "129"},  # sharding in progress
-            {
-                "sys.m2.sharding.root": "1" * 64,
-                "sys.m2.sharding.state": "3",
-            },  # root container
-        ]
-        for sys in system:
-            props = {"system": sys}
-            resp = self.request(
-                "POST",
-                self.url_container("set_properties"),
-                params=params_container,
-                data=json.dumps(props),
-            )
-            self.assertEqual(204, resp.status)
+        props = {"system": {"sys.m2.sharding.state": "129"}}  # sharding in progress
+        resp = self.request(
+            "POST",
+            self.url_container("set_properties"),
+            params=params_container,
+            data=json.dumps(props),
+        )
+        self.assertEqual(204, resp.status)
 
-            # Try to drain
-            resp = self.request(
-                "POST",
-                self.url_container("drain"),
-                params=params_container,
-            )
-            self.assertEqual(400, resp.status)
+        # Try to do operation
+        resp = self.request(
+            "POST",
+            self.url_container(operation),
+            params=params_container,
+        )
+        self.assertEqual(400, resp.status)
 
-            # No object drain
-            params_content = params_container.copy()
-            params_content["path"] = path
-            resp = self.request(
-                "GET", self.url_content("locate"), params=params_content
-            )
-            self.assertEqual(resp.status, 200)
+        # No object deleted
+        params_content = params_container.copy()
+        params_content["path"] = path
+        resp = self.request("GET", self.url_content("locate"), params=params_content)
+        self.assertEqual(resp.status, 200)
+
+    def test_drain_during_sharding(self):
+        self._test_data_flush_during_sharding("drain")
+
+    def test_flush_during_sharding(self):
+        self._test_data_flush_during_sharding("flush")
 
 
 class TestMeta2Contents(BaseTestCase):

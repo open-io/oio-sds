@@ -26,10 +26,13 @@ from oio.common.constants import (
     DRAINING_STATE_NEEDED,
     EXISTING_SHARD_STATE_ABORTED,
     EXISTING_SHARD_STATE_SHARDED,
+    FLUSHING_STATE_IN_PROGRESS,
+    FLUSHING_STATE_NEEDED,
     HEADER_PREFIX,
     M2_PROP_ACCOUNT_NAME,
     M2_PROP_CONTAINER_NAME,
     M2_PROP_DRAINING_STATE,
+    M2_PROP_FLUSHING_STATE,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_ROOT,
@@ -461,6 +464,14 @@ class ContainerSharding(ProxyClient):
         return draining_state and draining_state in (
             DRAINING_STATE_NEEDED,
             DRAINING_STATE_IN_PROGRESS,
+        )
+
+    @staticmethod
+    def flushing_in_progress(meta):
+        flushing_state = int_value(meta["system"].get(M2_PROP_FLUSHING_STATE), 0)
+        return flushing_state and flushing_state in (
+            FLUSHING_STATE_NEEDED,
+            FLUSHING_STATE_IN_PROGRESS,
         )
 
     @staticmethod
@@ -1896,6 +1907,8 @@ class ContainerSharding(ProxyClient):
             raise ValueError("Sharding already in progress")
         if self.draining_in_progress(meta):
             raise ValueError("Draining in progress")
+        if self.flushing_in_progress(meta):
+            raise ValueError("Flushing in progress")
         root_cid_, current_shard = self.meta_to_shard(meta)
         if root_cid_ is None:
             raise ValueError("Not a shard")
@@ -1951,6 +1964,12 @@ class ContainerSharding(ProxyClient):
             if self.draining_in_progress(neighboring_shard_meta):
                 self.logger.info(
                     "Draining in progress for neighboring shard %s",
+                    neighboring_shard["cid"],
+                )
+                continue
+            if self.flushing_in_progress(neighboring_shard_meta):
+                self.logger.info(
+                    "Flushing in progress for neighboring shard %s",
                     neighboring_shard["cid"],
                 )
                 continue
@@ -2033,6 +2052,19 @@ class ContainerSharding(ProxyClient):
                 # we can just indicate that there has been no modification.
                 self.logger.warning(
                     "Merge temporarily impossible of %s and %s because draining "
+                    "is in progress, retry later: %s",
+                    str(smaller_shard),
+                    str(bigger_shard),
+                    exc,
+                )
+                return False
+            if exc.status == 441:  # Flushing is in progress
+                # The shrinking has not yet started and there is no rollback to do,
+                # because there has been no modification.
+                # On this type of normal (when there are flush) and temporary error,
+                # we can just indicate that there has been no modification.
+                self.logger.warning(
+                    "Merge temporarily impossible of %s and %s because flushing "
                     "is in progress, retry later: %s",
                     str(smaller_shard),
                     str(bigger_shard),

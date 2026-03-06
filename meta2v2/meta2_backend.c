@@ -1337,8 +1337,18 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_flush_container(sq3, cb, u0, limit, truncated);
-			err = sqlx_transaction_end(repctx, err);
+			gint64 sharding_state = sqlx_admin_get_i64(sq3,
+					M2V2_ADMIN_SHARDING_STATE, 0);
+			if (SHARDING_IN_PROGRESS(sharding_state)) {
+				/* Flushing may manipulate a lot of objects, wait for the end of the
+				 * sharding before flushing. */
+				err = BADREQ("Sharding is in progress");
+				// Rollback allows to delete the context properly.
+				err = sqlx_transaction_rollback(repctx, err);
+			} else {
+				err = m2db_flush_container(sq3, cb, u0, limit, truncated);
+				err = sqlx_transaction_end(repctx, err);
+			}
 		}
 		if (!err) {
 			m2b_add_modified_container(m2, sq3);
@@ -3252,12 +3262,24 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			goto rollback;
 		}
 
-		if (sqlx_admin_has(sq3, M2V2_ADMIN_DRAINING_STATE)) {
+		gint64 draining_state = sqlx_admin_get_i64(sq3, M2V2_ADMIN_DRAINING_STATE, 0);
+		if (DRAINING_IN_PROGRESS(draining_state)) {
 			/* The drain uses a marker to know where it is.
 			 * The sharding or shrinking will make that marker obsolete
 			 * for the resulting shards. */
 			err = NEWERROR(CODE_CONTAINER_DRAINING,
 					"Container draining needed or in progress, cannot shard"
+			);
+			goto rollback;
+		}
+
+		gint64 flush_state = sqlx_admin_get_i64(sq3, M2V2_ADMIN_FLUSHING_STATE, 0);
+		if (FLUSHING_IN_PROGRESS(flush_state)) {
+			/* The flush deletes objects, so the database will be smaller, no
+			 * need to shard.
+			 */
+			err = NEWERROR(CODE_CONTAINER_FLUSHING,
+					"Container flushing needed or in progress, cannot shard"
 			);
 			goto rollback;
 		}
@@ -3391,12 +3413,22 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 			goto rollback;
 		}
 
-		if (sqlx_admin_has(sq3, M2V2_ADMIN_DRAINING_STATE)) {
+		gint64 draining_state = sqlx_admin_get_i64(sq3, M2V2_ADMIN_DRAINING_STATE, 0);
+		if (DRAINING_IN_PROGRESS(draining_state)) {
 			/* The drain uses a marker to know where it is.
 			 * The sharding or shrinking will make that marker obsolete
 			 * for the resulting shards. */
 			err = NEWERROR(CODE_CONTAINER_DRAINING,
 					"Container draining needed or in progress, cannot shrink"
+			);
+			goto rollback;
+		}
+
+		gint64 flushing_state = sqlx_admin_get_i64(sq3, M2V2_ADMIN_FLUSHING_STATE, 0);
+		if (FLUSHING_IN_PROGRESS(flushing_state)) {
+			/* Container is getting flushed, wait for the end before shrinking. */
+			err = NEWERROR(CODE_CONTAINER_FLUSHING,
+					"Container flushing needed or in progress, cannot shrink"
 			);
 			goto rollback;
 		}

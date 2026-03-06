@@ -503,12 +503,6 @@ m2db_set_drain_state(struct sqlx_sqlite3_s *sq3, gint64 state)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_DRAINING_STATE, (state>0)?state:0);
 }
 
-void
-m2db_del_drain_state(struct sqlx_sqlite3_s *sq3)
-{
-	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_STATE);
-}
-
 GError *
 m2db_get_drain_marker(struct sqlx_sqlite3_s *sq3, gchar **result)
 {
@@ -534,23 +528,11 @@ m2db_del_drain_marker(struct sqlx_sqlite3_s *sq3)
 	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_MARKER);
 }
 
-gint64
-m2db_get_drain_timestamp(struct sqlx_sqlite3_s *sq3)
-{
-	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP, 0);
-}
-
 void
 m2db_set_drain_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp)
 {
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP,
 			(timestamp>0)?timestamp:0);
-}
-
-void
-m2db_del_drain_timestamp(struct sqlx_sqlite3_s *sq3)
-{
-	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP);
 }
 
 gint64
@@ -565,12 +547,6 @@ m2db_set_flush_state(struct sqlx_sqlite3_s *sq3, gint64 state)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_FLUSHING_STATE, (state>0)?state:0);
 }
 
-void
-m2db_del_flush_state(struct sqlx_sqlite3_s *sq3)
-{
-	sqlx_admin_del(sq3, M2V2_ADMIN_FLUSHING_STATE);
-}
-
 gint64
 m2db_get_flush_timestamp(struct sqlx_sqlite3_s *sq3)
 {
@@ -582,12 +558,6 @@ m2db_set_flush_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp)
 {
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_FLUSHING_TIMESTAMP,
 			(timestamp>0)?timestamp:0);
-}
-
-void
-m2db_del_flush_timestamp(struct sqlx_sqlite3_s *sq3)
-{
-	sqlx_admin_del(sq3, M2V2_ADMIN_FLUSHING_TIMESTAMP);
 }
 
 /* GET ---------------------------------------------------------------------- */
@@ -2791,10 +2761,15 @@ m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
 
 	/* Checks and consistency */
 	gint64 container_draining_state = m2db_get_drain_state(args->sq3);
-	if (container_draining_state == DRAINING_STATE_NEEDED ||
-			container_draining_state == DRAINING_STATE_IN_PROGRESS) {
+	if DRAINING_IN_PROGRESS(container_draining_state) {
 		err = NEWERROR(CODE_CONTAINER_DRAINING,
 				"Container draining needed or in progress, cannot restore");
+		goto label_end;
+	}
+	gint64 container_flushing_state = m2db_get_flush_state(args->sq3);
+	if FLUSHING_IN_PROGRESS(container_flushing_state) {
+		err = NEWERROR(CODE_CONTAINER_FLUSHING,
+				"Container flushing needed or in progress, cannot restore");
 		goto label_end;
 	}
 	if (g_strcmp0(CONTENTS_HEADERS_get_chunk_method(current_header)->str,

@@ -194,6 +194,8 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_NOT_ALLOWED:
 		case CODE_CONTAINER_DRAINING:
 			return _reply_forbidden_error(args, err);
+		case CODE_CONTAINER_FLUSHING:
+			return _reply_forbidden_error(args, err);
 		case CODE_POLICY_NOT_SUPPORTED:
 			return _reply_format_error(args, err);
 	}

@@ -21,7 +21,9 @@ from unittest.mock import patch
 from oio.common.constants import (
     DRAINING_STATE_IN_PROGRESS,
     EXISTING_SHARD_STATE_LOCKED,
+    FLUSHING_STATE_IN_PROGRESS,
     M2_PROP_DRAINING_STATE,
+    M2_PROP_FLUSHING_STATE,
     M2_PROP_SHARDING_STATE,
     M2_PROP_SHARDING_TIMESTAMP,
     NEW_SHARD_STATE_APPLYING_SAVED_WRITES,
@@ -366,6 +368,47 @@ class TestAutoSharding(BaseTestCase):
 
         self.auto_sharding.container_sharding.draining_in_progress = (
             draining_in_progress_override
+        )
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == "shrinking_no_change":
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
+        shards = list(self.container_sharding.show_shards(self.account, self.cname))
+        self.assertEqual(2, len(shards))
+
+    def test_shrinking_while_flushing(self):
+        def _cb(status, _msg):
+            self.assertEqual(500, status)
+
+        for i in range(2):
+            self.storage.object_create(
+                self.account, self.cname, obj_name=f"obj-{i}", data=b"data"
+            )
+        shards = self._find_and_replace(self.cname)
+        shard_cid = shards[0]["cid"]
+        meta2db = self._get_meta2db(None, cid=shard_cid)
+        meta2db_neighbour = self._get_meta2db(None, cid=shards[1]["cid"])
+        self.storage.container_set_properties(
+            None,
+            None,
+            cid=meta2db_neighbour.cid,
+            system={M2_PROP_FLUSHING_STATE: str(FLUSHING_STATE_IN_PROGRESS)},
+        )
+        self.auto_sharding.process(meta2db.env, _cb)
+
+        def _cb(status, _msg):
+            self.assertEqual(200, status)
+
+        self.auto_sharding.reset_stats()
+
+        def flushing_in_progress_override(meta={}):
+            return False
+
+        self.auto_sharding.container_sharding.flushing_in_progress = (
+            flushing_in_progress_override
         )
         self.auto_sharding.process(meta2db.env, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
