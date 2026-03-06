@@ -351,7 +351,7 @@ statsd_port = ${STATSD_PORT}
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = logger check_integrity draining auto_vacuum auto_sharding indexer copy_cleaner sse_checker
+pipeline = logger check_integrity draining flushing auto_vacuum auto_sharding indexer copy_cleaner sse_checker
 
 [filter:indexer]
 use = egg:oio#indexer
@@ -384,7 +384,13 @@ use = egg:oio#check_integrity
 [filter:draining]
 use = egg:oio#draining
 drain_limit = 1000
-drain_limit_per_pass = 100000
+drain_limit_per_pass = 2000
+kafka_cluster_health_topics = oio,oio-chunks,oio-delete-*
+
+[filter:flushing]
+use = egg:oio#flushing
+flush_limit = 1000
+flush_limit_per_pass = 2000
 kafka_cluster_health_topics = oio,oio-chunks,oio-delete-*
 
 [filter:copy_cleaner]

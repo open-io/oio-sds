@@ -31,7 +31,7 @@ syslog_prefix = OIO,OPENIO,meta2-crawler,1
 statsd_prefix = meta2-crawler
 
 [pipeline:main]
-pipeline = logger draining auto_vacuum auto_sharding indexer sse_checker
+pipeline = logger draining flushing auto_vacuum auto_sharding indexer sse_checker
 
 [filter:indexer]
 # Index meta2 databases into the associated rdir service(s).
@@ -120,6 +120,27 @@ drain_limit = 1000
 # Drain limit for each pass/iteration of the crawler. It aims to limit the
 # meta2 usage and to smooth out the calls over time.
 drain_limit_per_pass = 100000
+# List of endpoints to fetch Redpanda cluster metrics, comma-separated.
+kafka_cluster_health_metrics_endpoints =
+# Kafka metrics cache duration in seconds.
+kafka_cluster_health_cache_duration = 10
+# List of topic patterns to watch, comma-separated.
+# Only one wildcard is allowed per topic pattern.
+kafka_cluster_health_topics = *
+# Maximum lag allowed by watched topic (<0 to disable).
+kafka_cluster_health_max_lag = -1
+# Minimal available space allowed in percent (<0 to disable).
+kafka_cluster_health_min_available_space = -1
+
+[filter:flushing]
+# Trigger the flush operation for a given container.
+use = egg:oio#flushing
+# Flush limit for each call from the crawler to the meta2. It aims to limit
+# the number of events generated.
+flush_limit = 1000
+# Flush limit for each pass/iteration of the crawler. It aims to limit the
+# meta2 usage and to smooth out the calls over time.
+flush_limit_per_pass = 100000
 # List of endpoints to fetch Redpanda cluster metrics, comma-separated.
 kafka_cluster_health_metrics_endpoints =
 # Kafka metrics cache duration in seconds.
