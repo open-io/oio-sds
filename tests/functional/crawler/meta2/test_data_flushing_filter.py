@@ -19,16 +19,21 @@ from time import time as now
 from unittest.mock import patch
 
 from oio.common.constants import (
+    DRAINING_STATE_DONE,
     DRAINING_STATE_IN_PROGRESS,
-    DRAINING_STATE_NEEDED,
+    FLUSHING_STATE_DONE,
+    FLUSHING_STATE_IN_PROGRESS,
     M2_PROP_DRAINING_STATE,
     M2_PROP_DRAINING_TIMESTAMP,
+    M2_PROP_FLUSHING_STATE,
+    M2_PROP_FLUSHING_TIMESTAMP,
     M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
 )
 from oio.common.kafka_http import KafkaClusterHealth
 from oio.common.utils import cid_from_name, request_id
 from oio.crawler.meta2.filters.draining import Draining
+from oio.crawler.meta2.filters.flushing import Flushing
 from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase, random_str
 
@@ -52,19 +57,30 @@ class FilterApp(object):
         pass
 
 
-class TestDrainingFilter(BaseTestCase):
+NEEDED = 1  # Hardcoded because used in default values
+
+
+class DataFlushingFilter:
+    TYPE = "data_flushing"
+    CLASS_FILTER = None
+    EVENT_EXPECTED = None
+    STATE_IN_PROGRESS = None
+    STATE_DONE = None
+    M2_PROP_STATE = None
+    M2_PROP_TIMESTAMP = None
+
     @classmethod
     def setUpClass(cls):
-        super(TestDrainingFilter, cls).setUpClass()
+        super(DataFlushingFilter, cls).setUpClass()
         cls._service_group("crawler", "stop", wait=3)
 
     @classmethod
     def tearDownClass(cls):
         cls._service_group("crawler", "start", wait=1)
-        super(TestDrainingFilter, cls).tearDownClass()
+        super(DataFlushingFilter, cls).tearDownClass()
 
     def setUp(self):
-        super(TestDrainingFilter, self).setUp()
+        super(DataFlushingFilter, self).setUp()
         self.shards_account = ".shards_%s" % self.account
         self.use_sharding = False
         self.cname = "ct-%d" % int(now())
@@ -102,7 +118,7 @@ class TestDrainingFilter(BaseTestCase):
             self.storage.container_delete(self.account, self.cname, force=True)
         except Exception:
             self.logger.warning("Exception during cleaning %s", self.shards_account)
-        super(TestDrainingFilter, self).tearDown()
+        super(DataFlushingFilter, self).tearDown()
 
     def _get_meta2db_env(self, cid):
         dir_data = self.storage.directory.list(cid=cid, service_type="meta2")
@@ -143,24 +159,24 @@ class TestDrainingFilter(BaseTestCase):
             reqid=reqid,
         )
 
-    def _set_draining_flag(self, flag=DRAINING_STATE_NEEDED):
+    def _set_flag(self, flag=NEEDED):
         system = {
-            M2_PROP_DRAINING_STATE: str(flag),
-            M2_PROP_DRAINING_TIMESTAMP: str(round(now() * 1000000)),
+            self.M2_PROP_STATE: str(flag),
+            self.M2_PROP_TIMESTAMP: str(round(now() * 1000000)),
         }
         output = self.storage.container_set_properties(
             self.account, self.cname, system=system, propagate_to_shards=True
         )
         self.assertEqual(b"", output)
 
-    def _process_draining(
+    def _process_data_flush(
         self,
         nb_objects=0,
         meta2db_env=None,
         callback=fake_cb,
         nb_passes=1,
-        drain_limit=None,
-        drain_limit_per_pass=None,
+        limit=None,
+        limit_per_pass=None,
         cid=None,
         out_of_range_objects=None,
     ):
@@ -173,11 +189,11 @@ class TestDrainingFilter(BaseTestCase):
 
         conf = self.conf.copy()
         conf["kafka_cluster_health_metrics_endpoints"] = "http://redpanda-metrics"
-        if drain_limit:
-            conf["drain_limit"] = drain_limit
-        if drain_limit_per_pass:
-            conf["drain_limit_per_pass"] = drain_limit_per_pass
-        draining = Draining(app=self.app, conf=conf)
+        if limit:
+            conf[f"{self.TYPE}_limit"] = limit
+        if limit_per_pass:
+            conf[f"{self.TYPE}_limit_per_pass"] = limit_per_pass
+        data_flush = self.CLASS_FILTER(app=self.app, conf=conf)
 
         # pylint: disable=protected-access
         if self.expected_successes >= 1:
@@ -195,23 +211,23 @@ class TestDrainingFilter(BaseTestCase):
                     for chunk in chunks:
                         chunk_urls.append((chunk["url"], object_["id"]))
 
-        # Process the draining
+        # Process the data flush
         if not meta2db_env:
             meta2db_env = self._get_meta2db_env(cid)
         with patch.object(KafkaClusterHealth, "check", return_value=None):
             for _ in range(nb_passes):
-                draining.process(meta2db_env, callback)
+                data_flush.process(meta2db_env, callback)
                 meta2db_env.pop("admin_table")
-        self.assertEqual(self.expected_successes, draining.successes)
-        self.assertEqual(self.expected_skipped, draining.skipped)
-        self.assertEqual(self.expected_errors, draining.errors)
+        self.assertEqual(self.expected_successes, data_flush.successes)
+        self.assertEqual(self.expected_skipped, data_flush.skipped)
+        self.assertEqual(self.expected_errors, data_flush.errors)
 
         if self.expected_successes >= 1:
-            # All chunks should have received a draining event
-            drained_chunks = []
+            # All chunks should have received a "deletion" event
+            deleted_chunks = []
             for _, content in chunk_urls:
                 event = self.wait_for_kafka_event(
-                    types=(EventTypes.CONTENT_DRAINED,),
+                    types=(self.EVENT_EXPECTED,),
                     fields={"content": content},
                 )
                 self.assertIsNotNone(event)
@@ -219,35 +235,37 @@ class TestDrainingFilter(BaseTestCase):
                     if event_data.get("type") == "chunks":
                         evt_chunk_url = event_data.get("id")
                         self.logger.debug("Drain event for %s received", evt_chunk_url)
-                        if evt_chunk_url not in drained_chunks:
-                            drained_chunks.append(evt_chunk_url)
-            self.assertEqual(len(drained_chunks), len(chunk_urls))
-            # Check if the out-of-range objects are not drained
+                        if evt_chunk_url not in deleted_chunks:
+                            deleted_chunks.append(evt_chunk_url)
+            self.assertEqual(len(deleted_chunks), len(chunk_urls))
+            # Check if the out-of-range objects are not deleted
             for obj_name in out_of_range_objects:
                 _, chunks = self.storage.object_locate(None, None, obj_name, cid=cid)
                 self.assertGreater(len(chunks), 0)
 
-    def test_drain_container(self):
+            props = self.storage.container_get_properties(None, None, cid=cid)
+            self.assertEqual(self.STATE_DONE, int(props["system"][self.M2_PROP_STATE]))
+
+    def test_data_flush_container(self):
         nb_obj_to_add = 10
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
-        self._set_draining_flag()
-        self._process_draining(nb_obj_to_add)
+        self._set_flag()
+        self._process_data_flush(nb_obj_to_add)
 
-        # Flag draining done should have been set,
-        # nothing should be done anymore
+        # "Done" flag done should have been set, nothing should be done anymore
         self.expected_successes = 0
         self.expected_skipped = 1
         self.expected_errors = 0
-        self._process_draining()
+        self._process_data_flush()
 
-    def test_drain_without_flag(self):
+    def test_data_flush_without_flag(self):
         """
-        In this test, the draining flag is not set in the meta2, the crawler
-        should skip this meta2.
+        In this test, the flag is not set in the meta2, the crawler should skip this
+        meta2.
         """
         nb_obj_to_add = 10
         self.expected_successes = 0
@@ -255,12 +273,11 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_errors = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
-        self._process_draining(nb_obj_to_add)
+        self._process_data_flush(nb_obj_to_add)
 
-    def test_drain_with_bad_flag(self):
+    def test_data_flush_with_bad_flag(self):
         """
-        In this test, the draining flag is incorrect, the crawler
-        should skip this meta2.
+        In this test, the flag is incorrect, the crawler should skip this meta2.
         """
         nb_obj_to_add = 10
         self.expected_successes = 0
@@ -268,10 +285,10 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_errors = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
-        self._set_draining_flag(flag=DRAINING_STATE_IN_PROGRESS + 1)
-        self._process_draining(nb_obj_to_add)
+        self._set_flag(flag=self.STATE_IN_PROGRESS + 1)
+        self._process_data_flush(nb_obj_to_add)
 
-    def test_drain_bad_meta2(self):
+    def test_data_flush_bad_meta2(self):
         """
         In this test, the meta2 path is not correct, the crawler should
         return an error in the stats.
@@ -291,15 +308,15 @@ class TestDrainingFilter(BaseTestCase):
         meta2db_env["path"] = "%s-wrong" % meta2db_env["path"]
         self.assertRaises(
             FileNotFoundError,
-            self._process_draining,
+            self._process_data_flush,
             nb_obj_to_add,
             meta2db_env=meta2db_env,
             callback=_cb,
         )
 
-    def test_drain_multiple_passes(self):
+    def test_data_flush_multiple_passes(self):
         """
-        In this test, the conf gonna be tweaked to simulate a draining in
+        In this test, the conf gonna be tweaked to simulate a data flush in
         multiple passes.
         """
         nb_obj_to_add = 100
@@ -310,12 +327,12 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_errors = 0
 
         self._add_objects(self.cname, nb_obj_to_add)
-        self._set_draining_flag()
-        self._process_draining(
-            nb_obj_to_add, nb_passes=nb_passes, drain_limit=5, drain_limit_per_pass=42
+        self._set_flag()
+        self._process_data_flush(
+            nb_obj_to_add, nb_passes=nb_passes, limit=5, limit_per_pass=42
         )
 
-    def test_drain_on_shards(self):
+    def test_data_flush_on_shards(self):
         nb_obj_to_add = 4
 
         self._add_objects(self.cname, nb_obj_to_add)
@@ -333,14 +350,24 @@ class TestDrainingFilter(BaseTestCase):
         )
         self.assertTrue(modified)
 
-        self._set_draining_flag()
+        self._set_flag()
 
         show_shards = self.container_sharding.show_shards(self.account, self.cname)
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
         for shard in show_shards:
-            self._process_draining(2, cid=shard["cid"])
+            self._process_data_flush(2, cid=shard["cid"])
+
+
+class TestDrainingFilter(DataFlushingFilter, BaseTestCase):
+    TYPE = "drain"
+    CLASS_FILTER = Draining
+    EVENT_EXPECTED = EventTypes.CONTENT_DRAINED
+    STATE_IN_PROGRESS = DRAINING_STATE_IN_PROGRESS
+    STATE_DONE = DRAINING_STATE_DONE
+    M2_PROP_STATE = M2_PROP_DRAINING_STATE
+    M2_PROP_TIMESTAMP = M2_PROP_DRAINING_TIMESTAMP
 
     def test_drain_on_shard_containing_out_of_range_objects(self):
         nb_obj_to_add = 8
@@ -359,7 +386,7 @@ class TestDrainingFilter(BaseTestCase):
         )
         self.assertTrue(modified)
 
-        self._set_draining_flag()
+        self._set_flag()
 
         show_shards = self.container_sharding.show_shards(self.account, self.cname)
         shard_id = next(show_shards)["cid"]
@@ -377,4 +404,14 @@ class TestDrainingFilter(BaseTestCase):
         self.expected_successes = 1
         self.expected_skipped = 0
         self.expected_errors = 0
-        self._process_draining(2, cid=shard_id, out_of_range_objects=self.created[:2])
+        self._process_data_flush(2, cid=shard_id, out_of_range_objects=self.created[:2])
+
+
+class TestFlushFilter(DataFlushingFilter, BaseTestCase):
+    TYPE = "flush"
+    CLASS_FILTER = Flushing
+    EVENT_EXPECTED = EventTypes.CONTENT_DELETED
+    STATE_IN_PROGRESS = FLUSHING_STATE_IN_PROGRESS
+    STATE_DONE = FLUSHING_STATE_DONE
+    M2_PROP_STATE = M2_PROP_FLUSHING_STATE
+    M2_PROP_TIMESTAMP = M2_PROP_FLUSHING_TIMESTAMP
