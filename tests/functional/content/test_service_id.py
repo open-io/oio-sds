@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,8 @@ import os
 import random
 import time
 from subprocess import check_call
+
+import pytest
 
 from oio.common.exceptions import ServiceBusy
 from tests.utils import BaseTestCase, random_str
@@ -52,19 +54,19 @@ class SystemdParser(configparser.RawConfigParser):
         return
 
     def _write_section(self, fp, section_name, section_items, delimiter):
-        fp.write("[{}]\n".format(section_name))
+        fp.write(f"[{section_name}]\n")
         for key, values in section_items:
             for value in values:
-                value = self._interpolation.before_write(self, section_name, key, value)
-                if (value is not None and len(value) > 0) or not self._allow_no_value:
-                    value = delimiter + str(value).replace("\n", "\n\t")
-                    fp.write("{}{}\n".format(key, value))
+                bval = self._interpolation.before_write(self, section_name, key, value)
+                if bval or not self._allow_no_value:
+                    new_value = delimiter + str(bval).replace("\n", "\n\t")
+                    fp.write(f"{key}{new_value}\n")
         fp.write("\n")
 
 
 class BaseServiceIdTest(BaseTestCase):
     def setUp(self):
-        super(BaseServiceIdTest, self).setUp()
+        super().setUp()
 
         if not self.conf["with_service_id"]:
             self.skipTest("Service ID not enabled")
@@ -75,13 +77,13 @@ class BaseServiceIdTest(BaseTestCase):
         self.wait_for_score(("meta2",))
 
     def tearDown(self):
-        super(BaseServiceIdTest, self).tearDown()
         self.wait_for_score(("meta2",))
         self._reload_meta()
+        super().tearDown()
 
     def _update_apache(self, port):
         path = HTTPD_CONF % (self.ns, self.name)
-        with open(path, "r") as fp:
+        with open(path) as fp:
             data = fp.read().split("\n")
         for idx in range(len(data)):
             if data[idx].startswith("listen"):
@@ -94,7 +96,7 @@ class BaseServiceIdTest(BaseTestCase):
     def _cache_flush(self):
         for item in ("local", "low", "high"):
             r = self.http_pool.request(
-                "POST", "http://%s/v3.0/cache/flush/%s" % (self.conf["proxy"], item)
+                "POST", f"http://{self.conf['proxy']}/v3.0/cache/flush/{item}"
             )
             self.assertEqual(r.status, 204)
 
@@ -129,7 +131,7 @@ class BaseServiceIdTest(BaseTestCase):
         self.save_watch_conf(name, conf)
 
     def _change_rawx_addr(self, name, port):
-        service = "oio-%s.service" % name
+        service = self.service_to_ctl_key(name, "rawx")
         self._service(service, "stop")
 
         self._update_systemd_service_rawx(service, port)
@@ -146,7 +148,7 @@ class BaseServiceIdTest(BaseTestCase):
 
 class TestRawxServiceId(BaseServiceIdTest):
     def setUp(self):
-        super(TestRawxServiceId, self).setUp()
+        super().setUp()
 
         if not self.conf["with_service_id"]:
             self.skipTest("Service ID not enabled")
@@ -156,15 +158,12 @@ class TestRawxServiceId(BaseServiceIdTest):
         while "service_id" not in self.rawx:
             self.rawx = random.choice(self.conf["services"]["rawx"])
 
-        self.name = "rawx-%d" % int(self.rawx["num"])
+        self.name = f"rawx-{self.rawx['num']}"
 
         self._port = int(self.rawx["addr"].split(":")[1])
         self._newport = self._port + 10000 + random.randint(0, 200)
 
         self.org_rawx = self.rawx.copy()
-
-    def tearDown(self):
-        super(TestRawxServiceId, self).tearDown()
 
     def _check_data(self):
         try:
@@ -211,6 +210,7 @@ class TestRawxServiceId(BaseServiceIdTest):
                 if self.rawx["service_id"] in item["url"]:
                     return
 
+    @pytest.mark.legacy
     def test_rawx_service_id_new_addr(self):
         self._generate_data()
         self._change_rawx_addr(self.name, self._newport)
@@ -224,7 +224,7 @@ class TestRawxServiceId(BaseServiceIdTest):
 
 class TestMeta2ServiceId(BaseServiceIdTest):
     def setUp(self):
-        super(TestMeta2ServiceId, self).setUp()
+        super().setUp()
 
         if not self.conf["with_service_id"]:
             self.skipTest("Service ID not enabled")
@@ -238,9 +238,6 @@ class TestMeta2ServiceId(BaseServiceIdTest):
                 entry["new_port"] = port + 1000
             else:
                 entry["new_port"] = port
-
-    def tearDown(self):
-        super(TestMeta2ServiceId, self).tearDown()
 
     def _update_systemd_service_meta(self, service, port):
         conf = SystemdParser()
@@ -266,13 +263,13 @@ class TestMeta2ServiceId(BaseServiceIdTest):
 
     def _change_meta2_addr(self, field):
         for entry in self.meta2:
-            name = "meta2-%s" % entry["num"]
+            watch_name = f"meta2-{entry['num']}"
             port = entry[field]
 
-            service = "oio-%s.service" % name
+            service = self.service_to_ctl_key(entry["service_id"], "meta2")
             self._service(service, "stop")
             self._update_systemd_service_meta(service, port)
-            self._update_event_watch(name, port)
+            self._update_event_watch(watch_name, port)
 
             self._service(service, "daemon-reload")
             self._service(service, "start")
@@ -282,6 +279,7 @@ class TestMeta2ServiceId(BaseServiceIdTest):
         check_call(["openio", "cluster", "unlockall"])
         self._cache_flush()
 
+    @pytest.mark.legacy
     def test_meta2_service_id_new_addr(self):
         self._create_data()
         self._change_meta2_addr("new_port")

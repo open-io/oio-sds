@@ -862,9 +862,14 @@ class BaseTestCase(CommonTestCase):
         Convert a service ID or address to the appropriate key
         for the microservice supervisor.
         """
-        if os.getenv("OIOCI_CFG_SUPERVISOR"):
-            return self.service_to_supervisord_key(svc, type_)
-        return self.service_to_systemd_key(svc, type_)
+        try:
+            if os.getenv("OIOCI_CFG_SUPERVISOR"):
+                return self.service_to_supervisord_key(svc, type_)
+            return self.service_to_systemd_key(svc, type_)
+        except KeyError:
+            if not svc.startswith(self.ns):
+                return self.service_to_ctl_key(f"{self.ns}-{svc}", type_)
+            raise
 
     def service_to_supervisord_key(self, svc, type_):
         """
@@ -874,7 +879,7 @@ class BaseTestCase(CommonTestCase):
             svcid = descr.get("service_id")
             if svc == svcid or svc == descr["addr"]:
                 return f"{type_}:{svcid}"
-        raise ValueError(f"{svc} not found in the list of {type_} services")
+        raise KeyError(f"{svc} not found in the list of {type_} services")
 
     def service_to_systemd_key(self, svc, type_):
         """
@@ -886,7 +891,7 @@ class BaseTestCase(CommonTestCase):
                 return descr["unit"]
             elif svc == descr.get("num"):
                 return descr["unit"]
-        raise ValueError("%s not found in the list of %s services" % (svc, type_))
+        raise KeyError(f"{svc} not found in the list of {type_} services")
 
     def storage_method_from_policy(self, storage_policy):
         """Get a StorageMethod instance from a storage policy name."""

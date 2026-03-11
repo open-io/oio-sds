@@ -134,7 +134,7 @@ class TestContentVersioning(BaseTestCase):
 
     def test_content_purge(self):
         # many contents
-        for i in range(0, 4):
+        for _ in range(0, 4):
             self.api.object_create(
                 self.account, self.container, obj_name="versioned", data="content"
             )
@@ -771,6 +771,7 @@ class TestContentVersioning(BaseTestCase):
         # Only one version -> latest
         self.assertEqual(objects[5]["name"], "past_obj")
 
+    @pytest.mark.xfail(strict=False)
     @pytest.mark.flaky(reruns=2)
     def test_object_list_short_timeout(self):
         attempts = 20

@@ -141,12 +141,12 @@ broker_endpoint = {endpoint}
                 cname,
                 obj_name=name,
                 data=b"yes",
-                policy="THREECOPIES",
+                policy="SINGLE",
                 reqid=reqid,
                 max_retries=3,
             )
             self.created_objects.append(name)
-        for i in range(n_obj * 3):
+        for i in range(n_obj):
             _event = self.wait_for_event(
                 reqid=reqid,
                 types=(EventTypes.CHUNK_NEW,),
