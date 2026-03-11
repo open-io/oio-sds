@@ -44,6 +44,7 @@ build
 
 # Python tools
 .noseids
+ruff.toml
 
 # IDE
 .idea

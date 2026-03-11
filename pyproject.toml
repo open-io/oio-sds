@@ -95,6 +95,7 @@ addopts = [
 ]
 log_level = "DEBUG"
 markers = [
+  "legacy: tests which will stop passing in the near future",
   "lifecycle: lifecycle-related tests",
   "no_thread_patch: tests which must run with unpatched thread module",
 ]
@@ -106,11 +107,14 @@ extend-include = ["bin/*", "tools/**/*.py"]
 exclude = ["tools/oio-bootstrap.py", "bin/encryption_tool/README.md", "confgen.py"]
 
 [tool.ruff.lint]
+# B: flake8-bugbear
+# D: pydocstyle
 # E: pycodestyle (errors)
+# F: pyflakes
 # I: isort
 # PLC: pylint (convention)
 # PLE: pylint (errors)
-extend-select = ["E", "I", "PLC", "PLE"]
+select = ["E", "F", "I", "PLC", "PLE"]
 # FIXME(FVE): PLC0415 -> `import` should be at the top-level of a file
 ignore = ["D203", "D212", "PLC0415"]
 
