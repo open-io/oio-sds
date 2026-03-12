@@ -315,11 +315,13 @@ OioGroup=${NS},${SRVTYPE},${IP}:${PORT}
 [Service]
 ${SERVICEUSER}
 ${SERVICEGROUP}
-Type=simple
+Type=notify
 NotifyAccess=main
 ExecReload=/bin/kill -HUP $MAINPID
 ExecStart=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-watchdog
+WatchdogSec=10
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 ${ENVIRONMENT}
 TimeoutStopSec=${SYSTEMCTL_TIMEOUT_STOP_SEC}

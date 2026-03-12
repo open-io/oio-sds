@@ -76,6 +76,10 @@ GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
+/** Number of ticks (seconds) between "I'm alive" messages to watchdog.
+ * 0 means watchdog is disabled. */
+static gint watchdog_interval_tick = 0;
+
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -492,6 +496,17 @@ _task_malloc_trim(gpointer p UNUSED)
 	malloc_trim(sqlx_periodic_malloctrim_size);
 }
 
+/** Reach out to the watchdog and tell this process is alive. */
+static void
+_task_watchdog(gpointer p UNUSED)
+{
+	VARIABLE_PERIOD_DECLARE();
+	if (VARIABLE_PERIOD_SKIP(watchdog_interval_tick))
+		return;
+
+	oio_sd_notify(0, "WATCHDOG=1");
+}
+
 static void
 _NOLOCK_local_score_update (const struct service_info_s *si0)
 {
@@ -832,6 +847,28 @@ _task_reload_srvtypes (gpointer p UNUSED)
 		g_strfreev (types);
 }
 
+static gboolean
+_learn_service(gpointer k, gpointer v, gpointer u UNUSED)
+{
+	struct service_info_s *si = v;
+	struct service_tag_s *tag_first = service_info_get_tag(
+			si->tags, NAME_TAGNAME_FIRST);
+	/* We don't check the value: the tag is set to TRUE internally by the
+	 * current process, and we trash the list afterwards. */
+	if (tag_first) {
+		service_learn(k);
+	}
+	return FALSE;
+}
+
+static gboolean
+_add_v_to_list(gpointer k UNUSED, gpointer v, gpointer u)
+{
+	GSList **thelist = u;
+	*thelist = g_slist_prepend(*thelist, v);
+	return FALSE;
+}
+
 static void
 _task_push (gpointer p UNUSED)
 {
@@ -839,26 +876,8 @@ _task_push (gpointer p UNUSED)
 	struct lru_tree_s *lru = NULL;
 	GSList *tmp = NULL;
 
-	gboolean _learn(gpointer k, gpointer v, gpointer u) {
-		(void) u;
-		struct service_info_s *si = v;
-		struct service_tag_s *tag_first = service_info_get_tag(
-				si->tags, NAME_TAGNAME_FIRST);
-		/* We don't check the value: the tag is set to TRUE internally by the
-		 * current process, and we trash the list afterwards. */
-		if (tag_first) {
-			service_learn(k);
-		}
-		return FALSE;
-	}
-	gboolean _list (gpointer k, gpointer v, gpointer u) {
-		(void) k, (void) u;
-		tmp = g_slist_prepend(tmp, v);
-		return FALSE;
-	}
-
 	PUSH_WRITE(lru = push_queue; push_queue = _push_queue_create());
-	lru_tree_foreach(lru, _list, NULL);
+	lru_tree_foreach(lru, _add_v_to_list, &tmp);
 
 	if (!tmp) {
 		GRID_TRACE("Push: no service to be pushed");
@@ -876,7 +895,7 @@ _task_push (gpointer p UNUSED)
 	if (err) {
 		GRID_WARN("Push error: (%d) %s", err->code, err->message);
 	} else {
-		lru_tree_foreach(lru, _learn, NULL);
+		lru_tree_foreach(lru, _learn_service, NULL);
 	}
 
 	g_clear_error(&err);
@@ -1353,6 +1372,31 @@ configure_request_handlers (void)
 }
 
 static gboolean
+configure_watchdog(void)
+{
+	gint64 watchdog_usec = 0;
+	const gchar *watchdog_usec_str = g_getenv("WATCHDOG_USEC");
+	if (oio_str_is_number(watchdog_usec_str, &watchdog_usec)) {
+		/* The watchdog expects a message every half interval */
+		watchdog_interval_tick = watchdog_usec / 2 / G_TIME_SPAN_SECOND;
+		if (watchdog_usec > 0 && watchdog_interval_tick == 0) {
+			GRID_ERROR("WatchdogSec variable must be at least 2. "
+			 "Lower values will disable the watchdog.");
+		} else {
+			GRID_DEBUG("Watchdog set at interval %ds", watchdog_interval_tick);
+		}
+	}
+	return watchdog_interval_tick >= 1;
+}
+
+static void
+_stats_trie_runner(const struct trie_node_s *n)
+{
+	oio_stats_set(n->gq_count, 0, n->gq_time, 0,
+			0, 0, 0, 0);
+}
+
+static gboolean
 grid_main_configure (int argc, char **argv)
 {
 	if (argc < 2) {
@@ -1403,11 +1447,7 @@ grid_main_configure (int argc, char **argv)
 	configure_request_handlers ();
 
 	/* ensure each Route as a pair of count/time stats */
-	void _runner (const struct trie_node_s *n) {
-		oio_stats_set(n->gq_count, 0, n->gq_time, 0,
-					  0, 0, 0, 0);
-	}
-	path_parser_foreach (path_parser, _runner);
+	path_parser_foreach(path_parser, _stats_trie_runner);
 	oio_stats_set(
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
@@ -1480,6 +1520,11 @@ grid_main_configure (int argc, char **argv)
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_malloc_trim, NULL, NULL);
+
+	if (configure_watchdog()) {
+		grid_task_queue_register(admin_gtq, 1,
+			(GDestroyNotify) _task_watchdog, NULL, NULL);
+	}
 
 	network_server_bind_host (server, cfg_main_url, handler_action,
 			(network_transport_factory) transport_http_factory0);

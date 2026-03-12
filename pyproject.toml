@@ -98,6 +98,7 @@ markers = [
   "legacy: tests which will stop passing in the near future",
   "lifecycle: lifecycle-related tests",
   "no_thread_patch: tests which must run with unpatched thread module",
+  "requires_systemd: tests which require services to run in a systemd environment",
 ]
 
 [tool.ruff]
