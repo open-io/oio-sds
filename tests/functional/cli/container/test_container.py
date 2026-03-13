@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
 # Copyright (C) 2021-2026 OVH SAS
 #
@@ -45,11 +44,8 @@ class ContainerTest(CliTestCase):
         try:
             cls.openio("container delete " + cls.NAME)
         except Exception as err:
-            cls.logger.warning("Failed to delete container %s: %s", cls.NAME, err)
+            cls._cls_logger.warning("Failed to delete container %s: %s", cls.NAME, err)
         super().tearDownClass()
-
-    def setUp(self):
-        super(ContainerTest, self).setUp()
 
     def _test_container_show(self, with_cid=False, extra_counters=False):
         opts = self.get_format_opts("json")
@@ -678,7 +674,7 @@ class TestContainerSharding(CliTestCase):
         try:
             cls.openio("container delete " + cls.NAME)
         except Exception as err:
-            cls.logger.warning("Failed to delete container %s: %s", cls.NAME, err)
+            cls._cls_logger.warning("Failed to delete container %s: %s", cls.NAME, err)
         super().tearDownClass()
 
     def test_abort_no_sharding_yet(self):
