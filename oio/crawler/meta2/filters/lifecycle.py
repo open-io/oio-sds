@@ -76,7 +76,7 @@ def extract_run_id(suffix):
 class Context:
     def __init__(self, meta2db, account, container):
         self._meta2db = meta2db
-        self.reqid = request_id()
+        self.reqid = request_id("lc-")
         self.run_id = extract_run_id(self.suffix)
         self.account = account
         self.container = container
@@ -141,7 +141,8 @@ class Context:
 
 
 class Lifecycle(Meta2Filter):
-    """Lifecycle filter.
+    """
+    Lifecycle filter.
 
     Load lifecycle configuration
     Order rules, actions
@@ -228,7 +229,8 @@ class Lifecycle(Meta2Filter):
         return S3_STORAGE_CLASSES_ORDER.index(S3StorageClasses(storage_class)) + 1
 
     def _get_main_container_props(self):
-        """Get properties from main container.
+        """
+        Get properties from main container.
 
         Main container could be the container itself,
         Root container in case of shard,
@@ -381,7 +383,8 @@ class Lifecycle(Meta2Filter):
         return True
 
     def _process(self, env, cb):
-        """Process current container:
+        """
+        Process current container.
 
         Get information about container from associated main container
         Get and load lifecycle configuration
@@ -487,13 +490,14 @@ class Lifecycle(Meta2Filter):
         return self.app(env, cb)
 
     def _gen_views_non_current_action(self, lc, non_current_days_in_sec):
-        """Generate views for NoncurrentExpiration/NoncurrentTransition.
+        """
+        Generate views for NoncurrentExpiration/NoncurrentTransition.
 
         noncurrent_view depends on current_view.
         """
         noncurrent_view = lc.create_noncurrent_view()
         current_view = lc.create_common_views(
-            "current_view", formated_time=non_current_days_in_sec
+            "current_view", formatted_time=non_current_days_in_sec
         )
         return {
             "noncurrent_view": noncurrent_view,
@@ -501,7 +505,8 @@ class Lifecycle(Meta2Filter):
         }
 
     def _gen_views_current_action(self, lc, days_in_sec, date):
-        """Generate views to handle current version and delete marker
+        """
+        Generate views to handle current version and delete marker.
 
         Current views are used in case of versioned container.
         No need to create them for non versioned container
@@ -570,7 +575,9 @@ class Lifecycle(Meta2Filter):
         return None
 
     def _process_action(self, lc_instance, action_class, rule_id, rule_filter, action):
-        """Process one action by batches.
+        """
+        Process one action by batches.
+
         Handle different types of actions and versioned/not versioned container
         """
         view_queries = {}
@@ -694,6 +701,8 @@ class Lifecycle(Meta2Filter):
 
     def _set_finished_status(self, meta2db, key):
         """
+        Declare the specified action as finished.
+
         Store {key, 1} in admin table, the key reflects a finished action,
         finished rule or finished processing
         """
@@ -705,9 +714,7 @@ class Lifecycle(Meta2Filter):
         return res
 
     def _load_progression(self, meta2db):
-        """
-        Load progression from database
-        """
+        """Load progression from database."""
         statement = (
             f"SELECT k, v FROM admin where k LIKE '{self.PROGRESSION_MARKER_PREFIX}%';"
         )
@@ -719,6 +726,7 @@ class Lifecycle(Meta2Filter):
     def _is_processed(self, key):
         """
         Check if a container, rule action is done.
+
         This is accomplished by setting a specific key in admin table.
         """
         return key in self.progression

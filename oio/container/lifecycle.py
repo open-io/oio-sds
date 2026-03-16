@@ -1,5 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -99,7 +99,7 @@ def lifecycle_backup_path(account, bucket):
     return f"{account}/{bucket}/lifecycle-config"
 
 
-class ContainerLifecycle(object):
+class ContainerLifecycle:
     # List lifecycle configuration versions supported by filter
     SUPPORTED_CONFIGURATION_VERSIONS = (1,)
 
@@ -111,16 +111,12 @@ class ContainerLifecycle(object):
         self.lifecycle_conf = None
 
     def get_configuration(self):
-        """
-        Get lifecycle configuration from container property.
-        """
+        """Get lifecycle configuration from container property."""
         props = self.api.container_get_properties(self.account, self.container)
         return props["properties"].get(LIFECYCLE_PROPERTY_KEY)
 
     def load(self, conf=None):
-        """
-        Load lifecycle conf from provided conf or container property.
-        """
+        """Load lifecycle conf from provided conf or container property."""
         if conf is None:
             conf = self.get_configuration()
 
@@ -141,8 +137,8 @@ class ContainerLifecycle(object):
             registry.validate("lifecycle", self.lifecycle_conf)
         except (SchemaNotFound, SchemaValidationError) as exc:
             raise LifecycleConfigurationInvalid(
-                f"Unable to validate configuration against schema: {str(exc)}"
-            )
+                f"Unable to validate configuration against schema: {exc}"
+            ) from exc
 
         schema_version = self.lifecycle_conf.get("_schema_version", -1)
         if schema_version not in self.SUPPORTED_CONFIGURATION_VERSIONS:
@@ -214,7 +210,7 @@ class ContainerLifecycle(object):
     def build_sql_query(
         self,
         rule_filter,
-        formated_days=None,
+        formatted_days=None,
         date=None,
         is_transition=False,
     ):
@@ -274,9 +270,9 @@ class ContainerLifecycle(object):
         where_clauses = []
         if rule_filter.prefix:
             where_clauses.append("( al.alias LIKE ?||'%')")
-        if formated_days is not None:
+        if formatted_days is not None:
             where_clauses.append(
-                f" ((al.mtime + {formated_days}) < (CAST "
+                f" ((al.mtime + {formatted_days}) < (CAST "
                 f"(strftime('%s', 'now') AS INTEGER )))"
             )
         elif date is not None:
@@ -318,7 +314,7 @@ class ContainerLifecycle(object):
         )
 
     def create_common_views(
-        self, view_name, formated_time=None, date=None, deleted=None
+        self, view_name, formatted_time=None, date=None, deleted=None
     ):
         if not view_name:
             raise ValueError("Lifecycle views, empty view name!")
@@ -334,9 +330,9 @@ class ContainerLifecycle(object):
                 _query = f"{_query} AND (al.deleted=1)"
             else:
                 _query = f"{_query} AND (al.deleted=0)"
-        elif formated_time is not None:
+        elif formatted_time is not None:
             _time_cond = (
-                f" AND ( (al.mtime + {formated_time}) < (CAST "
+                f" AND ( (al.mtime + {formatted_time}) < (CAST "
                 f"(strftime('%s', 'now') AS INTEGER )))"
             )
             _query = f"{_query}{_time_cond}"
@@ -351,11 +347,9 @@ class ContainerLifecycle(object):
         return _query
 
     def noncurrent_query(
-        self, rule_filter, noncurrent_versions, formated_time, is_transition=False
+        self, rule_filter, noncurrent_versions, formatted_time, is_transition=False
     ):
-        """
-        Deal with non current versions
-        """
+        """Deal with non current versions."""
         if noncurrent_versions is None:
             noncurrent_versions = 0
 
@@ -365,9 +359,9 @@ class ContainerLifecycle(object):
             f"row_id > {1 + noncurrent_versions}",
             self._processed_sql_condition(),
         ]
-        if formated_time is not None:
+        if formatted_time is not None:
             conditions.append(
-                f"(non_current_since + {formated_time}) < "
+                f"(non_current_since + {formatted_time}) < "
                 "CAST(strftime('%s', 'now') AS INTEGER)"
             )
         if rule_filter.prefix:
@@ -408,9 +402,7 @@ class ContainerLifecycle(object):
         return f"{query} WHERE ({' AND '.join(conditions)})"
 
     def markers_query(self, rule_filter):
-        """
-        Get expired delete markers
-        """
+        """Get expired delete markers"""
 
         # SELECT is forced on meta2 side
         query = f" WHERE ( nb_versions=1 AND {self._processed_sql_condition()} "
@@ -421,7 +413,7 @@ class ContainerLifecycle(object):
 
         return query
 
-    def abort_incomplete_query(self, rule_filter, formated_days=None):
+    def abort_incomplete_query(self, rule_filter, formatted_days=None):
         # Beginning of query will be force by meta2 code to avoid
         # update or delete queries
         _query = " "
@@ -438,7 +430,7 @@ class ContainerLifecycle(object):
         _query = f"{_query} WHERE ("
         # Time condition is always present via DaysaAfterInitiation
         _time_cond = (
-            f" ((al.mtime + {formated_days}) < (CAST "
+            f" ((al.mtime + {formatted_days}) < (CAST "
             f"(strftime('%s', 'now') AS INTEGER )))"
         )
         _query = f"{_query}{_time_cond}"
@@ -464,7 +456,7 @@ class Tags:
                 raise ValueError("Key 'Key' not found in Tag")
             if tag:
                 raise ValueError(
-                    f"Unsupported fields in Tag: {', '.join((k for k in tag))}"
+                    f"Unsupported fields in Tag: {', '.join(k for k in tag)}"
                 )
             self.tags[key] = value
 
@@ -488,5 +480,5 @@ class RuleFilter:
         if rule_filter:
             raise ValueError(
                 f"Unsupported fields in 'Filter' for rule '{rule_id}': "
-                f"{', '.join((k for k in rule_filter))}"
+                f"{', '.join(k for k in rule_filter)}"
             )
