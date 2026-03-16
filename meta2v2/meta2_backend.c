@@ -4421,13 +4421,13 @@ end:
 	return err;
 }
 
-static GError* _tag_matched_properties(struct sqlx_sqlite3_s *sq3, const char *prefix,
+static GError*
+_tag_matched_properties(struct sqlx_sqlite3_s *sq3, const char *prefix,
 			const char *base_set_adapted_tags, const char *full_query_set_tag,
 			GHashTable *ht_policies, int order) {
 	GError *err = NULL;
 	struct sqlx_repctx_s *repctx_clean = NULL;
 	gchar *query_update_properties = NULL;
-
 
 	err = sqlx_transaction_begin(sq3, &repctx_clean);
 	if (err) {
@@ -4613,7 +4613,8 @@ meta2_backend_apply_lifecycle_current(struct meta2_backend_s *m2b,
 	}
 
 	// Custom sqlite function
-	int rc_create = sqlite3_create_function(sq3->db, "_is_allowed_transition", 3, SQLITE_UTF8, NULL, &_is_allowed_transition, NULL, NULL);
+	int rc_create = sqlite3_create_function(sq3->db, "_is_allowed_transition", 3,
+			SQLITE_UTF8, NULL, &_is_allowed_transition, NULL, NULL);
 	if (rc_create != SQLITE_OK) {
 		g_prefix_error(&err, "Failed to create custom function:is_allowed_transition" );
 		goto end;
@@ -4753,6 +4754,37 @@ end:
 	return err;
 }
 
+static GString *
+_prepare_lc_event(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		const char *main_account, const char *run_id, gchar *object_name,
+		gint64 version, gint64 mtime, gboolean has_bucket_logging, const char *owner,
+		const char *action, const char *storage_class, const char *rule_id)
+{
+	GString *event = oio_event__create_with_id(
+			"storage.lifecycle.action", url, oio_ext_get_reqid());
+	g_string_append(event, ",\"data\":{");
+	append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+	append_str(event, "main_account", g_strdup(main_account));
+	append_str(event, "run_id", g_strdup(run_id));
+	append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
+	append_str(event, "object", object_name);
+	append_str(event, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
+	append_int64(event, "version", version);
+	append_int64(event, "mtime", mtime);
+	append_boolean(event, "has_bucket_logging", has_bucket_logging);
+	if (has_bucket_logging) {
+		append_str(event, "bucket_owner", g_strdup(owner));
+	}
+	append_str(event, "action", g_strdup(action));
+	if (storage_class && *storage_class) {
+		append_str(event, "storage_class", g_strdup(storage_class));
+	}
+	if (rule_id) {
+		append_str(event, "rule_id", g_strdup(rule_id));
+	}
+	g_string_append(event, "}}");
+	return event;
+}
 
 GError*
 meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
@@ -4922,9 +4954,13 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 		sqlite3_bind_int(stmt, id, storage_class_order);
 	}
 
+	/* FIXME(FVE): we should set a local deadline at half the request deadline
+	 * and stop looping when it's reached, then we'll get enough time to mark
+	 * what has been processed. That would require adjusting the the "set tags"
+	 * query with the number of processed items (lower than batch_size). */
 	guint32 count_versions = 0;
 	gint32 count_objects = 0;
-	gchar object_name_to_process[1025] = {0};
+	gchar object_name_to_process[LIMIT_LENGTH_CONTENTPATH] = {0};
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		gchar *object_name = g_strdup((gchar *) sqlite3_column_text(stmt, 0));
 		found_match = TRUE;
@@ -4953,29 +4989,9 @@ meta2_backend_apply_lifecycle_noncurrent(struct meta2_backend_s *m2b,
 
 		count_rows++;
 
-		GString *event = oio_event__create_with_id(
-				"storage.lifecycle.action", url, oio_ext_get_reqid());
-		g_string_append(event, ",\"data\":{");
-		append_str(event, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
-		append_str(event, "main_account", g_strdup(main_account));
-		append_str(event, "run_id", g_strdup(run_id));
-		append_str(event, "container", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
-		append_str(event, "object", object_name);
-		append_str(event, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
-		append_int64(event, "version", version);
-		append_int64(event, "mtime", mtime);
-		append_boolean(event, "has_bucket_logging", has_bucket_logging);
-		if (has_bucket_logging) {
-			append_str(event, "bucket_owner", g_strdup(owner));
-		}
-		append_str(event, "action", g_strdup(action));
-		if (storage_class && *storage_class) {
-			append_str(event, "storage_class", g_strdup(storage_class));
-		}
-		if (rule_id) {
-			append_str(event, "rule_id", g_strdup(rule_id));
-		}
-		g_string_append(event, "}}");
+		GString *event = _prepare_lc_event(sq3, url, main_account, run_id,
+				object_name, version, mtime, has_bucket_logging,
+				owner, action, storage_class, rule_id);
 		gchar *key = g_strdup(oio_url_get(url, OIOURL_HEXID));
 		oio_events_queue__send(m2b->notifier_lifecycle_generated, key,
 				g_string_free(event, FALSE));

@@ -21,6 +21,7 @@ from oio.common.constants import (
     LOGGING_PROPERTY_KEY,
     M2_PROP_LIFECYCLE_CUSTOM_BUDGET,
     M2_PROP_LIFECYCLE_TIME_BYPASS,
+    M2_PROP_OBJECTS,
     M2_PROP_SHARDING_LOWER,
     M2_PROP_SHARDING_UPPER,
     M2_PROP_VERSIONING_POLICY,
@@ -48,6 +49,9 @@ from oio.container.lifecycle import (
 from oio.crawler.meta2.filters.base import Meta2Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 from oio.lifecycle.metrics import LifecycleAction, LifecycleMetricTracker, LifecycleStep
+
+DEFAULT_TIMEOUT = 30.0
+OBJECT_COUNT_THRESHOLD = 1000000
 
 
 class LifecycleBudgetReached(Exception):
@@ -138,6 +142,12 @@ class Context:
         if upper.startswith("<"):
             upper = upper[1:]
         return upper
+
+    @property
+    def object_count(self):
+        """Tell how many objects there are in the current container."""
+        obj_str = self._meta2db.system.get(M2_PROP_OBJECTS, "0")
+        return int(obj_str)
 
 
 class Lifecycle(Meta2Filter):
@@ -758,6 +768,10 @@ class Lifecycle(Meta2Filter):
             )
             return False
 
+        timeout = DEFAULT_TIMEOUT
+        if self.context.object_count > OBJECT_COUNT_THRESHOLD:
+            timeout *= 3.0
+
         while True:
             next_batch_size = self._get_next_limit()
 
@@ -787,6 +801,7 @@ class Lifecycle(Meta2Filter):
                 action_type="current" if action_class.current else "noncurrent",
                 payload=data,
                 reqid=self.context.reqid,
+                timeout=timeout,
             )
             if not applied:
                 self.logger.error(
