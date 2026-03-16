@@ -196,11 +196,12 @@ class KafkaEventWorker(KafkaConsumerWorker):
                 return
 
             if is_http_retryable(status):
-                self.logger.warn(
-                    "event handling failure (release with delay): (%s) %s reqid=%s",
+                self.logger.warning(
+                    "Event handling failed, will retry later: "
+                    "reqid=%s status=%s error=%s",
+                    reqid,
                     status,
                     msg,
-                    reqid,
                 )
                 self.statsd.timing(
                     f"event.{self.topic}.{event}.retry",
@@ -209,10 +210,20 @@ class KafkaEventWorker(KafkaConsumerWorker):
                 raise RetryLater(delay=kwargs.get("delay"), topic=kwargs.get("topic"))
 
             if is_http_outdated(status):
+                self.logger.warning(
+                    "Event handling failed, message requeued for too long: "
+                    "reqid=%s status=%s error=%s",
+                    reqid,
+                    status,
+                    msg,
+                )
                 raise OutdatedMessage("Message requeued for too long")
 
-            self.logger.debug(
-                "event handling failure (rejecting): %s reqid=%s", msg, reqid
+            self.logger.warning(
+                "Event handling failed permanently: reqid=%s status=%s error=%s",
+                reqid,
+                status,
+                msg,
             )
             raise RejectMessage(f"Failed to process message {msg}: ({reqid}) {status}")
 
