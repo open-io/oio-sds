@@ -712,8 +712,9 @@ class Meta0PrefixMapping(MetaMapping):
                 ]
                 svcs.sort(
                     key=(
-                        lambda svc: svc["upper_limit"]
-                        - len(self.get_managed_bases(svc))
+                        lambda svc: (
+                            svc["upper_limit"] - len(self.get_managed_bases(svc))
+                        )
                     )
                 )
                 _decommission(svcs[0], [base])
