@@ -21,6 +21,7 @@ import time
 from io import BytesIO
 
 from oio.common.exceptions import (
+    ClientPreconditionFailed,
     NotFound,
     OioException,
     OrphanChunk,
@@ -74,6 +75,39 @@ class TestECContent(BaseTestCase):
     def random_chunks(self, nb):
         pos = random.sample(range(self.k + self.m), nb)
         return ["0.%s" % i for i in pos]
+
+    def _rawx_volumes(self):
+        rawx_volumes = {}
+        services = self.conscience.all_services("rawx")
+        for rawx in services:
+            tags = rawx["tags"]
+            service_id = tags.get("tag.service_id") or rawx["addr"]
+            rawx_volumes[service_id] = tags.get("tag.vol")
+        return rawx_volumes
+
+    def _truncate_chunk_tail(
+        self,
+        chunk,
+        rawx_volumes,
+        first_block_size,
+        min_truncate=1,
+        max_truncate=8192,
+    ):
+        chunk_path = self.chunk_path_from_url(
+            chunk.url,
+            rawx_volumes,
+        )
+        chunk_size = os.path.getsize(chunk_path)
+        max_allowed_truncate = min(max_truncate, chunk_size - first_block_size - 1)
+        if max_allowed_truncate < min_truncate:
+            raise ValueError(
+                "Chunk too small to truncate while keeping data after first block: "
+                + f"size={chunk_size}, first_block_size={first_block_size}"
+            )
+        truncate_size = min_truncate
+        with open(chunk_path, "wb") as chunk_fd:
+            chunk_fd.truncate(chunk_size - truncate_size)
+            chunk_fd.flush()
 
     def _test_create(self, data_size):
         # generate random test data
@@ -229,6 +263,87 @@ class TestECContent(BaseTestCase):
         self._test_rebuild(
             0, self.random_chunks(1), extra_properties={"foo+2": "bar+2"}
         )
+
+    def test_content_rebuild_with_corrupted_sources(self):
+        """
+        Rebuild a missing chunk while another chunk from the same object
+        is corrupted. The rebuild must still succeed.
+
+        This is a regression scenario for failures like:
+        "Invalid fragment payload in ECPyECLibDriver.reconstruct".
+        """
+        if self.ec_enable_pass_through:
+            self.skipTest("Covered by non pass-through EC rebuild tests")
+
+        # Size the object so that each of the k+m stored EC fragments is
+        # slightly larger than one fragment block (ec_fragment_size).
+        # This guarantees that truncation can be detected during rebuild.
+        probe_content = self.content_factory.new(
+            self.container_id,
+            self.content,
+            1,
+            self.stgpol,
+        )
+        first_block_size = probe_content.storage_method.ec_fragment_size
+        data_size = (self.k + self.m) * first_block_size + 1024
+        data = random_data(data_size)
+
+        content = self.content_factory.new(
+            self.container_id,
+            self.content,
+            len(data),
+            self.stgpol,
+        )
+        content.create(BytesIO(data))
+        content = self.content_factory.get(
+            self.container_id,
+            content.content_id,
+        )
+
+        rawx_volumes = self._rawx_volumes()
+        chunks = sorted(list(content.chunks), key=lambda chunk: chunk.pos)
+        self.assertGreaterEqual(len(chunks), 2)
+
+        removed_chunk = chunks[0]
+        chunk_to_truncate = chunks[1]
+
+        removed_size = int(self.blob_client.chunk_head(removed_chunk.url)["chunk_size"])
+        self.assertGreater(removed_size, first_block_size)
+        os.remove(
+            self.chunk_path_from_url(
+                removed_chunk.url,
+                rawx_volumes,
+            )
+        )
+
+        self._truncate_chunk_tail(
+            chunk_to_truncate,
+            rawx_volumes,
+            first_block_size=first_block_size,
+            min_truncate=64,
+            max_truncate=64,
+        )
+
+        self.assertRaises(
+            ClientPreconditionFailed,
+            self.blob_client.chunk_head,
+            chunk_to_truncate.url,
+            verify_checksum=True,
+        )
+
+        rebuilt_size = content.rebuild_chunk(
+            removed_chunk.id,
+            read_all_available_sources=True,
+        )
+        self.assertEqual(removed_size, rebuilt_size)
+
+        rebuilt_content = self.content_factory.get(
+            self.container_id,
+            content.content_id,
+        )
+        rebuilt_chunk = rebuilt_content.chunks.filter(pos=removed_chunk.pos).one()
+        self.assertIsNotNone(rebuilt_chunk)
+        self.assertNotEqual(removed_chunk.url, rebuilt_chunk.url)
 
     def test_content_rebuild_unrecoverable(self):
         self.assertRaises(

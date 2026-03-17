@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,13 +23,14 @@ from oio.common.exceptions import (
     ObjectUnavailable,
     UnrecoverableContent,
 )
+from oio.common.green import GreenPile
 from oio.common.storage_functions import (
     _get_weighted_random_score,
     _sort_chunks,
     fetch_stream_ec,
 )
 from oio.common.utils import GeneratorIO, request_id
-from oio.content.content import Chunk, Content
+from oio.content.content import Chunk, ChunksHelper, Content
 
 
 class ECContent(Content):
@@ -95,6 +96,16 @@ class ECContent(Content):
                     read_all_available_sources=read_all_available_sources,
                     reqid=reqid,
                 )
+            except (UnrecoverableContent, ObjectUnavailable) as err:
+                last_error = err
+                if attempt + 1 >= max_attempts:
+                    break
+                if read_all_available_sources:
+                    chunks = ChunksHelper(
+                        self._filter_corrupted_chunks(chunks.all()),
+                        raw_chunk=False,
+                    )
+                continue
             # TODO(FVE): catch more exception types?
             except Conflict as err:
                 # Conflict happens when the chunk already exists on the selected
@@ -110,6 +121,39 @@ class ECContent(Content):
                     err,
                 )
         raise last_error
+
+    def _filter_corrupted_chunks(self, chunks):
+        """Return chunks that pass checksum verification.
+
+        Checks are executed concurrently with ``chunk_head`` using
+        ``verify_checksum=True``. Chunks raising exceptions are considered
+        corrupted and excluded from the returned list. The original order
+        is preserved.
+        """
+        if not chunks:
+            return []
+
+        def _check_chunk(idx, chunk):
+            try:
+                self.blob_client.chunk_head(
+                    chunk.url,
+                    verify_checksum=True,
+                )
+                return idx, chunk
+            except Exception as e:
+                self.logger.warning("Unable to verify chunk at %s: %s", chunk.url, e)
+                return idx, None
+
+        pile = GreenPile(len(chunks))
+        for idx, chunk in enumerate(chunks):
+            pile.spawn(_check_chunk, idx, chunk)
+
+        valid_chunks = []
+        for idx, chunk in pile:
+            if chunk is not None:
+                valid_chunks.append((idx, chunk))
+
+        return [chunk for _, chunk in sorted(valid_chunks)]
 
     def _create_spare_chunk(self, current_chunk, new_chunk, extras=None):
         meta = {
