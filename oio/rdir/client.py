@@ -56,13 +56,11 @@ DEFAULT_RDIR_REPLICAS = 3
 
 
 def _make_id(ns, type_, addr):
-    return "%s|%s|%s" % (ns, type_, addr)
+    return f"{ns}|{type_}|{addr}"
 
 
 def _build_dict_by_id(ns, all_rdir):
-    """
-    Build a dictionary of all rdir services indexed by their ID.
-    """
+    """Build a dictionary of all rdir services indexed by their ID."""
     return {
         _make_id(ns, "rdir", x["tags"].get("tag.service_id", x["addr"])): x
         for x in all_rdir
@@ -75,11 +73,11 @@ def _filter_rdir_hosts(allsrv):
         if srv["type"] == "rdir":
             host_list.append(srv["host"])
     if not host_list:
-        raise NotFound("No rdir service found in %s" % (allsrv,))
+        raise NotFound(f"No rdir service found in {allsrv}")
     return host_list
 
 
-class RdirDispatcher(object):
+class RdirDispatcher:
     def __init__(self, conf, rdir_client=None, logger=None, **kwargs):
         self.conf = conf
         self.ns = conf["namespace"]
@@ -201,11 +199,11 @@ class RdirDispatcher(object):
                 if service_id == provider_id:
                     break
             else:
-                raise ValueError("%s isn't a %s" % (service_id, service_type))
+                raise ValueError(f"{service_id} isn't a {service_type}")
             all_services = [provider]
         all_rdir = self.cs.all_services("rdir", True, **kwargs)
         if len(all_rdir) <= 0:
-            raise ServiceUnavailable("No rdir service found in %s" % self.ns)
+            raise ServiceUnavailable(f"No rdir service found in {self.ns}")
 
         by_id = _build_dict_by_id(self.ns, all_rdir)
 
@@ -401,7 +399,7 @@ class RdirDispatcher(object):
             x["tags"].get("stat.opened_db_count", 0) for x in all_rdir if x["score"] > 0
         ]
         if len(opened_db) <= 0:
-            raise ServiceUnavailable("No valid rdir service found in %s" % self.ns)
+            raise ServiceUnavailable(f"No valid rdir service found in {self.ns}")
         if not max_per_rdir:
             upper_limit = sum(opened_db) / float(len(opened_db))
         else:
@@ -550,8 +548,8 @@ class RdirDispatcher(object):
         """
         if not known or len(known) > replicas:
             raise ValueError(
-                'There should be at most %d "known" services, but known=%s'
-                % (replicas, known)
+                f"There should be at most {replicas} 'known' services, "
+                f"but known={known}"
             )
 
         options = {}
@@ -588,15 +586,13 @@ class RdirDispatcher(object):
         if rdir_count == expected:
             return svcs
         raise ServerException(
-            "LB returned incoherent result (expected %d rdir, got %d): %s"
-            % (expected, rdir_count, svcs)
+            "LB returned incoherent result "
+            f"(expected {expected} rdir, got {rdir_count}): {svcs}"
         )
 
 
 class RdirClient(HttpApi):
-    """
-    Client class for rdir services.
-    """
+    """Client class for rdir services."""
 
     base_url = {
         "rawx": "rdir",
@@ -606,12 +602,21 @@ class RdirClient(HttpApi):
     def __init__(
         self, conf, directory_client=None, cache_duration=60.0, logger=None, **kwargs
     ):
-        super(RdirClient, self).__init__(
+        pool_connections = int(
+            conf.get(
+                "rdir_pool_connections",
+                kwargs.pop("pool_connections", DEFAULT_NB_POOL_CONNECTIONS),
+            )
+        )
+        pool_maxsize = int(
+            conf.get(
+                "rdir_pool_maxsize", kwargs.pop("pool_maxsize", DEFAULT_POOL_MAXSIZE)
+            )
+        )
+        super().__init__(
             service_type="rdir",
-            pool_connections=conf.get(
-                "rdir_pool_connections", DEFAULT_NB_POOL_CONNECTIONS
-            ),
-            pool_maxsize=conf.get("rdir_pool_maxsize", DEFAULT_POOL_MAXSIZE),
+            pool_connections=pool_connections,
+            pool_maxsize=pool_maxsize,
             block=boolean_value(conf.get("rdir_block_connections", False)),
             **kwargs,
         )
@@ -672,8 +677,8 @@ class RdirClient(HttpApi):
                 now + self._cache_duration * random.uniform(0.9, 1.0),
             )
             return cur_hosts
-        except NotFound:
-            raise VolumeException("No rdir assigned to volume %s" % volume_id)
+        except NotFound as nfe:
+            raise VolumeException(f"No rdir assigned to volume {volume_id}") from nfe
 
     def _get_resolved_rdir_hosts(self, volume_id, rdir_hosts=None, reqid=None):
         if not rdir_hosts:
@@ -693,8 +698,7 @@ class RdirClient(HttpApi):
         all_uri = []
         for rdir_host in rdir_hosts:
             all_uri.append(
-                "http://%s/v1/%s/%s"
-                % (rdir_host, self.__class__.base_url[service_type], action)
+                f"http://{rdir_host}/v1/{self.__class__.base_url[service_type]}/{action}"
             )
         return all_uri
 
@@ -814,7 +818,7 @@ class RdirClient(HttpApi):
         return resp, body
 
     def create(self, volume_id, service_type="rawx", **kwargs):
-        """Create the database for `volume_id` on the appropriate rdir"""
+        """Create the database for `volume_id` on the appropriate rdir."""
         self._rdir_request(
             volume_id, "POST", "create", service_type=service_type, **kwargs
         )
@@ -831,7 +835,7 @@ class RdirClient(HttpApi):
         mtime=0,
         **kwargs,
     ):
-        """Reference a chunk in the reverse directory"""
+        """Reference a chunk in the reverse directory."""
         body = {
             # Will be stripped and kept only in the key
             "chunk_id": chunk_id,
@@ -855,7 +859,8 @@ class RdirClient(HttpApi):
 
     def chunk_push_batch(self, volume_id, chunk_list, headers=None, **kwargs):
         """
-        Reference a list of chunks in the reverse directory
+        Reference a list of chunks in the reverse directory.
+
         chunk_list must be a list of dict with the following keys, chunk_id,
         container_id, content_id, path, version, mtime.
         """
@@ -871,7 +876,7 @@ class RdirClient(HttpApi):
         )
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id, **kwargs):
-        """Unreference a chunk from the reverse directory"""
+        """Unreference a chunk from the reverse directory."""
         body = {
             "container_id": container_id,
             "content_id": content_id,
@@ -882,7 +887,8 @@ class RdirClient(HttpApi):
 
     def chunk_delete_batch(self, volume_id, chunk_list, **kwargs):
         """
-        Unreference a list of chunk from the reverse directory
+        Unreference a list of chunk from the reverse directory.
+
         chunk_list must be a list of dict with the following keys, chunk_id,
         container_id, content_id.
         """
@@ -1223,7 +1229,7 @@ class RdirClient(HttpApi):
 
     def _resolve_cid_to_path(self, cid):
         """
-        Resolves a container ID into a a container path.
+        Resolve a container ID into a a container path.
 
         :param cid: The container ID.
         :return: NS/account/container path.
