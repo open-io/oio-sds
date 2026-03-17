@@ -31,12 +31,13 @@ from oio.common.constants import (
     M2_PROP_VERSIONING_POLICY,
     TAGGING_KEY,
 )
-from oio.common.exceptions import NoSuchObject
+from oio.common.exceptions import NoSuchObject, OioUnhealthyKafkaClusterError
 from oio.common.kafka import (
     DEFAULT_LIFECYCLE_RESTORE_TOPIC,
     DEFAULT_LIFECYCLE_TOPIC,
     KafkaSender,
 )
+from oio.common.kafka_http import KafkaClusterHealth
 from oio.common.utils import cid_from_name
 from oio.crawler.meta2.filters.lifecycle import Lifecycle
 from oio.event.evob import EventTypes
@@ -3992,3 +3993,332 @@ class TestLifecycleCrawlerWithSharding(TestLifecycleCrawler):
             },
         )
         super().test_transition_non_current_not_allowed()
+
+
+@pytest.mark.lifecycle
+class TestLifecycleCrawlerUseKafkaHealth(TestLifecycleCrawler):
+    def setUp(self):
+        super().setUp()
+        self.filter_conf = {
+            **self.conf,
+            "use_kafka_health_check": True,
+            "kafka_cluster_health_topics": "oio-lifecycle",
+            "kafka_cluster_health_max_lag": 20000,
+            "kafka_cluster_health_min_available_space": 5,
+            "redis_host": "127.0.0.1:6379",
+            "time_factor": self.TIME_FACTOR,
+            "shorten_days_dates_factor": self.TIME_FACTOR,
+            "broker_endpoint": self._cls_conf["kafka_endpoints"],
+            "lifecycle_configuration_backup_account": "foo",
+            "lifecycle_configuration_backup_bucket": "bar",
+            "storage_class.STANDARD": "EC21, ANY-E93, TWOCOPIES, THREECOPIES",
+            "storage_class.STANDARD_IA": "SINGLE",
+        }
+
+    def test_override_bucket_budget_larger(self):
+        pass
+
+    def test_override_bucket_budget_smaller(self):
+        pass
+
+    def test_bucket_budget_reached(self):
+        pass
+
+    def test_non_current_budget_reached(self):
+        pass
+
+    def test_current_healthy_check(self):
+        # self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "Expiration": {
+                        "0": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "Expiration": {
+                        "1": {"Days": 2},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": ["0-0", "1-1"], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": [],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 1,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 0,
+                "processed": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 1,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 0,
+                "processed": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 1,
+            },
+        )
+
+        self._create_objects_for_rule(
+            None, prefix="doc/a/", count=10, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            None, prefix="doc/b/", count=5, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            None, prefix="doc/c/", count=5, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(
+            None, prefix="doc/z/", count=5, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, prefix="foo/", count=5)
+        self._wait_n_days(3)
+        with patch.object(
+            KafkaClusterHealth,
+            "check",
+            side_effect=(OioUnhealthyKafkaClusterError("failed")),
+        ):
+            self._run_scenario(
+                configuration,
+                callback,
+                filter_conf={"container_budget_per_pass": 5},
+                passes=3,
+            )
+
+    def test_non_current_healthy_check(self):
+        self._enable_versioning()
+
+        def callback(status, _msg):
+            self.assertEqual(200, status)
+
+        configuration = {
+            "Rules": {
+                "0": {
+                    "ID": "rule-1",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "doc/"},
+                    "NoncurrentVersionExpiration": {
+                        "0": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 101},
+                        "__time_type": "Days",
+                    },
+                },
+                "1": {
+                    "ID": "rule-2",
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": "foo/"},
+                    "NoncurrentVersionExpiration": {
+                        "1": {"NoncurrentDays": 2, "NewerNoncurrentVersions": 101},
+                        "__time_type": "Days",
+                    },
+                },
+            },
+            "_schema_version": 1,
+            "_expiration_rules": {"days": [], "date": []},
+            "_transition_rules": {"days": [], "date": []},
+            "_delete_marker_rules": [],
+            "_abort_mpu_rules": [],
+            "_non_current_expiration_rules": ["0-0", "1-1"],
+            "_non_current_transition_rules": [],
+        }
+        self.metrics_by_passes = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 1,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 0,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 0,
+                "processed": 2,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 0,
+            },
+        )
+        objects = self._create_objects_for_rule(
+            None,
+            prefix="doc/a/",
+            count=10,
+            versions=1,
+            action=ExpectedAction.DELETE,
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+        objects = self._create_objects_for_rule(
+            None, prefix="doc/b/", count=5, versions=1, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+        objects = self._create_objects_for_rule(
+            None, prefix="doc/c/", count=5, versions=1, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+        objects = self._create_objects_for_rule(
+            None, prefix="doc/z/", count=5, versions=1, action=ExpectedAction.DELETE
+        )
+        self._create_objects_for_rule(None, objects=objects, versions=101)
+
+        self._create_objects_for_rule(None, prefix="foo/", count=5, versions=102)
+        self._wait_n_days(3)
+
+        count = 0
+
+        def health_func(*args):
+            nonlocal count
+            count += 1
+            if count % 2 == 0:
+                raise OioUnhealthyKafkaClusterError("failed")
+            else:
+                return None
+
+        with patch.object(
+            KafkaClusterHealth,
+            "check",
+            side_effect=health_func,
+        ):
+            self._run_scenario(
+                configuration,
+                callback,
+                filter_conf={"container_budget_per_pass": 5},
+                passes=3,
+            )
+
+
+class TestLifecycleCrawlerUseHKafkaHelathWithSharding(
+    TestLifecycleCrawlerWithSharding, TestLifecycleCrawlerUseKafkaHealth
+):
+    def setUp(self):
+        super().setUp()
+        self.filter_conf = {
+            **self.conf,
+            "use_kafka_health_check": True,
+            "kafka_cluster_health_topics": "oio-lifecycle",
+            "kafka_cluster_health_max_lag": 20000,
+            "kafka_cluster_health_min_available_space": 5,
+            "redis_host": "127.0.0.1:6379",
+            "time_factor": self.TIME_FACTOR,
+            "shorten_days_dates_factor": self.TIME_FACTOR,
+            "broker_endpoint": self._cls_conf["kafka_endpoints"],
+            "lifecycle_configuration_backup_account": "foo",
+            "lifecycle_configuration_backup_bucket": "bar",
+            "storage_class.STANDARD": "EC21, ANY-E93, TWOCOPIES, THREECOPIES",
+            "storage_class.STANDARD_IA": "SINGLE",
+        }
+
+    def test_override_bucket_budget_larger(self):
+        pass
+
+    def test_override_bucket_budget_smaller(self):
+        pass
+
+    def test_bucket_budget_reached(self):
+        pass
+
+    def test_non_current_budget_reached(self):
+        pass
+
+    def test_current_healthy_check(self):
+        # self._enable_versioning()
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 3,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 0,
+                "processed": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 3,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 0,
+                "processed": 1,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 3,
+            },
+        )
+        super().test_current_healthy_check()
+
+    def test_non_current_healthy_check(self):
+        self.metrics_by_passes_with_sharding = (
+            {
+                **self.DEFAULT_STATS,
+                "successes": 2,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 2,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 1,
+                "processed": 2,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 1,
+            },
+            {
+                **self.DEFAULT_STATS,
+                "successes": 0,
+                "processed": 3,
+                "container_budget_reached": 0,
+                "total_events": 0,
+                "total_delete": 0,
+                "unhealthy_kafka_cluster": 1,
+            },
+        )
+        super().test_non_current_healthy_check()
