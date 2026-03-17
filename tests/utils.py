@@ -26,11 +26,12 @@ from functools import wraps
 from importlib import __import__ as late_import
 from subprocess import check_call
 from subprocess import run as run_cmd
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import yaml
 from confluent_kafka import OFFSET_END, TopicPartition
 
+from oio.blob.utils import chunk_id_to_path
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import M2_PROP_CONTAINER_NAME, REQID_HEADER
 from oio.common.green import eventlet, get_watchdog, time
@@ -97,6 +98,25 @@ def random_data(size: int) -> bytes:
         return random_str(size).encode("utf-8")
 
 
+def chunk_path_from_url(
+    url,
+    rawx_volumes,
+    hash_width,
+    hash_depth,
+):
+    """Return the on-disk path of a chunk.
+
+    The service ID is extracted from the URL and used to pick the RAWX volume
+    from rawx_volumes. hash_width and hash_depth are passed explicitly.
+    """
+    parsed = urlparse(url)
+    service_id = parsed.netloc
+    chunk_id = parsed.path.lstrip("/")
+    return chunk_id_to_path(
+        chunk_id, hash_width, hash_depth, volume_path=rawx_volumes[service_id]
+    )
+
+
 def trim_srv(srv):
     return {"score": srv["score"], "addr": srv["addr"], "tags": srv["tags"]}
 
@@ -132,6 +152,7 @@ class CommonTestCase(unittest.TestCase):
 
     _cls_kafka_consumer = None
     _cls_logger = logging.getLogger("test")
+    _cls_rawx_hash_layouts = {}
 
     def _compression(self):
         rx = self.conf.get("rawx", {})
@@ -157,6 +178,54 @@ class CommonTestCase(unittest.TestCase):
         num, path, addr, _ = self.get_service_url(srvtype, i=i)
         ip, port = addr.split(":")
         return num, path, ip, port
+
+    def chunk_path_from_url(
+        self,
+        url,
+        rawx_volumes,
+    ):
+        """Return the on-disk path of a chunk for this test context.
+
+        The RAWX hash layout is fetched from one responsive RAWX service and
+        cached, then forwarded to the module-level helper.
+        """
+        hash_width, hash_depth = self._get_rawx_hash_layout(rawx_volumes)
+        return chunk_path_from_url(url, rawx_volumes, hash_width, hash_depth)
+
+    def _get_rawx_hash_layout(self, rawx_volumes, refresh=False):
+        """Get and cache namespace RAWX (hash_width, hash_depth).
+
+        Try RAWX services from rawx_volumes until one responds.
+        """
+        cache = self.__class__._cls_rawx_hash_layouts
+        cache_key = "rawx_hash_layout"
+        if not refresh:
+            layout = cache.get(cache_key)
+            if layout is not None:
+                return layout
+
+        conf = None
+        last_error = None
+        for service_id in rawx_volumes:
+            try:
+                conf = self.admin.service_get_info(service_id, "rawx")
+                break
+            except Exception as exc:
+                last_error = exc
+                continue
+        if conf is None:
+            raise ValueError(f"Unable to get RAWX hash layout: {last_error}")
+        hash_width = conf.get("hash_width")
+        hash_depth = conf.get("hash_depth")
+        if isinstance(hash_width, list):
+            hash_width = hash_width[0]
+        if isinstance(hash_depth, list):
+            hash_depth = hash_depth[0]
+        hash_width = int(hash_width)
+        hash_depth = int(hash_depth)
+        layout = (hash_width, hash_depth)
+        cache[cache_key] = layout
+        return layout
 
     def _url(self, name):
         return "/".join((self.uri, "v3.0", self.ns, name))
@@ -237,6 +306,7 @@ class CommonTestCase(unittest.TestCase):
         super(CommonTestCase, cls).setUpClass()
         cls._monkey_patch()
         cls._cls_conf = get_config()
+        cls._cls_rawx_hash_layouts = {}
         cls._cls_account = cls._cls_conf["account"]
         cls._cls_ns = cls._cls_conf["namespace"]
         cls._cls_uri = "http://" + cls._cls_conf["proxy"]

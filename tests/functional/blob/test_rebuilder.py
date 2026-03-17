@@ -74,15 +74,11 @@ class TestBlobRebuilder(BaseTestCase):
             self._service(service, "start", wait=3)
         super(TestBlobRebuilder, self).tearDown()
 
-    def _chunk_path(self, chunk):
-        url = chunk["url"]
-        volume_id = url.split("/", 3)[2]
-        chunk_id = url.split("/", 3)[3]
-        volume = self.rawx_volumes[volume_id]
-        return volume + "/" + chunk_id[:3] + "/" + chunk_id
-
     def _corrupt_chunk(self, chunk, offset=7):
-        chunk_path = self._chunk_path(chunk)
+        chunk_path = self.chunk_path_from_url(
+            chunk["url"],
+            self.rawx_volumes,
+        )
         self.logger.debug("Corrupting chunk %s", chunk_path)
         with open(chunk_path, "rb+") as chunk_fd:
             chunk_fd.seek(offset, os.SEEK_SET)
@@ -111,7 +107,12 @@ class TestBlobRebuilder(BaseTestCase):
         removed_chunk = random.choice(self.chunks)
         chunk_headers = self.blob_client.chunk_head(removed_chunk["url"])
         removed_chunk_size = int(chunk_headers["chunk_size"])
-        os.remove(self._chunk_path(removed_chunk))
+        os.remove(
+            self.chunk_path_from_url(
+                removed_chunk["url"],
+                self.rawx_volumes,
+            )
+        )
         chunks_kept = list(self.chunks)
         chunks_kept.remove(removed_chunk)
 
@@ -152,7 +153,12 @@ class TestBlobRebuilder(BaseTestCase):
         chunk = random.choice(self.chunks)
         rawx_id = chunk["url"].split("/")[2]
         chunk_id = chunk["url"].split("/")[3]
-        os.remove(self._chunk_path(chunk))
+        os.remove(
+            self.chunk_path_from_url(
+                chunk["url"],
+                self.rawx_volumes,
+            )
+        )
         chunks_kept = list(self.chunks)
         chunks_kept.remove(chunk)
 

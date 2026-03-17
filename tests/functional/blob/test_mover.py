@@ -80,13 +80,6 @@ class TestBlobMover(BaseTestCase):
             )
         super(TestBlobMover, self).tearDown()
 
-    def _chunk_path(self, chunk):
-        url = chunk["url"]
-        volume_id = url.split("/", 3)[2]
-        chunk_id = url.split("/", 3)[3]
-        volume = self.rawx_volumes[volume_id]
-        return volume + "/" + chunk_id[:3] + "/" + chunk_id
-
     def test_move_with_wrong_size(self):
         if not self.chunk_method.startswith("ec"):
             self.skipTest("Only works with EC")
@@ -112,7 +105,10 @@ class TestBlobMover(BaseTestCase):
         self.assertRaises(
             (ChunkException, ObjectUnavailable, SpareChunkException),
             mover.chunk_move,
-            self._chunk_path(orig_chunk),
+            self.chunk_path_from_url(
+                orig_chunk["url"],
+                self.rawx_volumes,
+            ),
             chunk_id,
         )
 
@@ -187,7 +183,12 @@ class TestBlobMover(BaseTestCase):
                             if (i % 2) == 0:  # Corrupt data sometimes
                                 # Corrupt the chunk
                                 corrupted_data = b"chunk is dead"
-                                with open(self._chunk_path(chunk), "wb") as fp:
+                                with open(
+                                    self.chunk_path_from_url(
+                                        chunk["url"], self.rawx_volumes
+                                    ),
+                                    "wb",
+                                ) as fp:
                                     fp.write(corrupted_data)
                                 corrupted_objects.setdefault(object_name, []).append(
                                     chunk_id

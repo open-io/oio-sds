@@ -158,9 +158,6 @@ class TestBlobIndexer(BaseTestCase):
             chunk_id,
         )
 
-    def _chunk_path(self, chunk_id):
-        return self.rawx_path + "/" + chunk_id[:3] + "/" + chunk_id
-
     def _index_pass(self, reset_stats=False, callback=None):
         """Simulates crawl_volume() from oio.crawler.rawx.crawler
         but only calls the process() function of BlobIndexer
