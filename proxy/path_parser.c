@@ -1,6 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/internals.h>
 #include "path_parser.h"
 
-/* Allocates a node an initaite it with the given word and variable. */
+/* Allocates a node an initiate it with the given word and variable. */
 static struct trie_node_s * _node_init (const struct trie_node_s*,
 		const gchar *word, const gchar *variable);
 
@@ -73,16 +74,16 @@ path_parser_clean (struct path_parser_s *self)
 }
 
 struct path_matching_s **
-path_parser_match (struct path_parser_s *self, gchar **tokens)
+path_parser_match(struct path_parser_s *self, gchar **tokens)
 {
 	struct path_matching_s nomatch = {NULL,NULL};
-	GSList *lmatch = _trie_explore (self->roots, tokens, &nomatch);
+	GSList *lmatch = _trie_explore(self->roots, tokens, &nomatch);
 
 	struct path_matching_s **p, **result;
-	p = result = g_try_malloc0 ((1 + g_slist_length(lmatch)) * sizeof (struct path_matching_s*));
-	for (GSList *l=lmatch; l ;l=l->next)
+	p = result = g_try_malloc0((1 + g_slist_length(lmatch)) * sizeof (struct path_matching_s*));
+	for (GSList *l = lmatch; l; l = l->next)
 		(*p++) = l->data;
-	g_slist_free (lmatch);
+	g_slist_free(lmatch);
 	return result;
 }
 
@@ -240,7 +241,7 @@ _stat_name (const char *prefix, const char *tail, gchar *d, gsize dlen)
 	}
 
 	gchar *s;
-	/* agregate subsequent '_' */
+	/* aggregate subsequent '_' */
 	while (NULL != (s = g_strrstr_len(d, dlen, "__"))) {
 		for (;*s;++s)
 			*s = *(s+1);
@@ -309,9 +310,9 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 
 	EXTRA_ASSERT (needles && *needles);
 
-	for (; *tab ;++tab) {
+	for (; *tab; ++tab) {
 		if ((*tab)->word) { // Explicit word
-			if (0 != strcmp (*needles, (*tab)->word))
+			if (g_strcmp0(*needles, (*tab)->word))
 				continue;
 			struct path_matching_s *m = _match_dup (current_match);
 			m->last = *tab;

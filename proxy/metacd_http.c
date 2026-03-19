@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -160,8 +160,9 @@ _metacd_match (const gchar *method, const gchar *path)
 
 	GRID_TRACE2("matching [%s]", key);
 	gchar **tokens = g_strsplit (key, "/", -1);
-	for (gchar **p=tokens; *p ;++p) {
+	for (gchar **p = tokens; *p; ++p) {
 		gchar *unescaped = g_uri_unescape_string(*p,NULL);
+		// NOTE: unescaped can be NULL!
 		oio_str_reuse(p, unescaped);
 	}
 	struct path_matching_s **result = path_parser_match (path_parser, tokens);
