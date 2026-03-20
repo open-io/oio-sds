@@ -245,6 +245,9 @@ class KafkaEventWorker(KafkaConsumerWorker):
         return None
 
     def stop(self):
-        for handler in self.handlers.values():
-            handler.close()
         super().stop()
+        for handler in self.handlers.values():
+            # Despite the name "handler", these may be of class Filter
+            # and have a close method.
+            if hasattr(handler, "close"):
+                handler.close()
