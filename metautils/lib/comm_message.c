@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -183,8 +183,7 @@ message_marshall_gba(MESSAGE m, GError **err)
 		return NULL;
 	}
 
-	guint32 s32 = result->len - 4;
-	*((guint32*)(result->data)) = g_htonl(s32);
+	*((guint32*)(result->data)) = g_htonl(encRet.encoded);
 	return result;
 }
 
@@ -224,10 +223,15 @@ message_unmarshall(const guint8 *buf, gsize len, GError ** error)
 	if (rc.code == RC_OK)
 		return m;
 
-	if (rc.code == RC_WMORE)
-		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "incomplete content", rc.consumed);
-	else
-		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "invalid content", rc.consumed);
+	if (rc.code == RC_WMORE) {
+		GSETERROR(error,
+				"%s (%"G_GSIZE_FORMAT" bytes consumed)",
+				"incomplete content", rc.consumed);
+	} else {
+		GSETERROR(error,
+				"%s (%"G_GSIZE_FORMAT" bytes buffer, %zd bytes message, %"G_GSIZE_FORMAT" bytes consumed)",
+				"invalid content", len, s, rc.consumed);
+	}
 
 	metautils_message_destroy (m);
 	return NULL;

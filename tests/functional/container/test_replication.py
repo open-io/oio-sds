@@ -17,7 +17,8 @@
 import os
 import time
 
-from oio.api.object_storage import ObjectStorageApi
+import pytest
+
 from oio.common import exceptions
 from oio.common.utils import request_id
 from tests.utils import BaseTestCase, random_str
@@ -36,10 +37,10 @@ class TestContainerReplication(BaseTestCase):
     }
 
     def setUp(self):
-        super(TestContainerReplication, self).setUp()
+        super().setUp()
         if int(self.conf.get("container_replicas", 1)) < 3:
             self.skipTest("Container replication must be enabled")
-        self.api = ObjectStorageApi(self.ns, pool_manager=self.http_pool)
+        self.api = self.storage
         self.must_restart_meta2 = False
         self.wait_for_score(("meta2",))
         self._apply_conf_on_all("meta2", self.__class__.down_cache_opts)
@@ -55,7 +56,7 @@ class TestContainerReplication(BaseTestCase):
     def tearDown(self):
         # Start all services
         self._service_group("all", "start")
-        super(TestContainerReplication, self).tearDown()
+        super().tearDown()
         # Restart meta2 after configuration has been reset by parent tearDown
         if self.must_restart_meta2:
             self._service_group("meta2", "stop")
@@ -66,6 +67,17 @@ class TestContainerReplication(BaseTestCase):
         all_svc = [x["addr"] for x in self.conf["services"][type_]]
         for svc in all_svc:
             self.admin.service_set_live_config(svc, conf, request_attempts=4)
+
+    def _enable_large_synchronous_restore(self):
+        """Allow synchronous restore up to 2046MiB."""
+        opts = {
+            "server.request.max_size": 2047 * 1024 * 1024,
+            "sqliterepo.dump.max_size": 2046 * 1024 * 1024,
+        }
+        opts.update(self.__class__.down_cache_opts)
+        self.set_ns_opts(opts)
+        self._apply_conf_on_all("meta2", opts)
+        self.must_restart_meta2 = True
 
     def _disable_synchronous_restore(self):
         """Disable synchronous restore, restart all meta2 services"""
@@ -79,7 +91,7 @@ class TestContainerReplication(BaseTestCase):
         dump_max_size = int(self.ns_conf.get("sqliterepo.dump.max_size", 1073741824))
         return dump_max_size
 
-    def _test_restore_after_missed_diff(self):
+    def _test_restore_after_missed_diff(self, fill_db_hook=None):
         cname = "test_restore_" + random_str(8)
         # Create a container
         self.api.container_create(self.account, cname)
@@ -92,6 +104,8 @@ class TestContainerReplication(BaseTestCase):
         self._service(self.service_to_ctl_key(stopped, "meta2"), "stop")
         # Create an object
         self.api.object_create_ext(self.account, cname, obj_name=cname, data=cname)
+        if fill_db_hook:
+            fill_db_hook(cname, cname)
         # Start the stopped peer
         self.api.logger.info("Starting meta2 %s", stopped)
         self._service(self.service_to_ctl_key(stopped, "meta2"), "start")
@@ -167,6 +181,32 @@ class TestContainerReplication(BaseTestCase):
         if self.is_running_on_public_ci():
             self.skipTest("Too buggy to run on public CI")
         self._test_restore_after_missed_diff()
+
+    def _fill_large_properties(self, cname, obj_name):
+        reqid = request_id("fill-prop-")
+        # (8 + 254 * 4) * 250 * 4000 should be more than 1GiB (with overhead)
+        payload = "test" * 254
+        for it in range(250):
+            properties = {f"{it:03d}-{x:04d}": payload for x in range(4000)}
+            try:
+                self.storage.object_set_properties(
+                    self.account, cname, obj_name, properties, reqid=reqid
+                )
+            except Exception as err:
+                self.logger.warning("Failed to set some properties: %s", err)
+
+    @pytest.mark.xfail(strict=False)
+    def test_synchronous_restore_missed_diff_big_db(self):
+        """
+        Test DB_RESTORE mechanism (the master send a dump of the whole
+        database to one of the peers).
+        """
+        if not self._synchronous_restore_allowed():
+            self.skipTest("Synchronous replication is disabled")
+        if self.is_running_on_public_ci():
+            self.skipTest("Too buggy to run on public CI")
+        self._enable_large_synchronous_restore()
+        self._test_restore_after_missed_diff(self._fill_large_properties)
 
     def test_synchronous_restore_missing_db(self):
         """
