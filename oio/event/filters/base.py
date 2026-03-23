@@ -145,12 +145,13 @@ class Filter(object):
             )
             return resp(env, cb)
         except ClientException as exc:
+            # Treat http timeout errors as retryable
             # Treat gateway errors (502, 504) as retryable
-            if exc.http_status in (502, 504):
+            if exc.http_status in (408, 502, 504):
                 event = Event(env)
                 resp = RetryableEventError(
                     event=event,
-                    body=f"Retryable gateway error: {exc}",
+                    body=f"Retryable error: {exc}",
                     delay=self._retry_delay,
                 )
                 return resp(env, cb)

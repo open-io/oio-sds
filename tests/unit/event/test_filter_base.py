@@ -270,7 +270,7 @@ class TestFilterSafeProcess(unittest.TestCase):
         cb.assert_called_once()
         call_args = cb.call_args
         self.assertEqual(call_args[0][0], 503)
-        self.assertIn("Retryable gateway error", call_args[0][1])
+        self.assertIn("Retryable error", call_args[0][1])
         self.assertIn("502 Bad Gateway", call_args[0][1])
 
     def test_safe_process_catches_504_gateway_timeout(self):
@@ -293,8 +293,31 @@ class TestFilterSafeProcess(unittest.TestCase):
         cb.assert_called_once()
         call_args = cb.call_args
         self.assertEqual(call_args[0][0], 503)
-        self.assertIn("Retryable gateway error", call_args[0][1])
+        self.assertIn("Retryable error", call_args[0][1])
         self.assertIn("504 Gateway Timeout", call_args[0][1])
+
+    def test_safe_process_catches_408_request_timeout(self):
+        """
+        Test that ClientException with http_status 408 (Request Timeout)
+        is caught and converted to RetryableEventError.
+        """
+        env = self._create_event()
+        cb = self._create_mock_callback()
+
+        # Mock process to raise ClientException with 408
+        with patch.object(
+            self.filter,
+            "process",
+            side_effect=ClientException(http_status=408, message="408 Request Timeout"),
+        ):
+            self.filter(env, cb)
+
+        # Verify the callback was called with status 503 (retryable)
+        cb.assert_called_once()
+        call_args = cb.call_args
+        self.assertEqual(call_args[0][0], 503)
+        self.assertIn("Retryable error", call_args[0][1])
+        self.assertIn("408 Request Timeout", call_args[0][1])
 
     def test_safe_process_does_not_catch_other_client_exceptions(self):
         """
@@ -346,7 +369,8 @@ class TestFilterSafeProcess(unittest.TestCase):
 
     def test_safe_process_gateway_error_includes_retry_delay(self):
         """
-        Test that gateway errors (502, 504) include the configured retry delay.
+        Test that retryable http errors (408, 502, 504)
+        include the configured retry delay.
         """
         # Set a specific retry delay
         self.filter._retry_delay = 3.5
