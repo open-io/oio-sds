@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2025 OVH SAS
+Copyright (C) 2025-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -79,6 +79,9 @@ gboolean gridd_clients_finished(struct gridd_client_s **clients);
 
 // Return the first non-NULL return of each call to error()
 GError * gridd_clients_error(struct gridd_client_s **clients);
+
+// Generate a new error with the concatenation of all messages
+GError * gridd_clients_errors(struct gridd_client_s **clients);
 
 // Trigger a start on each client
 void gridd_clients_start(struct gridd_client_s **clients);

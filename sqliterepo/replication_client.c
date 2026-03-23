@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021-2025 OVH SAS
+Copyright (C) 2021-2026 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -110,7 +110,7 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 
 	gridd_clients_start(clients);
 	if (!(err = gridd_clients_loop(clients)))
-		err = gridd_clients_error(clients);
+		err = gridd_clients_errors(clients);
 	gridd_clients_free(clients);
 
 	if (err) {

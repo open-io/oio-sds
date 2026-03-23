@@ -134,6 +134,33 @@ gridd_clients_error(struct gridd_client_s **clients)
 	return NULL;
 }
 
+GError *
+gridd_clients_errors(struct gridd_client_s **clients)
+{
+	GSList *errors = NULL;
+	GError *main_err = NULL;
+	for (struct gridd_client_s **pc = clients; clients && *pc; pc++) {
+		GError *err = gridd_client_error(*pc);
+		if (err) {
+			errors = g_slist_prepend(errors, err);
+		}
+	}
+	guint error_count = g_slist_length(errors);
+	if (error_count == 1) {
+		main_err = errors->data;
+	} else if (error_count > 1) {
+		main_err = NEWERROR(CODE_UNAVAILABLE, "");
+		for (GSList *cursor = errors; cursor != NULL; cursor = cursor->next) {
+			GError *err = cursor->data;
+			g_prefix_error(&main_err, "(%d) %s\n", err->code, err->message);
+			g_error_free(err);
+		}
+		g_prefix_error(&main_err, "several errors encountered: ");
+	}
+	g_slist_free(errors);  // We freed or borrowed the elements already
+	return main_err;
+}
+
 void
 gridd_clients_set_timeout(struct gridd_client_s **clients, gdouble seconds)
 {
