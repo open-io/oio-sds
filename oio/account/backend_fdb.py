@@ -1851,12 +1851,14 @@ class AccountBackendFdb(object):
                 if container_is_deleted:
                     if current_dtime >= new_dtime:
                         raise Conflict(
-                            "No update needed, event older than last container update"
+                            "No update needed, event older than last container "
+                            "update (container_missing, delete_event)"
                         )
                 elif current_dtime >= new_mtime:
                     # Container no longer exists
                     raise Conflict(
-                        "No update needed, event older than last container update"
+                        "No update needed, event older than last container "
+                        "update (container_missing, update_event)"
                     )
             if container_is_deleted:
                 # Container is already deleted, keep the most recent dtime
@@ -1875,11 +1877,13 @@ class AccountBackendFdb(object):
                 # allow the deletion.
                 if current_mtime > new_dtime:
                     raise Conflict(
-                        "No update needed, event older than last container update"
+                        "No update needed, event older than last container "
+                        "update (existing_container, delete_event)"
                     )
             elif current_mtime >= new_mtime:
                 raise Conflict(
-                    "No update needed, event older than last container update"
+                    "No update needed, event older than last container update "
+                    "(existing_container, update_event)"
                 )
 
         current_region = tr[container_space.pack((REGION_FIELD,))]
