@@ -1069,7 +1069,7 @@ meta2_backend_container_isempty (struct meta2_backend_s *m2,
 	GRID_DEBUG("ISEMPTY(%s)", oio_url_get(url, OIOURL_WHOLE));
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = m2b_open(m2, url, _mode_masterslave(0)|M2V2_OPEN_URGENT,
+	GError *err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_URGENT,
 			&sq3);
 	if (!err) {
 		err = _check_if_container_empty (sq3);
@@ -1277,6 +1277,22 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	gboolean force = BOOL(flags & M2V2_DESTROY_FORCE);
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
+
+	/* When a container deleted event must be emitted,
+	 * ensure mastership first. 
+	 * On a slave, the open call returns CODE_REDIRECT (303) to the master.
+	 * */
+	if (send_event) {
+		struct sqlx_sqlite3_s *sq3_master_check = NULL;
+		struct m2_open_args_s master_check_args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_URGENT, NULL, 0
+		};
+		err = m2b_open_with_args(m2, url, NULL, &master_check_args,
+				&sq3_master_check);
+		if (err)
+			return err;
+		m2b_close(m2, sq3_master_check, url);
+	}
 
 	err = m2b_open(m2, url, M2V2_OPEN_LOCAL|M2V2_OPEN_URGENT, &sq3);
 	if (!err) {

@@ -1419,6 +1419,17 @@ _re_enable (struct req_args_s *args)
 	}
 }
 
+static void
+_learn_master_from_redirect(struct client_ctx_s *ctx, const char *master)
+{
+	if (!ctx || !oio_str_is_set(master))
+		return;
+	gchar *election_key = g_strconcat(ctx->name.base, "/",
+			ctx->name.type, NULL);
+	service_learn_master(election_key, master);
+	g_free(election_key);
+}
+
 static GError *
 _destroy_on_meta2(struct req_args_s *args, struct client_ctx_s *ctx,
 		gchar **urlv, const gboolean force)
@@ -1430,8 +1441,24 @@ _destroy_on_meta2(struct req_args_s *args, struct client_ctx_s *ctx,
 	/* Execute the first destroy on the master
 	 * so that the delete event is sent from the master. */
 	sort_services(ctx, urlv);
-	err = m2v2_remote_execute_DESTROY(
-			urlv[0], args->url, M2V2_DESTROY_EVENT|flag_force);
+
+	const guint max_redirects = g_strv_length(urlv) - 1;
+	for (guint redirects = 0; ; redirects++) {
+		const char *target = urlv[0];
+		g_clear_error(&err);
+		err = m2v2_remote_execute_DESTROY(
+				target, args->url, M2V2_DESTROY_EVENT | flag_force);
+		if (!err || err->code != CODE_REDIRECT)
+			break;
+		if (redirects >= max_redirects) {
+			g_prefix_error(&err, "Too many redirects during destroy: ");
+			break;
+		}
+		_learn_master_from_redirect(ctx, err->message);
+		sort_services(ctx, urlv);
+		GRID_DEBUG("DESTROY: redirected from [%s] to master [%s], "
+				"retrying after sort", target, err->message);
+	}
 	if (err) {
 		/* rollback! */
 		struct meta1_service_url_s m1u;

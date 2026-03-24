@@ -2,7 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020-2025 OVH SAS
+Copyright (C) 2020-2026 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -291,6 +291,8 @@ struct client_ctx_s {
 void sleep_at_most(gint64 delay);
 
 void sort_services(struct client_ctx_s *ctx, gchar **m1uv);
+
+void service_learn_master(const char *obj, const char *master);
 
 /**
  * Flushes  the resolver cache (all levels) and the cache of known MASTER
