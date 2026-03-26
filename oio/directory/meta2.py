@@ -1,5 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,7 @@ from oio.common.exceptions import (
     ClientException,
     DisusedUninitializedDB,
     RemainsDB,
+    SourceNotInPeers,
     UninitializedDB,
     VolumeException,
     from_multi_responses,
@@ -188,7 +189,7 @@ class Meta2Database(object):
         peers = self._get_peers(bseq)
 
         if src not in peers:
-            raise ValueError("Source service isn't used (peers=%s)" % peers)
+            raise SourceNotInPeers(f"Source {src} service isn't used (peers={peers})")
 
     def _get_service_full_id(self, service):
         return self.conf["namespace"] + "|" + self.service_type + "|" + service

@@ -201,6 +201,10 @@ class EmptyByteRange(Exception):
     pass
 
 
+class SourceNotInPeers(Exception):
+    pass
+
+
 class InvalidStorageMethod(OioException):
     pass
 
