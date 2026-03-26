@@ -182,6 +182,27 @@ class TestMeta2Database(BaseTestCase):
         self.assertIsNone(moved[0]["dst"])
         self.assertIsNotNone(moved[0]["err"])
 
+    def test_move_with_src_not_in_peers(self):
+        self.api.container_create(self.account, self.reference)
+
+        base = cid_from_name(self.account, self.reference)
+        current_peers = self._get_peers()
+        src = "10.0.0.99:6015"
+
+        all_meta2_services = self.conscience.all_services("meta2", True)
+        for service in all_meta2_services:
+            if service["id"] not in current_peers:
+                src = service["id"]
+
+        moved = self.meta2_database.move(base, src)
+        moved = list(moved)
+        self.assertEqual(1, len(moved))
+        self.assertTrue(moved[0]["base"].startswith(base))
+        self.assertEqual(src, moved[0]["src"])
+        self.assertIsNone(moved[0]["dst"])
+        self.assertIsNotNone(moved[0]["err"])
+        self.assertIn("SourceNotInPeers", moved[0]["err"].__class__.__name__)
+
     def test_move_with_dst_already_used(self):
         self.api.container_create(self.account, self.reference)
 
