@@ -28,7 +28,7 @@ from oio.common.constants import (
 from oio.common.kafka import KafkaSender
 from oio.common.properties import RestoreProperty
 from oio.common.utils import request_id
-from oio.event.evob import EventTypes
+from oio.event.evob import Event, EventTypes
 from oio.event.filters.archive_restore import ArchiveRestore
 from oio.event.filters.object_restore_detection import ObjectRestoreDetection
 from tests.utils import BaseTestCase, random_str
@@ -583,3 +583,25 @@ class TestArchiveRestore(BaseTestCase):
         self.assertIsNotNone(evt)
         self.assertEqual("properties", evt.data[1]["type"])
         self.assertNotIn("_postponed", evt.data[1])
+
+    def test_get_bucket_sharded(self):
+        archive_filter = ArchiveRestore(
+            self.app,
+            {
+                "redis_host": self.conf["services"]["redis"][0]["addr"],
+            },
+        )
+        cid = "A7BB438880B97A84467CD32C17111719851917B68F1B40B1163DDE3BA352C108"
+        event_data = {
+            "url": {
+                "bucket": "test-bucket",
+                "shard": {
+                    "account": ".shards_AUTH_demo",
+                    "user": f"test-bucket-{cid}-1767969641288657-0",
+                    "id": cid,  # not supposed to be the same but don't care
+                },
+            }
+        }
+        event = Event(event_data)
+        result = archive_filter._get_bucket(event)
+        self.assertEqual(result, "test-bucket")
