@@ -216,16 +216,24 @@ class ArchiveRestore(Filter):
         return account
 
     def _get_bucket(self, event):
-        container = event.url.get("user")
-        if not container:
-            container = event.get("shard", {}).get("user")
-            if container is None:
+        """
+        Extract the bucket name from an event.
+
+        Handles sharded containers by stripping the sharding suffix if present.
+        Handles MPU containers by stripping the +segments suffix.
+
+        :param event: The event to extract the bucket from.
+        :returns: The bucket name, or None if not found.
+        """
+        bucket = event.url.get("bucket") or event.url.get("user")
+        if not bucket:
+            bucket = event.get("shard", {}).get("user")
+            if bucket is None:
                 return None
             # Remove shard suffix
-            container = container.rsplit(".", 1)[0]
-        if container.endswith(MULTIUPLOAD_SUFFIX):
-            container = container[: -len(MULTIUPLOAD_SUFFIX)]
-        return container
+            bucket, _cid, _ts, _idx = bucket.rsplit("-", 3)
+        # Remove +segments suffix if present
+        return bucket.removesuffix(MULTIUPLOAD_SUFFIX)
 
     def process(self, env, cb):
         try:
