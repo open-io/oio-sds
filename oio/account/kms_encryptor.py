@@ -84,6 +84,7 @@ class KmsEncryptor:
         if not accounts:
             accounts = depaginate(
                 self.backend.list_accounts,
+                item_key=lambda x: x["id"],
                 listing_key=lambda x: x[0],
                 marker_key=lambda x: x[1],
                 truncated_key=lambda x: x[1] is not None,
