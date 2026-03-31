@@ -12,18 +12,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-import socket
-
-from gevent import socket as gevent_socket
-
-# Patch SSL only if gevent has already patched sockets.
-# This avoids recursion when sockets are unpatched and
-# ensures SSL remain gevent-compatible when socket has
-# been patched.
-if socket.socket is gevent_socket.socket:
-    from gevent import monkey
-
-    monkey.patch_ssl()
 
 import json  # noqa: E402
 import time  # noqa: E402
