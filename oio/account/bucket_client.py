@@ -1,4 +1,4 @@
-# Copyright (C) 2021-2024 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -69,9 +69,7 @@ class BucketClient(ServiceClient):
     def bucket_show(
         self, bucket, account=None, check_owner=None, details=False, **kwargs
     ):
-        """
-        Get information about a bucket.
-        """
+        """Get information about a bucket."""
         params = {}
         if account:
             params["account"] = account
@@ -79,9 +77,8 @@ class BucketClient(ServiceClient):
             params["check_owner"] = check_owner
         if details:
             params["details"] = details
-        _resp, body = self.bucket_request(
-            bucket, "GET", "show", params=params, **kwargs
-        )
+        resp, body = self.bucket_request(bucket, "GET", "show", params=params, **kwargs)
+        body["backend"] = resp.headers.get("sys.type", "meta2")
         return body
 
     def bucket_update(

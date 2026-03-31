@@ -79,6 +79,21 @@ class ContainerTest(CliTestCase):
         output = self.openio("bucket list " + opts)
         self.assertIn(cname, output)
 
+    def test_bucket_list_with_properties(self):
+        cname = "mybucket-" + random_str(4).lower()
+        # Create bucket
+        opts = self.get_format_opts(fields=("Created",))
+        output = self.openio("bucket create " + cname + opts)
+        self.assertEqual("True\n", output)
+        # List buckets
+        opts = self.get_format_opts(format_="json")
+        opts += f" --prefix {cname} --properties"
+        output = self.openio("bucket list " + opts)
+        result = self.json_loads(output)[0]  # root object is a list
+        self.assertIn("Backend", result)
+        self.assertIn(result["Backend"], ("meta2", "fdb"))
+        self.assertEqual(result["Versioning"], "Suspended")
+
     def test_bucket_list_with_versioning(self):
         cname = "mybucket-" + random_str(4).lower()
         # Create bucket

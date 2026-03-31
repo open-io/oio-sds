@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-"""Container-related commands"""
+"""Container-related commands."""
 
 from logging import getLogger
 from time import sleep
@@ -58,7 +58,12 @@ from oio.common.constants import (
     OIO_DB_STATUS_NAME,
     SHARDING_STATE_NAME,
 )
-from oio.common.easy_value import boolean_value, int_value
+from oio.common.easy_value import (
+    boolean_value,
+    convert_size,
+    convert_timestamp,
+    int_value,
+)
 from oio.common.exceptions import (
     CommandError,
     Conflict,
@@ -835,7 +840,7 @@ class ShowBucket(ShowOne):
     log = getLogger(__name__ + ".ShowBucket")
 
     def get_parser(self, prog_name):
-        parser = super(ShowBucket, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument("bucket", help="Name of the bucket to query.")
         parser.add_argument(
             "--check-owner",
@@ -861,8 +866,6 @@ class ShowBucket(ShowOne):
             reqid=self.app.request_id(prefix="CLI-bucket-show-"),
         )
         if parsed_args.formatter == "table":
-            from oio.common.easy_value import convert_size, convert_timestamp
-
             data["bytes"] = convert_size(data["bytes"], unit="iB")
             if "ctime" in data:
                 data["ctime"] = convert_timestamp(data.get("ctime", 0.0))
@@ -871,7 +874,7 @@ class ShowBucket(ShowOne):
                 for history in data.get("features-details").values():
                     for elem in history:
                         elem["mtime"] = convert_timestamp(elem.get("mtime", 0.0))
-        return zip(*sorted(data.items()))
+        return zip(*sorted(data.items()), strict=True)
 
 
 class ShowContainer(ContainerCommandMixin, ShowOne):
@@ -890,9 +893,27 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         )
         return parser
 
-    def take_action(self, parsed_args):
-        from oio.common.easy_value import convert_size, convert_timestamp
+    def _add_state_info(
+        self, info, sys, prop_state, prop_timestamp, info_prefix, state_names, formatter
+    ):
+        """Extract state and timestamp for draining/flushing and add to info."""
 
+        if prop_state not in sys:
+            return
+        state = sys[prop_state]
+        try:
+            state = state_names[int(state)]
+        except (ValueError, KeyError, TypeError):
+            state = "Unknown"
+        info[f"{info_prefix}.state"] = state
+        timestamp = sys.get(prop_timestamp)
+        if timestamp is None:
+            self.log.warning("Missing %s timestamp", info_prefix)
+        elif formatter == "table":
+            timestamp = convert_timestamp(timestamp)
+        info[f"{info_prefix}.timestamp"] = timestamp
+
+    def take_action(self, parsed_args):
         self.log.debug("take_action(%s)", parsed_args)
 
         account = self.app.client_manager.account
@@ -922,6 +943,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         info = {
             "account": sys["sys.account"],
             "base_name": sys["sys.name"],
+            "backend": sys.get("sys.type", "meta2"),
             "container": sys["sys.user.name"],
             "ctime": ctime,
             "bytes_usage": bytes_usage,
@@ -948,20 +970,15 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                 continue
             info[key] = value
 
-        if M2_PROP_SHARDING_STATE in sys:
-            sharding_state = sys[M2_PROP_SHARDING_STATE]
-            try:
-                sharding_state = SHARDING_STATE_NAME[int(sharding_state)]
-            except (ValueError, KeyError, TypeError):
-                sharding_state = "Unknown"
-            info["sharding.state"] = sharding_state
-            sharding_timestamp = sys.get(M2_PROP_SHARDING_TIMESTAMP)
-            if sharding_timestamp is None:
-                self.log.warning("Missing sharding timestamp")
-            elif parsed_args.formatter == "table":
-                sharding_timestamp = convert_timestamp(sharding_timestamp)
-            info["sharding.timestamp"] = sharding_timestamp
-
+        self._add_state_info(
+            info,
+            sys,
+            M2_PROP_SHARDING_STATE,
+            M2_PROP_SHARDING_TIMESTAMP,
+            "sharding",
+            SHARDING_STATE_NAME,
+            parsed_args.formatter,
+        )
         if M2_PROP_SHARDING_ROOT in sys:
             info["sharding.root"] = sys.get(M2_PROP_SHARDING_ROOT)
             sharding_lower = sys.get(M2_PROP_SHARDING_LOWER)
@@ -999,31 +1016,24 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             if M2_PROP_SHARDING_QUEUE in sys:
                 info["sharding.queue"] = sys[M2_PROP_SHARDING_QUEUE]
 
-        if M2_PROP_DRAINING_STATE in sys:
-            draining_state = sys[M2_PROP_DRAINING_STATE]
-            try:
-                draining_state = DRAINING_STATE_NAME[int(draining_state)]
-            except (ValueError, KeyError, TypeError):
-                draining_state = "Unknown"
-            info["draining.state"] = draining_state
-            draining_timestamp = sys.get(M2_PROP_DRAINING_TIMESTAMP)
-            if draining_timestamp is not None:
-                if parsed_args.formatter == "table":
-                    draining_timestamp = convert_timestamp(draining_timestamp)
-                info["draining.timestamp"] = draining_timestamp
-
-        if M2_PROP_FLUSHING_STATE in sys:
-            flushing_state = sys[M2_PROP_FLUSHING_STATE]
-            try:
-                flushing_state = FLUSHING_STATE_NAME[int(flushing_state)]
-            except (ValueError, KeyError, TypeError):
-                flushing_state = "Unknown"
-            info["flushing.state"] = flushing_state
-            flushing_timestamp = sys.get(M2_PROP_FLUSHING_TIMESTAMP)
-            if flushing_timestamp is not None:
-                if parsed_args.formatter == "table":
-                    flushing_timestamp = convert_timestamp(flushing_timestamp)
-                info["flushing.timestamp"] = flushing_timestamp
+        self._add_state_info(
+            info,
+            sys,
+            M2_PROP_DRAINING_STATE,
+            M2_PROP_DRAINING_TIMESTAMP,
+            "draining",
+            DRAINING_STATE_NAME,
+            parsed_args.formatter,
+        )
+        self._add_state_info(
+            info,
+            sys,
+            M2_PROP_FLUSHING_STATE,
+            M2_PROP_FLUSHING_TIMESTAMP,
+            "flushing",
+            FLUSHING_STATE_NAME,
+            parsed_args.formatter,
+        )
 
         objects_drained = sys.get("extra_counter.drained")
         if objects_drained:
@@ -1051,9 +1061,8 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         info["stats.db_size"] = db_size
         wasted = info["stats.freelist_count"] / (info["stats.page_count"] or 1)
         wasted_bytes = info["stats.freelist_count"] * info["stats.page_size"]
-        info["stats.space_wasted"] = "%5.2f%% (est. %s)" % (
-            wasted * 100,
-            convert_size(wasted_bytes),
+        info["stats.space_wasted"] = (
+            f"{wasted * 100:5.2f}% (est. {convert_size(wasted_bytes)})"
         )
         if "stats.journal_mode" in sys:
             info["stats.journal_mode"] = sys["stats.journal_mode"]
@@ -1066,7 +1075,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             info["delete_exceeding_versions"] = delete_exceeding != "0"
         for k, v in data["properties"].items():
             info["meta." + k] = v
-        return list(zip(*sorted(info.items())))
+        return list(zip(*sorted(info.items()), strict=True))
 
 
 class ListBuckets(Lister):
@@ -1077,7 +1086,7 @@ class ListBuckets(Lister):
     def get_parser(self, prog_name):
         from oio.cli.common.utils import ValueFormatStoreTrueAction
 
-        parser = super(ListBuckets, self).get_parser(prog_name)
+        parser = super().get_parser(prog_name)
         parser.add_argument(
             "--prefix", metavar="<prefix>", help="Filter list using <prefix>"
         )
@@ -1102,10 +1111,10 @@ class ListBuckets(Lister):
             action=ValueFormatStoreTrueAction,
         )
         parser.add_argument(
+            "--properties",
             "--versioning",
             action="store_true",
-            dest="versioning",
-            help="Display the versioning state of each bucket",
+            help="Display the versioning state of each bucket (and other properties)",
         )
         parser.add_argument(
             "--human",
@@ -1115,6 +1124,20 @@ class ListBuckets(Lister):
             help="Display bytes size in a human-readable format",
         )
         return parser
+
+    def _fetch_properties(self, account, bucket_meta: dict, reqid):
+        try:
+            data = self.app.client_manager.storage.container_get_properties(
+                account, bucket_meta["name"], reqid=reqid
+            )
+        except NoSuchContainer:
+            self.log.info("Bucket %s does not exist", bucket_meta["name"])
+            return "meta2", "Error"
+
+        sys = data["system"]
+        status = sys.get(M2_PROP_VERSIONING_POLICY, None)
+        status_str = "Suspended" if status is None or int(status) == 0 else "Enabled"
+        return sys.get("sys.type", "meta2"), status_str
 
     def take_action(self, parsed_args):
         from oio.common.easy_value import convert_size
@@ -1135,7 +1158,6 @@ class ListBuckets(Lister):
 
         account = self.app.client_manager.account
         acct_client = self.app.client_manager.storage.account
-        storage = self.app.client_manager.storage
         reqid = self.app.request_id(prefix="CLI-bucket-list-")
 
         if parsed_args.full_listing:
@@ -1154,27 +1176,14 @@ class ListBuckets(Lister):
 
         columns = ("Name", "Objects", "Bytes", "Mtime", "Region")
 
-        def versioning(bucket):
-            try:
-                data = storage.container_get_properties(account, bucket, reqid=reqid)
-            except NoSuchContainer:
-                self.log.info("Bucket %s does not exist", bucket)
-                return "Error"
-
-            sys = data["system"]
-            # WARN it doe not reflect namespace versioning if enabled
-            status = sys.get(M2_PROP_VERSIONING_POLICY, None)
-            if status is None or int(status) == 0:
-                return "Suspended"
-            else:
-                return "Enabled"
-
-        if parsed_args.versioning:
-            columns += ("Versioning",)
+        if parsed_args.properties:
+            columns += ("Versioning", "Backend")
 
             def enrich(listing):
                 for v in listing:
-                    v["versioning"] = versioning(v["name"])
+                    v["backend"], v["versioning"] = self._fetch_properties(
+                        account, v, reqid
+                    )
                     yield v
 
             listing = enrich(listing)

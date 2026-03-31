@@ -29,6 +29,7 @@ OBJ_HEADERS = ["Name", "Size", "Hash"]
 CONTAINER_LIST_HEADERS = ["Name", "Bytes", "Count"]
 CONTAINER_FIELDS = [
     "account",
+    "backend",
     "base_name",
     "bytes_usage",
     "container",

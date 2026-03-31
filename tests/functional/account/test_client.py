@@ -1431,6 +1431,7 @@ class TestAccountClient(AccountBaseTestCase):
         resp.pop("mtime")
         self.assertDictEqual(expected_account_info, resp)
         resp = self.bucket_client.bucket_show(bucket)
+        resp.pop("backend")
         resp.pop("ctime")
         resp.pop("mtime")
         self.assertDictEqual(
