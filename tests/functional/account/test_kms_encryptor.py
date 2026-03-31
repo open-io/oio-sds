@@ -287,3 +287,26 @@ class TestKmsEncryptor(BaseTestCase):
         )
         _, return_code = encryptor.run()
         self.assertEqual(return_code, 0)
+
+    def test_kms_decrypt_after_encryptor_fills_missing_domain(self):
+        """Verify that all domains remain decryptable after the encryptor
+        fills in the missing ones."""
+        # Create secret with domain1 down so only domain2 is encrypted
+        self._service(
+            self.service_to_ctl_key("1", "kmsapi-mock-server"), "stop", wait=3
+        )
+        _, secret_meta = self.storage.kms.create_secret(self.account, self.bucket)
+        original_secret = secret_meta["secret"]
+        self._service(
+            self.service_to_ctl_key("1", "kmsapi-mock-server"), "start", wait=1
+        )
+        # Run encryptor to fill domain1
+        res, return_code = self.encryptor.run()
+        self.assertEqual(return_code, 0)
+        # Verify decryption still works (get_secret decrypts via KMS)
+        secret_meta_after = self.storage.kms.get_secret(
+            self.account,
+            self.bucket,
+            secret_id=secret_meta["secret_id"],
+        )
+        self.assertEqual(original_secret, secret_meta_after["secret"])

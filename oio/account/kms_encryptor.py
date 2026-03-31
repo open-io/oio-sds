@@ -169,7 +169,10 @@ class KmsEncryptor:
             bucket_name = secret_data["bucket"]
             secret_id = secret_data["secret_id"]
             secret = secret_data["secret"]
-            kms_secrets = secret_data["kms_secrets"]
+            kms_secrets = {
+                domain: (v["key_id"], v["ciphertext"])
+                for domain, v in secret_data["kms_secrets"].items()
+            }
             actual_domains = set(kms_secrets.keys())
             missing_domains = required_domains - actual_domains
             bucket_counters = results.setdefault("bucket-analysis", copy(counts))
@@ -234,6 +237,10 @@ class KmsEncryptor:
                 new_missing_domains = required_domains - set(kms_secrets.keys())
                 # Check if backend update is needed
                 if missing_domains != new_missing_domains:
+                    av_domains = missing_domains - new_missing_domains
+                    # Only save newly encrypted domains. Existing domain entries
+                    # are already correctly stored in FDB.
+                    newly_encrypted_kms = {d: kms_secrets[d] for d in av_domains}
                     # Save checksum, plaintext and ciphered secrets
                     try:
                         backend_updated = False
@@ -244,13 +251,13 @@ class KmsEncryptor:
                             secret,
                             checksum,
                             secret_id=secret_id,
-                            kms_secrets=kms_secrets,
+                            kms_secrets=newly_encrypted_kms,
                             incomplete=incomplete,
                             overwrite=True,
                         )
                         backend_updated = True
                     except Exception as e:
-                        for domain in kms_secrets.keys():
+                        for domain in av_domains:
                             encryption_per_domain[domain]["backend_failure"] += 1
                         self.logger.error(
                             "Failed to save secret in account service for "
@@ -261,7 +268,6 @@ class KmsEncryptor:
                             e,
                         )
                     if backend_updated:
-                        av_domains = missing_domains - new_missing_domains
                         for domain in av_domains:
                             encryption_per_domain[domain]["encryption_success"] += 1
             finally:
