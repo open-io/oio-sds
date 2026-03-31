@@ -267,3 +267,23 @@ class TestKmsEncryptor(BaseTestCase):
         self._service(
             self.service_to_ctl_key("1", "kmsapi-mock-server"), "start", wait=1
         )
+
+    def test_kms_encryptor_without_accounts_filter(self):
+        """Encrypt incomplete secrets without specifying accounts."""
+        self._service(self.service_to_ctl_key("1", "kmsapi-mock-server"), "stop")
+        self._service(
+            self.service_to_ctl_key("2", "kmsapi-mock-server"), "stop", wait=3
+        )
+        _ = self.storage.kms.create_secret(self.account, self.bucket)
+        self._service(self.service_to_ctl_key("1", "kmsapi-mock-server"), "start")
+        self._service(
+            self.service_to_ctl_key("2", "kmsapi-mock-server"), "start", wait=1
+        )
+        encryptor = KmsEncryptor(
+            conf=self.acct_conf,
+            reqid=self.reqid,
+            dry_run=False,
+            logger=self.logger,
+        )
+        _, return_code = encryptor.run()
+        self.assertEqual(return_code, 0)
