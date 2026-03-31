@@ -2047,3 +2047,28 @@ def post_fork(server, worker):
     if hasattr(server.app.application, "iam"):
         if hasattr(server.app.application.iam, "db"):
             server.app.application.iam.init_db()
+
+
+def post_worker_init(worker):
+    """
+    Fix urllib3's stale ssl.SSLContext reference after gevent monkey-patching.
+
+    urllib3 imports ssl.SSLContext at module load time. Since the app is created
+    in the gunicorn master (before any fork), that reference points to the original
+    blocking ssl.SSLContext. After patch_all() runs in the worker, ssl.SSLContext
+    is replaced with gevent's cooperative version, but urllib3 never sees the update.
+    Using the blocking SSLContext on gevent sockets causes RecursionError during
+    the SSL handshake.
+    """
+    import ssl
+
+    try:
+        import urllib3.util.ssl_ as urllib3_ssl
+
+        urllib3_ssl.SSLContext = ssl.SSLContext
+        # urllib3.util re-exports it independently
+        import urllib3.util as urllib3_util
+
+        urllib3_util.SSLContext = ssl.SSLContext
+    except ImportError:
+        pass

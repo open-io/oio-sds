@@ -2,6 +2,7 @@
 
 # oio-account-server.py
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2026 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,7 +19,7 @@
 
 from optparse import OptionParser
 
-from oio.account.server import create_app, post_fork
+from oio.account.server import create_app, post_fork, post_worker_init
 from oio.common.configuration import parse_options, read_conf
 from oio.common.wsgi import Application, ServiceLogger
 
@@ -27,4 +28,10 @@ if __name__ == "__main__":
     conf_file, options = parse_options(parser)
     conf = read_conf(conf_file, "account-server")
     app = create_app(conf)
-    Application(app, conf, post_fork=post_fork, logger_class=ServiceLogger).run()
+    Application(
+        app,
+        conf,
+        post_fork=post_fork,
+        post_worker_init=post_worker_init,
+        logger_class=ServiceLogger,
+    ).run()

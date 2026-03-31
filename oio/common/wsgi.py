@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021-2025 OVH SAS
+# Copyright (C) 2021-2026 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -47,10 +47,13 @@ class Application(BaseApplication):
         + "request_time_us_int:%(D)s	user_agent:%(a)s"
     )
 
-    def __init__(self, app, conf, post_fork=None, logger_class=None):
+    def __init__(
+        self, app, conf, post_fork=None, post_worker_init=None, logger_class=None
+    ):
         self.conf = conf
         self.application = app
         self.post_fork = post_fork
+        self.post_worker_init = post_worker_init
         self.logger_class = logger_class
         super(Application, self).__init__()
 
@@ -85,6 +88,8 @@ class Application(BaseApplication):
         self.cfg.set("logger_class", self.logger_class)
         if self.post_fork:
             self.cfg.set("post_fork", self.post_fork)
+        if self.post_worker_init:
+            self.cfg.set("post_worker_init", self.post_worker_init)
 
     def load(self):
         return self.application
