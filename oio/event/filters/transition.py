@@ -15,6 +15,9 @@
 
 from oio.common.exceptions import (
     Conflict,
+    NoSuchAccount,
+    NoSuchContainer,
+    NoSuchObject,
     OioException,
     OioNetworkException,
     OioTimeout,
@@ -66,6 +69,8 @@ class Transition(Filter):
                 version=event.url.get("version"),
                 reqid=reqid,
             )
+        except (NoSuchAccount, NoSuchContainer, NoSuchObject) as exc:
+            self.logger.warning("Object no longer exists, reason: %s", exc)
         except Conflict as exc:
             self.logger.info("Unable to transition object, reason: %s", exc)
         except (OioNetworkException, OioTimeout, ServiceBusy, ECDriverError) as exc:

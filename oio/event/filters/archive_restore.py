@@ -28,8 +28,8 @@ from oio.common.constants import (
     S3StorageClasses,
 )
 from oio.common.exceptions import (
-    ContentNotFound,
     NoSuchAccount,
+    NoSuchContainer,
     NoSuchObject,
 )
 from oio.common.properties import RestoreProperty
@@ -238,8 +238,8 @@ class ArchiveRestore(Filter):
     def process(self, env, cb):
         try:
             return self._process_event(env, cb)
-        except (ContentNotFound, NoSuchAccount, NoSuchObject) as exc:
-            self.logger.warning("Object not accessible, reason: %s", exc)
+        except (NoSuchAccount, NoSuchContainer, NoSuchObject) as exc:
+            self.logger.warning("Object no longer exists, reason: %s", exc)
             return self.app(env, cb)
 
     def _get_object_size(self, object_meta):
