@@ -30,7 +30,7 @@ class BlobRebuilderFilter(Filter):
             self.conf, logger=self.logger, watchdog=self.app_env["watchdog"]
         )
 
-    def _process_item(self, item):
+    def _process_item(self, item, reqid):
         try:
             container_id, content_id, path, version, chunk_id = item
             self.chunk_operator.rebuild(
@@ -40,6 +40,7 @@ class BlobRebuilderFilter(Filter):
                 path,
                 version,
                 rebuild_only_missing=True,
+                reqid=reqid,
             )
         except OioException as exc:
             if isinstance(exc, OrphanChunk):
@@ -67,7 +68,7 @@ class BlobRebuilderFilter(Filter):
             for chunk in event.data.get("missing_chunks", []):
                 item = base_item.copy()
                 item.append(chunk)
-                error = self._process_item(item)
+                error = self._process_item(item, reqid=event.reqid)
                 if error:
                     self.logger.warning("Failed to rebuild chunk, reason: %s", error)
                     errors.append((chunk, error))
