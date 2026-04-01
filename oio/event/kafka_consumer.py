@@ -121,6 +121,10 @@ class EventQueue:
                 )
         queue.put(data, **kwargs)
 
+    def cancel_join_thread(self):
+        for queue in self.queues.values():
+            queue.cancel_join_thread()
+
     def get(self, queue_id, **kwargs):
         queue = self.queues.get(queue_id)
         if not queue:
@@ -635,6 +639,15 @@ class KafkaBatchFeeder(
         # In case of batch feeder process restart some events from previous batch may
         # still be present in queues
         self.events_queue.reset()
+        # Also drain the offsets queue: workers may have processed events from a
+        # failed batch (e.g. after KafkaFatalException) and pushed acks that were
+        # never consumed. Leaving them would fill the queue and cause a circular
+        # deadlock with _events_queue on the next batch.
+        while True:
+            try:
+                self._offsets_queue.get_nowait()
+            except Empty:
+                break
 
     def _get_position_from_exception(self, exc):
         bad_column = re.search(r"column (\d+)\ ", str(exc))
@@ -827,6 +840,7 @@ class KafkaBatchFeeder(
                             self._commit_batch()
                     except KafkaFatalException:
                         self._close()
+                        time.sleep(1)
 
             except StopIteration:
                 ...
@@ -836,6 +850,11 @@ class KafkaBatchFeeder(
             # Try to commit even a partial batch
             self._commit_batch()
         self._close()
+        # Cancel the background feeder threads of all internal queues so that
+        # when run() returns, Python's cleanup does not call join_thread() and
+        # block waiting for items to be flushed to a pipe that no one reads anymore.
+        self._events_queue.cancel_join_thread()
+        self._offsets_queue.cancel_join_thread()
 
     def _connect(self):
         if not self._consumer:
